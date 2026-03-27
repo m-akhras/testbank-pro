@@ -775,10 +775,10 @@ export default function TestBankApp() {
   const chapters = course ? COURSES[course].chapters : [];
   const totalQ = selectedSections.reduce((a,s) => a + (sectionCounts[s] || 3), 0);
 
-  // Get available sections based on selected course filter
+  // Get available sections — only show when a course is selected, pulled from actual bank questions
   const availableSections = filterCourse === "All"
-    ? [...new Set(bank.map(q => q.section).filter(Boolean))].sort()
-    : (COURSES[filterCourse]?.chapters || []).flatMap(ch => ch.sections);
+    ? []
+    : [...new Set(bank.filter(q => q.course === filterCourse).map(q => q.section).filter(Boolean))].sort();
 
   const filteredBank = bank.filter(q =>
     (filterCourse === "All" || q.course === filterCourse) &&
@@ -1016,10 +1016,12 @@ export default function TestBankApp() {
               <select style={{...S.sel, width:"155px"}} value={filterCourse} onChange={e => { setFilterCourse(e.target.value); setFilterSection("All"); }}>
                 <option>All</option>{Object.keys(COURSES).map(c => <option key={c}>{c}</option>)}
               </select>
-              <select style={{...S.sel, width:"200px"}} value={filterSection} onChange={e => setFilterSection(e.target.value)}>
-                <option value="All">All Sections</option>
-                {availableSections.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
+              {filterCourse !== "All" && (
+                <select style={{...S.sel, width:"220px"}} value={filterSection} onChange={e => setFilterSection(e.target.value)}>
+                  <option value="All">All Sections</option>
+                  {availableSections.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              )}
               <select style={{...S.sel, width:"145px"}} value={filterType} onChange={e => setFilterType(e.target.value)}>
                 <option>All</option>{QTYPES.map(t => <option key={t}>{t}</option>)}
               </select>
