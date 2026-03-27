@@ -5,33 +5,104 @@ import { supabase } from "../lib/supabase";
 // ─── KaTeX helpers ───────────────────────────────────────────────────────────
 function toLatex(raw) {
   let s = String(raw ?? "");
-  s = s.replace(/\bintegral\s+from\s+(\S+)\s+to\s+(\S+)\s+of\s+(.+?)\s+d([a-z])\b/gi,(_,a,b,f,v)=>`\\(\\int_{${a}}^{${b}} ${f}\\,d${v}\\)`);
-  s = s.replace(/\bintegral\s+of\s+(.+?)\s+d([a-z])\b/gi,(_,f,v)=>`\\(\\int ${f}\\,d${v}\\)`);
-  s = s.replace(/\blim(?:it)?\s+as\s+([a-z])\s*(?:->|→)\s*([^\s,;.]+)/gi,(_,v,a)=>`\\(\\lim_{${v}\\to ${a.replace(/\binf(inity)?\b/gi,"\\infty")}}\\)`);
-  s = s.replace(/\bd\/d([a-z])\s*[\[(]([^\]\)\n]+)[\])]/g,(_,v,f)=>`\\(\\dfrac{d}{d${v}}\\left[${f}\\right]\\)`);
-  s = s.replace(/\bd([a-zA-Z])\/d([a-z])\b/g,(_,y,x)=>`\\(\\dfrac{d${y}}{d${x}}\\)`);
-  s = s.replace(/\bd\/d([a-z])\b/g,(_,v)=>`\\(\\dfrac{d}{d${v}}\\)`);
-  s = s.replace(/∂([a-zA-Z]?)\/∂([a-z])/g,(_,f,v)=>`\\(\\dfrac{\\partial ${f}}{\\partial ${v}}\\)`);
-  s = s.replace(/\b([a-zA-Z])('{1,3})\(([^)]+)\)/g,(_,fn,p,arg)=>`\\(${fn}${p}(${arg})\\)`);
-  s = s.replace(/\bsqrt\(([^)]+)\)/g,(_,x)=>`\\(\\sqrt{${x}}\\)`);
-  s = s.replace(/\bcbrt\(([^)]+)\)/g,(_,x)=>`\\(\\sqrt[3]{${x}}\\)`);
-  s = s.replace(/\bfrac\(([^,)]+),\s*([^)]+)\)/g,(_,a,b)=>`\\(\\dfrac{${a}}{${b}}\\)`);
-  s = s.replace(/\bsum\s+from\s+([a-z])=(\S+)\s+to\s+(\S+)/gi,(_,v,a,b)=>`\\(\\sum_{${v}=${a}}^{${b.replace(/\binf(inity)?\b/gi,"\\infty")}}\\)`);
-  s = s.replace(/\bprod(?:uct)?\s+from\s+([a-z])=(\S+)\s+to\s+(\S+)/gi,(_,v,a,b)=>`\\(\\prod_{${v}=${a}}^{${b.replace(/\binf(inity)?\b/gi,"\\infty")}}\\)`);
-  s = s.replace(/\be\^\(([^)]+)\)/g,(_,x)=>`\\(e^{${x}}\\)`);
-  s = s.replace(/\be\^([a-z0-9\-+]+)\b/g,(_,x)=>`\\(e^{${x}}\\)`);
-  s = s.replace(/\b(ln|log(?:_\d+)?|sin|cos|tan|sec|csc|cot|arcsin|arccos|arctan|sinh|cosh|tanh)\(([^)]+)\)/g,(_,fn,arg)=>`\\(\\${fn}(${arg})\\)`);
-  s = s.replace(/\b([a-zA-Z][a-zA-Z0-9]*|[0-9]+)\^(\{[^}]+\}|-?[0-9a-zA-Z]+)\b/g,(_,base,exp)=>`\\(${base}^{${exp.replace(/^\{|\}$/g,"")}}\\)`);
-  s = s.replace(/\|([a-zA-Z0-9 +\-*/^.]+)\|/g,(_,x)=>`\\(|${x}|\\)`);
-  s = s.replace(/\binfinity\b/gi,"\\(\\infty\\)");
-  s = s.replace(/\binf\b/g,"\\(\\infty\\)");
+
+  // Already has \( \) — pass through
+  if (s.includes("\\(")) return s;
+
+  const inf = "\\infty";
+  const fix = x => x.replace(/\binf(inity)?\b/gi, inf).trim();
+
+  // Integrals
+  s = s.replace(/\bintegral\s+from\s+(\S+)\s+to\s+(\S+)\s+of\s+(.+?)\s+d([a-z])\b/gi,
+    (_,a,b,f,v)=>`\\(\\int_{${fix(a)}}^{${fix(b)}} ${f}\\,d${v}\\)`);
+  s = s.replace(/\bintegral\s+of\s+(.+?)\s+d([a-z])\b/gi,
+    (_,f,v)=>`\\(\\int ${f}\\,d${v}\\)`);
+
+  // Limits  — handles lim as (x,y)->(a,b) too
+  s = s.replace(/\blim(?:it)?\s+as\s+\(([^)]+)\)\s*(?:->|→|->)\s*\(([^)]+)\)/gi,
+    (_,v,a)=>`\\(\\lim_{(${v})\\to(${fix(a)})}\\)`);
+  s = s.replace(/\blim(?:it)?\s+as\s+([a-zA-Z,\s]+?)\s*(?:->|→)\s*([^\s,;.(]+)/gi,
+    (_,v,a)=>`\\(\\lim_{${v.trim()}\\to ${fix(a)}}\\)`);
+
+  // Derivatives — d/dx[f], dz/dx, d/dx
+  s = s.replace(/\bd\/d([a-z])\s*\[([^\]]+)\]/g, (_,v,f)=>`\\(\\dfrac{d}{d${v}}\\left[${f}\\right]\\)`);
+  s = s.replace(/\bd\/d([a-z])\s*\(([^)]+)\)/g,  (_,v,f)=>`\\(\\dfrac{d}{d${v}}\\left(${f}\\right)\\)`);
+  s = s.replace(/\bd\^2([a-zA-Z])\/d([a-z])\^2\b/g, (_,y,x)=>`\\(\\dfrac{d^2${y}}{d${x}^2}\\)`);
+  s = s.replace(/\bd([a-zA-Z])\/d([a-z])\b/g,    (_,y,x)=>`\\(\\dfrac{d${y}}{d${x}}\\)`);
+  s = s.replace(/\bd\/d([a-z])\b/g,              (_,v)  =>`\\(\\dfrac{d}{d${v}}\\)`);
+
+  // Partial derivatives
+  s = s.replace(/d\^2([a-zA-Z])\/d([a-z])d([a-z])/g, (_,f,v1,v2)=>`\\(\\dfrac{\\partial^2 ${f}}{\\partial ${v1}\\,\\partial ${v2}}\\)`);
+  s = s.replace(/∂([a-zA-Z0-9]*)\/∂([a-z])/g,   (_,f,v)=>`\\(\\dfrac{\\partial ${f}}{\\partial ${v}}\\)`);
+  s = s.replace(/\bd\^2([a-zA-Z])\/d([a-zA-Z])d([a-zA-Z])\b/g, (_,f,v1,v2)=>`\\(\\dfrac{\\partial^2 ${f}}{\\partial ${v1}\\,\\partial ${v2}}\\)`);
+
+  // Trig & log functions with args
+  s = s.replace(/\b(arcsin|arccos|arctan|sinh|cosh|tanh|sin|cos|tan|sec|csc|cot|ln|log)\(([^)]+)\)/g,
+    (_,fn,arg)=>`\\(\\${fn}(${arg})\\)`);
+
+  // sqrt, cbrt
+  s = s.replace(/\bsqrt\(([^)]+)\)/g, (_,x)=>`\\(\\sqrt{${x}}\\)`);
+  s = s.replace(/\bcbrt\(([^)]+)\)/g, (_,x)=>`\\(\\sqrt[3]{${x}}\\)`);
+
+  // frac(a,b) explicit
+  s = s.replace(/\bfrac\(([^,)]+),\s*([^)]+)\)/g, (_,a,b)=>`\\(\\dfrac{${a.trim()}}{${b.trim()}}\\)`);
+
+  // Inline fractions like (a)/(b) or number/number  e.g. 2/3, (x+1)/(x-1)
+  s = s.replace(/\(([^()]+)\)\/\(([^()]+)\)/g, (_,a,b)=>`\\(\\dfrac{${a}}{${b}}\\)`);
+  s = s.replace(/([0-9]+)\/([0-9]+)/g, (_,a,b)=>`\\(\\dfrac{${a}}{${b}}\\)`);
+
+  // e^(expr) and e^x
+  s = s.replace(/\be\^\(([^)]+)\)/g, (_,x)=>`\\(e^{${x}}\\)`);
+  s = s.replace(/\be\^(-?[a-zA-Z0-9]+)\b/g, (_,x)=>`\\(e^{${x}}\\)`);
+
+  // Sums and products
+  s = s.replace(/\bsum\s+from\s+([a-z])=(\S+)\s+to\s+(\S+)/gi,
+    (_,v,a,b)=>`\\(\\sum_{${v}=${a}}^{${fix(b)}}\\)`);
+  s = s.replace(/\bprod(?:uct)?\s+from\s+([a-z])=(\S+)\s+to\s+(\S+)/gi,
+    (_,v,a,b)=>`\\(\\prod_{${v}=${a}}^{${fix(b)}}\\)`);
+
+  // Powers — base^{exp} or base^exp
+  s = s.replace(/\b([a-zA-Z][a-zA-Z0-9]*|[0-9]+(?:\.[0-9]+)?)\^\{([^}]+)\}/g,
+    (_,base,exp)=>`\\(${base}^{${exp}}\\)`);
+  s = s.replace(/\b([a-zA-Z][a-zA-Z0-9]*|[0-9]+)\^(-?[0-9a-zA-Z]+)\b/g,
+    (_,base,exp)=>`\\(${base}^{${exp}}\\)`);
+
+  // Subscripts like x_0, v_0
+  s = s.replace(/\b([a-zA-Z])_\{([^}]+)\}/g, (_,b,sub)=>`\\(${b}_{${sub}}\\)`);
+  s = s.replace(/\b([a-zA-Z])_([0-9a-zA-Z])\b/g, (_,b,sub)=>`\\(${b}_{${sub}}\\)`);
+
+  // Vectors <a,b,c>
+  s = s.replace(/<(-?[^<>]+(?:,[^<>]+)+)>/g, (_,inner)=>`\\(\\langle ${inner} \\rangle\\)`);
+
+  // Absolute value |expr|
+  s = s.replace(/\|([a-zA-Z0-9 +\-*/^._]+)\|/g, (_,x)=>`\\(\\left|${x}\\right|\\)`);
+
+  // Arrow →
+  s = s.replace(/\binfinity\b/gi, `\\(${inf}\\)`);
+  s = s.replace(/\binf\b/g, `\\(${inf}\\)`);
+  s = s.replace(/→/g, "\\(\\to\\)");
+  s = s.replace(/\bpi\b/g, "\\(\\pi\\)");
+  s = s.replace(/\btheta\b/gi, "\\(\\theta\\)");
+  s = s.replace(/\brho\b/gi, "\\(\\rho\\)");
+  s = s.replace(/\bphi\b/gi, "\\(\\phi\\)");
+  s = s.replace(/\blambda\b/gi, "\\(\\lambda\\)");
+  s = s.replace(/\bsigma\b/gi, "\\(\\sigma\\)");
+  s = s.replace(/\bdelta\b/gi, "\\(\\delta\\)");
+  s = s.replace(/\balpha\b/gi, "\\(\\alpha\\)");
+  s = s.replace(/\bbeta\b/gi, "\\(\\beta\\)");
+  s = s.replace(/\bgamma\b/gi, "\\(\\gamma\\)");
+
+  // Multiplication dot ×
+  s = s.replace(/\btimes\b/g, "\\(\\times\\)");
+  s = s.replace(/\bcdot\b/g, "\\(\\cdot\\)");
+
   return s;
 }
 
 function tokenize(raw) {
   const s = toLatex(String(raw ?? ""));
   const out = [];
-  const re = /\\\((.+?)\\\)/g;
+  const re = /\\\((.+?)\\\)/gs;
   let last = 0, m;
   while ((m = re.exec(s)) !== null) {
     if (m.index > last) out.push({ kind:"text", val: s.slice(last, m.index) });
@@ -40,6 +111,29 @@ function tokenize(raw) {
   }
   if (last < s.length) out.push({ kind:"text", val: s.slice(last) });
   return out;
+}
+
+function renderMath(latex) {
+  if (!window.katex) return null;
+  try {
+    return window.katex.renderToString(latex, {
+      throwOnError: false,
+      displayMode: false,
+      strict: false,
+      trust: true,
+      macros: {
+        "\\dfrac": "\\frac",
+      }
+    });
+  } catch(e) {
+    // Strip problematic parts and try simpler render
+    try {
+      const safe = latex.replace(/\\left|\\right/g,"");
+      return window.katex.renderToString(safe, { throwOnError:false, strict:false });
+    } catch {
+      return `<span style="color:#e8e8e0">${latex}</span>`;
+    }
+  }
 }
 
 function MathText({ children }) {
@@ -51,8 +145,7 @@ function MathText({ children }) {
       if (!window.katex) { setTimeout(render, 80); return; }
       ref.current.innerHTML = tokenize(src).map(tok => {
         if (tok.kind === "math") {
-          try { return window.katex.renderToString(tok.val, { throwOnError:false, displayMode:false, strict:false }); }
-          catch { return tok.val; }
+          return renderMath(tok.val) ?? tok.val;
         }
         return tok.val.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
       }).join("");
@@ -212,16 +305,18 @@ function buildQTI(questions, course, vLabel) {
       const id = "q"+(i+1)+(isB?String.fromCharCode(97+pi):"");
       const t = isB?"Q"+(i+1)+" Part "+(pi+1):"Q"+(i+1);
       const type = p.type||q.type;
+      const qnum = isB ? `Q${i+1}(${String.fromCharCode(97+pi)}) ` : `Q${i+1}. `;
+      const qtext = qnum + escapeXML(p.question||q.question);
       if (type==="Multiple Choice" && p.choices) {
         const cx = p.choices.map((c,ci)=>`<response_label ident="c${ci}"><material><mattext>${escapeXML(c)}</mattext></material></response_label>`).join("");
         const correct = p.choices.findIndex(c=>c===p.answer);
-        return `<item ident="${id}" title="${t}"><presentation><material><mattext texttype="text/plain">${escapeXML(p.question)}</mattext></material><response_lid ident="r${id}"><render_choice>${cx}</render_choice></response_lid></presentation><resprocessing><outcomes><decvar maxvalue="1" minvalue="0" varname="SCORE" vartype="Decimal"/></outcomes><respcondition continue="No"><conditionvar><varequal respident="r${id}">c${correct}</varequal></conditionvar><setvar action="Set" varname="SCORE">1</setvar></respcondition></resprocessing></item>`;
+        return `<item ident="${id}" title="${t}"><presentation><material><mattext texttype="text/plain">${qtext}</mattext></material><response_lid ident="r${id}"><render_choice>${cx}</render_choice></response_lid></presentation><resprocessing><outcomes><decvar maxvalue="1" minvalue="0" varname="SCORE" vartype="Decimal"/></outcomes><respcondition continue="No"><conditionvar><varequal respident="r${id}">c${correct}</varequal></conditionvar><setvar action="Set" varname="SCORE">1</setvar></respcondition></resprocessing></item>`;
       }
       if (type==="Formula") {
         const vars = (p.variables||q.variables||[]).map(v=>`<var name="${v.name}" min="${v.min}" max="${v.max}" precision="${v.precision||0}"/>`).join("");
-        return `<item ident="${id}" title="${t}"><presentation><material><mattext texttype="text/plain">${escapeXML(p.question||q.question)}</mattext></material><response_str ident="r${id}" rcardinality="Single"><render_fib/></response_str></presentation><resprocessing><outcomes><decvar varname="SCORE" vartype="Decimal" minvalue="0" maxvalue="1"/></outcomes></resprocessing><itemproc_extension><calculated><answer_tolerance>0.01</answer_tolerance><formulas><formula>${escapeXML(p.answerFormula||q.answerFormula||p.answer||"")}</formula></formulas><vars>${vars}</vars></calculated></itemproc_extension></item>`;
+        return `<item ident="${id}" title="${t}"><presentation><material><mattext texttype="text/plain">${qnum+escapeXML(p.question||q.question)}</mattext></material><response_str ident="r${id}" rcardinality="Single"><render_fib/></response_str></presentation><resprocessing><outcomes><decvar varname="SCORE" vartype="Decimal" minvalue="0" maxvalue="1"/></outcomes></resprocessing><itemproc_extension><calculated><answer_tolerance>0.01</answer_tolerance><formulas><formula>${escapeXML(p.answerFormula||q.answerFormula||p.answer||"")}</formula></formulas><vars>${vars}</vars></calculated></itemproc_extension></item>`;
       }
-      return `<item ident="${id}" title="${t}"><presentation><material><mattext texttype="text/plain">${escapeXML(p.question||q.question)}</mattext></material><response_str ident="r${id}" rcardinality="Single"><render_fib rows="5" columns="80"/></response_str></presentation><resprocessing><outcomes><decvar maxvalue="1" minvalue="0" varname="SCORE" vartype="Decimal"/></outcomes></resprocessing></item>`;
+      return `<item ident="${id}" title="${t}"><presentation><material><mattext texttype="text/plain">${qtext}</mattext></material><response_str ident="r${id}" rcardinality="Single"><render_fib rows="5" columns="80"/></response_str></presentation><resprocessing><outcomes><decvar maxvalue="1" minvalue="0" varname="SCORE" vartype="Decimal"/></outcomes></resprocessing></item>`;
     }).join("\n");
   }).join("\n");
   return `<?xml version="1.0" encoding="UTF-8"?>\n<questestinterop xmlns="http://www.imsglobal.org/xsd/ims_qtiasiv1p2">\n  <assessment title="${escapeXML(course)} — Version ${vLabel}">\n    <section ident="main">\n${items}\n    </section>\n  </assessment>\n</questestinterop>`;
@@ -409,6 +504,18 @@ function buildVersionPrompt(selectedQuestions, mutationType, versionLabel) {
   return `TESTBANK_VERSION_REQUEST\nVersion: ${versionLabel}\n\nMutate the following questions to create Version ${versionLabel}:\n${lines}\n\nMUTATION RULES:\n- numbers mutation: keep exact same function type and concept, only change coefficients/constants. Same difficulty, same steps.\n- function mutation: change to different but equivalent-difficulty function of same concept. Same difficulty, same steps.\n- For Branched: mutate the shared stem and regenerate ALL parts consistently.\n- ALWAYS regenerate the correct answer key for the mutated version.\n- Keep same question type, section, and difficulty.\n\nReturn a JSON array of mutated questions in the SAME order preserving the original structure:\n- Regular: {type, section, difficulty, question, answer, explanation, choices if MC}\n- Formula: {type, section, difficulty, question, variables, answerFormula, answer, explanation}\n- Branched: {type, section, difficulty, stem, parts:[{question,answer,explanation}]}\nReply with ONLY valid JSON array, no markdown.`;
 }
 
+
+// Combined prompt for ALL versions at once
+function buildAllVersionsPrompt(selectedQuestions, mutationType, labels) {
+  const lines = selectedQuestions.map((q,i) => {
+    const mut = mutationType[q.id]||"numbers";
+    const orig = q.type==="Branched" ? q.stem : q.question;
+    return (i+1)+". ["+q.section+"] ["+mut+" mutation] ["+q.type+"] Original: "+orig;
+  }).join("\n");
+  const versionList = labels.join(", ");
+  return `TESTBANK_ALL_VERSIONS_REQUEST\nVersions to create: ${versionList}\n\nFor each version, mutate ALL of the following questions:\n${lines}\n\nMUTATION RULES:\n- numbers mutation: keep exact same function type and concept, only change coefficients/constants. Same difficulty, same steps.\n- function mutation: change to different but equivalent-difficulty function of same concept. Same difficulty, same steps.\n- For Branched: mutate the shared stem and regenerate ALL parts consistently.\n- ALWAYS regenerate a correct answer key for each mutated version.\n- Keep same question type, section, and difficulty.\n- Each version must be DIFFERENT from all others.\n\nReturn a JSON object with one key per version label. Each value is a JSON array of mutated questions in the SAME order:\n{\n  "A": [{type, section, difficulty, question, choices, answer, explanation}, ...],\n  "B": [{type, section, difficulty, question, choices, answer, explanation}, ...],\n  ...\n}\nReply with ONLY valid JSON object, no markdown, no explanation.`;
+}
+
 function buildReplacePrompt(q) {
   return `TESTBANK_REPLACE_REQUEST\nGenerate 1 replacement question.\nSection: ${q.section} | Type: ${q.type} | Difficulty: ${q.difficulty}\nOriginal: ${q.type==="Branched" ? q.stem : q.question}\nRequirements: same section, same type, same difficulty, DIFFERENT question.\nUse plain-text math notation.\n${q.type==="Multiple Choice"?"Include 4 choices and correct answer.":""}\n${q.type==="Formula"?"Include variables array and answerFormula.":""}\n${q.type==="Branched"?"Include stem and parts array.":""}\nReply with ONLY a JSON array containing exactly 1 item, no markdown.`;
 }
@@ -544,10 +651,14 @@ export default function TestBankApp() {
   const [filterCourse, setFilterCourse] = useState("All");
   const [filterType, setFilterType] = useState("All");
   const [filterDiff, setFilterDiff] = useState("All");
+  const [filterSection, setFilterSection] = useState("All");
   const [saveExamName, setSaveExamName] = useState("");
   const [savingExam, setSavingExam] = useState(false);
   const [examSaved, setExamSaved] = useState(false);
   const [generatedPrompt, setGeneratedPrompt] = useState("");
+  const [versionsViewMode, setVersionsViewMode] = useState("single"); // "single" | "compare"
+  const [compareSection, setCompareSection] = useState("All");
+  const [selectedQIndices, setSelectedQIndices] = useState([]); // indices selected in compare mode for export
 
   const accent = course ? COURSES[course].color : "#10b981";
 
@@ -564,6 +675,29 @@ export default function TestBankApp() {
     setPasteError("");
     try {
       const raw = pasteInput.trim();
+
+      // For version_all, parse as object {A:[...], B:[...]}
+      if (pendingType === "version_all") {
+        const objMatch = raw.match(/\{[\s\S]*\}/);
+        if (!objMatch) throw new Error("No JSON object found. Make sure you copied the full response.");
+        const parsed = JSON.parse(objMatch[0]);
+        const { selected, labels } = pendingMeta;
+        const allVersions = labels.map(label => {
+          const qs = parsed[label] || [];
+          const versioned = qs.map((q,i) => ({
+            ...q, id: uid(), originalId: selected[i]?.id,
+            course: selected[i]?.course || course,
+            versionLabel: label, createdAt: Date.now()
+          }));
+          return { label, questions: versioned };
+        });
+        setVersions(allVersions); setActiveVersion(0);
+        setPendingType(null); setPasteInput(""); setPendingMeta(null);
+        setExamSaved(false); setSaveExamName("");
+        setScreen("versions");
+        return;
+      }
+
       const match = raw.match(/\[[\s\S]*\]/);
       if (!match) throw new Error("No JSON array found. Make sure you copied the full response.");
       const parsed = JSON.parse(match[0]);
@@ -610,10 +744,11 @@ export default function TestBankApp() {
   function triggerVersions() {
     const selected = bank.filter(q => selectedForExam.includes(q.id));
     const labels = VERSIONS.slice(0, versionCount);
-    const firstLabel = labels[0]; const remaining = labels.slice(1);
-    const prompt = buildVersionPrompt(selected, mutationType, firstLabel);
+    // Use combined all-versions prompt — one paste for everything
+    const prompt = buildAllVersionsPrompt(selected, mutationType, labels);
     setGeneratedPrompt(prompt);
-    setPendingType("version"); setPendingMeta({ selected, label: firstLabel, allVersions: [], remaining, mutationType });
+    setPendingType("version_all");
+    setPendingMeta({ selected, labels, mutationType });
     setPasteInput(""); setPasteError("");
   }
 
@@ -639,10 +774,17 @@ export default function TestBankApp() {
 
   const chapters = course ? COURSES[course].chapters : [];
   const totalQ = selectedSections.reduce((a,s) => a + (sectionCounts[s] || 3), 0);
+
+  // Get available sections based on selected course filter
+  const availableSections = filterCourse === "All"
+    ? [...new Set(bank.map(q => q.section).filter(Boolean))].sort()
+    : (COURSES[filterCourse]?.chapters || []).flatMap(ch => ch.sections);
+
   const filteredBank = bank.filter(q =>
     (filterCourse === "All" || q.course === filterCourse) &&
     (filterType === "All" || q.type === filterType) &&
-    (filterDiff === "All" || q.difficulty === filterDiff)
+    (filterDiff === "All" || q.difficulty === filterDiff) &&
+    (filterSection === "All" || q.section === filterSection)
   );
   const courseColors = { "Calculus 1":"#10b981","Calculus 2":"#8b5cf6","Calculus 3":"#f59e0b","Quantitative Methods I":"#06b6d4","Quantitative Methods II":"#f43f5e","Discrete Mathematics":"#a855f7" };
 
@@ -871,8 +1013,12 @@ export default function TestBankApp() {
             <p style={S.sub}>{bank.length} questions saved in Supabase.</p>
 
             <div style={{display:"flex", gap:"0.75rem", marginBottom:"1.25rem", flexWrap:"wrap"}}>
-              <select style={{...S.sel, width:"155px"}} value={filterCourse} onChange={e => setFilterCourse(e.target.value)}>
+              <select style={{...S.sel, width:"155px"}} value={filterCourse} onChange={e => { setFilterCourse(e.target.value); setFilterSection("All"); }}>
                 <option>All</option>{Object.keys(COURSES).map(c => <option key={c}>{c}</option>)}
+              </select>
+              <select style={{...S.sel, width:"200px"}} value={filterSection} onChange={e => setFilterSection(e.target.value)}>
+                <option value="All">All Sections</option>
+                {availableSections.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
               <select style={{...S.sel, width:"145px"}} value={filterType} onChange={e => setFilterType(e.target.value)}>
                 <option>All</option>{QTYPES.map(t => <option key={t}>{t}</option>)}
@@ -890,8 +1036,10 @@ export default function TestBankApp() {
               </div>
             )}
 
-            {filteredBank.map(q => (
-              <div key={q.id} style={S.qCard}>
+            {filteredBank.map(q => {
+              const inExam = selectedForExam.includes(q.id);
+              return (
+              <div key={q.id} style={{...S.qCard, borderColor: inExam ? accent+"66" : undefined}}>
                 <div style={S.qMeta}>
                   <span style={S.tag(courseColors[q.course])}>{q.course}</span>
                   <span style={S.tag()}>{q.type}</span>
@@ -901,11 +1049,12 @@ export default function TestBankApp() {
                     onClick={async () => { await deleteQuestion(q.id); setBank(prev => prev.filter(bq => bq.id !== q.id)); }}>
                     ✕
                   </button>
-                  <button style={{...S.smBtn, color:selectedForExam.includes(q.id)?accent:text2, border:"1px solid "+(selectedForExam.includes(q.id)?accent+"44":border)}}
+                  <button style={{...S.smBtn, color:inExam?accent:text2, border:"1px solid "+(inExam?accent+"44":border)}}
                     onClick={() => setSelectedForExam(p => p.includes(q.id) ? p.filter(id => id !== q.id) : [...p, q.id])}>
-                    {selectedForExam.includes(q.id) ? "✓ In exam" : "+ Exam"}
+                    {inExam ? "✓ In exam" : "+ Exam"}
                   </button>
                 </div>
+
                 {q.type === "Branched" ? (
                   <>
                     <div style={{...S.qText, color:accent+"cc"}}>Given: <MathText>{q.stem}</MathText></div>
@@ -925,38 +1074,61 @@ export default function TestBankApp() {
                     {q.explanation && <div style={S.expl}>💡 <MathText>{q.explanation}</MathText></div>}
                   </>
                 )}
+
+                {/* Inline mutation selector — only shown when question is selected for exam */}
+                {inExam && (
+                  <div style={{display:"flex", alignItems:"center", gap:"0.5rem", marginTop:"0.6rem", paddingTop:"0.6rem", borderTop:"1px solid "+accent+"33"}}>
+                    <span style={{fontSize:"0.68rem", color:accent, fontWeight:"bold", letterSpacing:"0.08em", textTransform:"uppercase"}}>Mutation:</span>
+                    <button
+                      style={{...S.smBtn, background:(mutationType[q.id]||"numbers")==="numbers"?accent+"22":"transparent", color:(mutationType[q.id]||"numbers")==="numbers"?accent:text2, border:"1px solid "+((mutationType[q.id]||"numbers")==="numbers"?accent+"66":border)}}
+                      onClick={() => setMutationType(p => ({...p,[q.id]:"numbers"}))}>
+                      numbers
+                    </button>
+                    <button
+                      style={{...S.smBtn, background:mutationType[q.id]==="function"?"#8b5cf622":"transparent", color:mutationType[q.id]==="function"?"#8b5cf6":text2, border:"1px solid "+(mutationType[q.id]==="function"?"#8b5cf666":border)}}
+                      onClick={() => setMutationType(p => ({...p,[q.id]:"function"}))}>
+                      function
+                    </button>
+                  </div>
+                )}
               </div>
-            ))}
+              );
+            })}
 
             {selectedForExam.length > 0 && (
               <div style={{...S.card, borderColor:accent+"44", marginTop:"1.5rem"}}>
-                <div style={{fontSize:"0.78rem", color:accent, fontWeight:"bold", marginBottom:"0.75rem"}}>
-                  {selectedForExam.length} questions selected for exam
-                </div>
-                <div style={S.row}>
-                  <div style={S.field}>
-                    <label style={S.lbl}>Versions</label>
-                    <select style={S.sel} value={versionCount} onChange={e => setVersionCount(Number(e.target.value))}>
+                <div style={{display:"flex", alignItems:"center", gap:"1rem", flexWrap:"wrap", marginBottom:"0.75rem"}}>
+                  <span style={{fontSize:"0.78rem", color:accent, fontWeight:"bold"}}>
+                    {selectedForExam.length} question{selectedForExam.length!==1?"s":""} selected
+                  </span>
+                  <div style={{display:"flex", alignItems:"center", gap:"0.5rem"}}>
+                    <span style={{fontSize:"0.72rem", color:text2}}>Versions:</span>
+                    <select style={{...S.sel, width:"130px", padding:"0.4rem 0.6rem"}} value={versionCount} onChange={e => setVersionCount(Number(e.target.value))}>
                       {[1,2,3,4,5].map(n => <option key={n} value={n}>{n} version{n>1?"s":""}</option>)}
                     </select>
                   </div>
+                  <button style={S.btn(accent, false)} onClick={triggerVersions}>✦ Build Versions</button>
                 </div>
-                <div style={{marginBottom:"0.75rem", fontSize:"0.78rem", color:text2}}>
-                  Mutation per question:
-                  {bank.filter(q => selectedForExam.includes(q.id)).map(q => (
-                    <span key={q.id} style={{display:"inline-flex", alignItems:"center", gap:"0.3rem", margin:"0.3rem 0.3rem 0 0"}}>
-                      <span style={S.tag(courseColors[q.course])}>{q.section.split(" ").slice(0,3).join(" ")}</span>
-                      <select style={{...S.sel, width:"110px", padding:"0.2rem 0.4rem", fontSize:"0.72rem"}}
-                        value={mutationType[q.id]||"numbers"}
-                        onChange={e => setMutationType(p => ({...p,[q.id]:e.target.value}))}>
-                        <option value="numbers">numbers</option>
-                        <option value="function">function</option>
-                      </select>
-                    </span>
-                  ))}
-                </div>
-                <button style={S.btn(accent, false)} onClick={triggerVersions}>✦ Build Versions</button>
+                <div style={{fontSize:"0.68rem", color:text3}}>Tip: set numbers/function mutation on each question card above ↑</div>
               </div>
+            )}
+
+            {pendingType === "version_all" && generatedPrompt && (
+              <>
+                <hr style={S.divider} />
+                <div style={{fontSize:"0.78rem", color:accent, fontWeight:"bold", marginBottom:"0.5rem"}}>
+                  📋 Copy this prompt — generates ALL {pendingMeta?.labels?.join(", ")} versions at once:
+                </div>
+                <div style={S.promptBox}>{generatedPrompt}</div>
+                <button style={S.oBtn(accent)} onClick={() => navigator.clipboard.writeText(generatedPrompt)}>Copy Prompt</button>
+                <PastePanel
+                  label={`Paste the JSON object with all versions ({"A":[...], "B":[...], ...}) here.`}
+                  S={S} text2={text2}
+                  pasteInput={pasteInput} setPasteInput={setPasteInput}
+                  pasteError={pasteError} handlePaste={handlePaste}
+                  onCancel={() => { setPendingType(null); setPasteInput(""); setGeneratedPrompt(""); }}
+                />
+              </>
             )}
 
             {pendingType === "version" && generatedPrompt && (
@@ -1025,19 +1197,31 @@ export default function TestBankApp() {
                   </div>
                 )}
 
-                {/* Version tabs */}
-                <div style={{display:"flex", gap:"0.5rem", marginBottom:"1.25rem", flexWrap:"wrap"}}>
-                  {versions.map((v,i) => (
-                    <button key={v.label} style={S.vTab(activeVersion===i,"#f43f5e")} onClick={() => setActiveVersion(i)}>
-                      Version {v.label} <span style={{fontSize:"0.68rem", opacity:0.7, marginLeft:"0.3rem"}}>({v.questions.length}q)</span>
-                    </button>
-                  ))}
+                {/* View mode toggle */}
+                <div style={{display:"flex", gap:"0.5rem", marginBottom:"1.25rem", alignItems:"center", flexWrap:"wrap"}}>
+                  <span style={{fontSize:"0.72rem", color:text2, marginRight:"0.25rem"}}>View:</span>
+                  <button style={S.vTab(versionsViewMode==="single","#f43f5e")} onClick={() => setVersionsViewMode("single")}>
+                    📄 Single Version
+                  </button>
+                  <button style={S.vTab(versionsViewMode==="compare","#8b5cf6")} onClick={() => setVersionsViewMode("compare")}>
+                    🔀 Compare All Versions
+                  </button>
                 </div>
 
-                {(() => {
+                {/* ── SINGLE VERSION MODE ── */}
+                {versionsViewMode === "single" && (() => {
                   const v = versions[activeVersion];
                   return (
                     <>
+                      {/* Version tabs */}
+                      <div style={{display:"flex", gap:"0.5rem", marginBottom:"1.25rem", flexWrap:"wrap"}}>
+                        {versions.map((ver,i) => (
+                          <button key={ver.label} style={S.vTab(activeVersion===i,"#f43f5e")} onClick={() => setActiveVersion(i)}>
+                            Version {ver.label} <span style={{fontSize:"0.68rem", opacity:0.7, marginLeft:"0.3rem"}}>({ver.questions.length}q)</span>
+                          </button>
+                        ))}
+                      </div>
+
                       <div style={{display:"flex", gap:"0.75rem", marginBottom:"1.25rem", flexWrap:"wrap"}}>
                         <button style={S.btn("#8b5cf6",false)} onClick={async () => {
                           dlFile(buildQTI(v.questions,v.questions[0]?.course||"Calculus",v.label),"Version_"+v.label+"_QTI.xml","text/xml");
@@ -1049,13 +1233,13 @@ export default function TestBankApp() {
                           if (examSaved && saveExamName) await logExport(saveExamName, "Word", v.label);
                         }}>⬇ Word (.docx)</button>
                         <button style={S.oBtn("#f59e0b")} onClick={() => versions.forEach(ver => dlFile(buildQTI(ver.questions,ver.questions[0]?.course||"Calculus",ver.label),"Version_"+ver.label+"_QTI.xml","text/xml"))}>⬇ All QTI</button>
-                        <button style={S.oBtn("#f59e0b")} onClick={async () => { for(const ver of versions){ const blob=await buildDocx(ver.questions,ver.questions[0]?.course||"Calculus",ver.label); dlBlob(blob,"Version_"+ver.label+"_Exam.docx"); }}}>⬇ All Word (.docx)</button>
+                        <button style={S.oBtn("#f59e0b")} onClick={async () => { for(const ver of versions){ const blob=await buildDocx(ver.questions,ver.questions[0]?.course||"Calculus",ver.label); dlBlob(blob,"Version_"+ver.label+"_Exam.docx"); }}}>⬇ All Word</button>
                       </div>
 
                       {v.questions.map((q,qi) => (
                         <div key={q.id||qi} style={S.qCard}>
                           <div style={S.qMeta}>
-                            <span>Q{qi+1}</span>
+                            <span style={{fontWeight:"bold", color:text1}}>Q{qi+1}</span>
                             <span style={S.tag("#f43f5e")}>{q.type}</span>
                             <span style={S.tag()}>{q.section}</span>
                             <span style={S.tag()}>{q.difficulty}</span>
@@ -1095,6 +1279,81 @@ export default function TestBankApp() {
                               />
                             </>
                           )}
+                        </div>
+                      ))}
+                    </>
+                  );
+                })()}
+
+                {/* ── COMPARE ALL VERSIONS MODE ── */}
+                {versionsViewMode === "compare" && (() => {
+                  const numQ = versions[0]?.questions?.length || 0;
+                  const allSections = [...new Set(versions.flatMap(v => v.questions.map(q => q.section)))];
+                  const [filterSec, setFilterSec] = [compareSection, setCompareSection];
+
+                  const filteredIndices = Array.from({length:numQ},(_,i)=>i).filter(i => {
+                    if (filterSec === "All") return true;
+                    return versions.some(v => v.questions[i]?.section === filterSec);
+                  });
+
+                  return (
+                    <>
+                      {/* Section filter */}
+                      <div style={{display:"flex", gap:"0.75rem", marginBottom:"1.25rem", alignItems:"center", flexWrap:"wrap"}}>
+                        <span style={{fontSize:"0.72rem", color:text2}}>Filter section:</span>
+                        <select style={{...S.sel, width:"220px"}} value={filterSec} onChange={e => setFilterSec(e.target.value)}>
+                          <option value="All">All Sections</option>
+                          {allSections.map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                        <span style={{fontSize:"0.72rem", color:text2}}>{filteredIndices.length} question{filteredIndices.length!==1?"s":""}</span>
+                      </div>
+
+                      {/* Export buttons for compare view */}
+                      <div style={{display:"flex", gap:"0.75rem", marginBottom:"1.25rem", flexWrap:"wrap"}}>
+                        <button style={S.oBtn("#f59e0b")} onClick={() => versions.forEach(ver => dlFile(buildQTI(ver.questions,ver.questions[0]?.course||"Calculus",ver.label),"Version_"+ver.label+"_QTI.xml","text/xml"))}>⬇ All QTI</button>
+                        <button style={S.oBtn("#f59e0b")} onClick={async () => { for(const ver of versions){ const blob=await buildDocx(ver.questions,ver.questions[0]?.course||"Calculus",ver.label); dlBlob(blob,"Version_"+ver.label+"_Exam.docx"); }}}>⬇ All Word</button>
+                      </div>
+
+                      {/* Questions grouped by number, all versions stacked */}
+                      {filteredIndices.map(qi => (
+                        <div key={qi} style={{marginBottom:"1.5rem"}}>
+                          {/* Question group header */}
+                          <div style={{fontSize:"0.72rem", color:"#f43f5e", fontWeight:"bold", letterSpacing:"0.1em", textTransform:"uppercase", marginBottom:"0.5rem", padding:"0.3rem 0.6rem", background:"#f43f5e18", borderRadius:"5px", display:"inline-block"}}>
+                            Question {qi+1} — {versions[0]?.questions[qi]?.section} — {versions[0]?.questions[qi]?.difficulty}
+                          </div>
+
+                          {versions.map((v, vi) => {
+                            const q = v.questions[qi];
+                            if (!q) return null;
+                            const vColors = ["#f43f5e","#8b5cf6","#f59e0b","#06b6d4","#10b981"];
+                            const vc = vColors[vi % vColors.length];
+                            return (
+                              <div key={v.label} style={{...S.qCard, borderLeft:`3px solid ${vc}`, marginBottom:"0.4rem"}}>
+                                <div style={S.qMeta}>
+                                  <span style={{background:vc+"22", color:vc, border:`1px solid ${vc}44`, borderRadius:"4px", padding:"0.15rem 0.5rem", fontSize:"0.7rem", fontWeight:"bold"}}>Version {v.label}</span>
+                                  <span style={S.tag()}>{q.type}</span>
+                                </div>
+                                {q.type==="Branched" ? (
+                                  <>
+                                    <div style={{...S.qText,color:vc+"cc"}}>Given: <MathText>{q.stem}</MathText></div>
+                                    {(q.parts||[]).map((p,pi) => (
+                                      <div key={pi} style={{marginBottom:"0.4rem",paddingLeft:"0.75rem",borderLeft:"2px solid "+border}}>
+                                        <div style={{fontSize:"0.7rem",color:text3}}>({String.fromCharCode(97+pi)})</div>
+                                        <div style={S.qText}><MathText>{p.question}</MathText></div>
+                                        {p.answer&&<div style={S.ans}>Answer: <MathText>{p.answer}</MathText></div>}
+                                      </div>
+                                    ))}
+                                  </>
+                                ) : (
+                                  <>
+                                    <div style={S.qText}><MathText>{q.question}</MathText></div>
+                                    {q.choices&&<ul style={S.cList}>{q.choices.map((c,ci)=><li key={ci} style={S.cItem(c===q.answer)}>{String.fromCharCode(65+ci)}. <MathText>{c}</MathText></li>)}</ul>}
+                                    {q.answer&&<div style={S.ans}>✓ <MathText>{q.answer}</MathText></div>}
+                                  </>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
                       ))}
                     </>
