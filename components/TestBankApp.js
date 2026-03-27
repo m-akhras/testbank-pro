@@ -227,32 +227,154 @@ function buildQTI(questions, course, vLabel) {
   return `<?xml version="1.0" encoding="UTF-8"?>\n<questestinterop xmlns="http://www.imsglobal.org/xsd/ims_qtiasiv1p2">\n  <assessment title="${escapeXML(course)} — Version ${vLabel}">\n    <section ident="main">\n${items}\n    </section>\n  </assessment>\n</questestinterop>`;
 }
 
-function buildDoc(questions, course, vLabel) {
-  let out = course+" — Version "+vLabel+"\nStewart: Early Transcendentals, 9th Ed.\n"+"=".repeat(60)+"\n\n";
-  questions.forEach((q,i) => {
-    if (q.type==="Branched") {
-      out += (i+1)+". [Branched | "+q.section+"]\nGiven: "+q.stem+"\n\n";
-      (q.parts||[]).forEach((p,pi) => {
-        out += "  ("+String.fromCharCode(97+pi)+") "+p.question+"\n";
-        if(p.choices) p.choices.forEach((c,ci)=>{ out+="      "+String.fromCharCode(65+ci)+". "+c+"\n"; });
-        if(p.answer) out+="      Answer: "+p.answer+"\n";
-        out+="\n";
+// ─── Math text → OMML (Word native math) converter ───────────────────────────
+function mathToOmml(raw) {
+  const s = String(raw ?? "");
+  // Convert common plain-text math patterns to OMML XML
+  function ommlFrac(num, den) {
+    return `<m:f><m:fPr><m:type m:val="bar"/></m:fPr><m:num><m:r><m:t>${num}</m:t></m:r></m:num><m:den><m:r><m:t>${den}</m:t></m:r></m:den></m:f>`;
+  }
+  function ommlSup(base, exp) {
+    return `<m:sSup><m:e><m:r><m:t>${base}</m:t></m:r></m:e><m:sup><m:r><m:t>${exp}</m:t></m:r></m:sup></m:sSup>`;
+  }
+  function ommlSqrt(inner) {
+    return `<m:rad><m:radPr><m:degHide m:val="1"/></m:radPr><m:deg/><m:e><m:r><m:t>${inner}</m:t></m:r></m:e></m:rad>`;
+  }
+  // Build OMML runs from text - handles inline math patterns
+  let result = s
+    .replace(/sqrt\(([^)]+)\)/g, (_,x) => `§SQRT§${x}§/SQRT§`)
+    .replace(/frac\(([^,)]+),([^)]+)\)/g, (_,n,d) => `§FRAC§${n.trim()}§SEP§${d.trim()}§/FRAC§`)
+    .replace(/([a-zA-Z0-9]+)\^(\{[^}]+\}|[a-zA-Z0-9\-+]+)/g, (_,b,e) => `§SUP§${b}§SEP§${e.replace(/[{}]/g,"")}§/SUP§`)
+    .replace(/d\/d([a-z])/g, (_,v) => `d/d${v}`)
+    .replace(/lim as ([a-z])->([^\s,]+)/gi, (_,v,a) => `lim(${v}→${a})`);
+
+  // Build OMML paragraph runs
+  const parts = result.split(/§(SQRT|FRAC|SUP)§/);
+  let omml = `<m:oMath>`;
+  let i = 0;
+  const tokens = result.split(/(§(?:SQRT|FRAC|SUP)§.*?§\/(?:SQRT|FRAC|SUP)§)/);
+  tokens.forEach(tok => {
+    if (tok.startsWith("§SQRT§")) {
+      const inner = tok.replace(/§SQRT§|§\/SQRT§/g,"");
+      omml += ommlSqrt(inner);
+    } else if (tok.startsWith("§FRAC§")) {
+      const [n,d] = tok.replace(/§FRAC§|§\/FRAC§/g,"").split("§SEP§");
+      omml += ommlFrac(n,d);
+    } else if (tok.startsWith("§SUP§")) {
+      const [b,e] = tok.replace(/§SUP§|§\/SUP§/g,"").split("§SEP§");
+      omml += ommlSup(b,e);
+    } else if (tok) {
+      omml += `<m:r><m:t xml:space="preserve">${tok.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}</m:t></m:r>`;
+    }
+  });
+  omml += `</m:oMath>`;
+  return omml;
+}
+
+// ─── Build proper .docx file ──────────────────────────────────────────────────
+async function buildDocx(questions, course, vLabel) {
+  // We build the docx XML manually for full math support
+  const ns = `xmlns:wpc="http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:wp14="http://schemas.microsoft.com/office/word/2010/wordprocessingDrawing" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:w10="urn:schemas-microsoft-com:office:word" xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml" xmlns:wpg="http://schemas.microsoft.com/office/word/2010/wordprocessingGroup" xmlns:wpi="http://schemas.microsoft.com/office/word/2010/wordprocessingInk" xmlns:wne="http://schemas.microsoft.com/office/word/2006/wordml" xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape"`;
+
+  function para(text, opts={}) {
+    const {bold=false, size=24, color="000000", indent=0, spacing=160} = opts;
+    const rpr = `<w:rPr>${bold?'<w:b/>':''}<w:sz w:val="${size}"/><w:color w:val="${color}"/></w:rPr>`;
+    const ppr = `<w:pPr><w:spacing w:after="${spacing}"/>${indent?`<w:ind w:left="${indent}"/>`:''}${bold?'<w:jc w:val="left"/>' :''}</w:pPr>`;
+    return `<w:p>${ppr}<w:r>${rpr}<w:t xml:space="preserve">${String(text).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}</w:t></w:r></w:p>`;
+  }
+
+  function mathPara(text, opts={}) {
+    const {indent=0} = opts;
+    const ppr = indent ? `<w:pPr><w:ind w:left="${indent}"/><w:spacing w:after="80"/></w:pPr>` : `<w:pPr><w:spacing w:after="80"/></w:pPr>`;
+    return `<w:p>${ppr}${mathToOmml(text)}</w:p>`;
+  }
+
+  let body = "";
+  // Title
+  body += para(`${course} — Exam Version ${vLabel}`, {bold:true, size:32, spacing:120});
+  body += para("Stewart: Early Transcendentals, 9th Edition", {size:22, color:"555555", spacing:200});
+
+  questions.forEach((q, i) => {
+    const num = i + 1;
+    if (q.type === "Branched") {
+      body += para(`${num}. [${q.section}] — ${q.difficulty}`, {bold:true, size:24, spacing:80});
+      body += mathPara(`Given: ${q.stem}`);
+      (q.parts||[]).forEach((p, pi) => {
+        body += para(`(${String.fromCharCode(97+pi)})`, {indent:360, size:22, spacing:60});
+        body += mathPara(p.question, {indent:360});
+        if (p.choices) p.choices.forEach((c,ci) => {
+          body += mathPara(`${String.fromCharCode(65+ci)}. ${c}`, {indent:720});
+        });
+        if (p.answer) body += para(`Answer: ${p.answer}`, {indent:360, size:22, color:"1a7a4a", spacing:80});
       });
     } else {
-      out += (i+1)+". ["+q.type+" | "+q.section+"]\n"+q.question+"\n";
-      if(q.type==="Formula") out+="  Variables: "+(q.variables||[]).map(v=>v.name+"∈["+v.min+","+v.max+"]").join(", ")+"\n";
-      if(q.choices) q.choices.forEach((c,ci)=>{ out+="  "+String.fromCharCode(65+ci)+". "+c+"\n"; });
-      if(q.answer) out+="\n  Answer: "+q.answer+"\n";
-      if(q.explanation) out+="  Note: "+q.explanation+"\n";
+      body += para(`${num}. [${q.section}] — ${q.type} — ${q.difficulty}`, {bold:true, size:24, spacing:80});
+      body += mathPara(q.question);
+      if (q.type==="Formula" && q.variables) {
+        body += para(`Variables: ${q.variables.map(v=>v.name+"∈["+v.min+","+v.max+"]").join(", ")}`, {indent:360, size:20, color:"555555", spacing:60});
+      }
+      if (q.choices) q.choices.forEach((c,ci) => {
+        body += mathPara(`${String.fromCharCode(65+ci)}. ${c}`, {indent:360});
+      });
+      if (q.answer) body += para(`✓ Answer: ${q.answer}`, {indent:0, size:22, color:"1a7a4a", spacing:60});
+      if (q.explanation) body += para(`Note: ${q.explanation}`, {indent:0, size:20, color:"666666", spacing:120});
     }
-    out+="\n";
+    body += `<w:p><w:pPr><w:spacing w:after="40"/><w:pBdr><w:bottom w:val="single" w:sz="4" w:space="1" w:color="DDDDDD"/></w:pBdr></w:pPr></w:p>`;
   });
-  return out;
+
+  const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document ${ns} mc:Ignorable="w14 wp14">
+<w:body>
+${body}
+<w:sectPr>
+  <w:pgSz w:w="12240" w:h="15840"/>
+  <w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/>
+</w:sectPr>
+</w:body>
+</w:document>`;
+
+  // Build minimal docx zip using JSZip loaded from CDN
+  if (!window.JSZip) {
+    await new Promise((res, rej) => {
+      const s = document.createElement("script");
+      s.src = "https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js";
+      s.onload = res; s.onerror = rej;
+      document.head.appendChild(s);
+    });
+  }
+
+  const zip = new window.JSZip();
+  zip.file("[Content_Types].xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+</Types>`);
+
+  zip.file("_rels/.rels", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+</Relationships>`);
+
+  zip.file("word/document.xml", documentXml);
+
+  zip.file("word/_rels/document.xml.rels", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+</Relationships>`);
+
+  const blob = await zip.generateAsync({type:"blob", mimeType:"application/vnd.openxmlformats-officedocument.wordprocessingml.document"});
+  return blob;
 }
 
 function dlFile(content, name, type) {
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([content],{type}));
+  a.download = name; a.click();
+}
+
+function dlBlob(blob, name) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
   a.download = name; a.click();
 }
 
@@ -922,11 +1044,12 @@ export default function TestBankApp() {
                           if (examSaved && saveExamName) await logExport(saveExamName, "QTI", v.label);
                         }}>⬇ QTI (.xml)</button>
                         <button style={S.btn("#10b981",false)} onClick={async () => {
-                          dlFile(buildDoc(v.questions,v.questions[0]?.course||"Calculus",v.label),"Version_"+v.label+"_Exam.txt","text/plain");
+                          const blob = await buildDocx(v.questions,v.questions[0]?.course||"Calculus",v.label);
+                          dlBlob(blob,"Version_"+v.label+"_Exam.docx");
                           if (examSaved && saveExamName) await logExport(saveExamName, "Word", v.label);
-                        }}>⬇ Word (.txt)</button>
+                        }}>⬇ Word (.docx)</button>
                         <button style={S.oBtn("#f59e0b")} onClick={() => versions.forEach(ver => dlFile(buildQTI(ver.questions,ver.questions[0]?.course||"Calculus",ver.label),"Version_"+ver.label+"_QTI.xml","text/xml"))}>⬇ All QTI</button>
-                        <button style={S.oBtn("#f59e0b")} onClick={() => versions.forEach(ver => dlFile(buildDoc(ver.questions,ver.questions[0]?.course||"Calculus",ver.label),"Version_"+ver.label+"_Exam.txt","text/plain"))}>⬇ All Word</button>
+                        <button style={S.oBtn("#f59e0b")} onClick={async () => { for(const ver of versions){ const blob=await buildDocx(ver.questions,ver.questions[0]?.course||"Calculus",ver.label); dlBlob(blob,"Version_"+ver.label+"_Exam.docx"); }}}>⬇ All Word (.docx)</button>
                       </div>
 
                       {v.questions.map((q,qi) => (
