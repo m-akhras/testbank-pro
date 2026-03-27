@@ -47,9 +47,17 @@ function toLatex(raw) {
   // frac(a,b) explicit
   s = s.replace(/\bfrac\(([^,)]+),\s*([^)]+)\)/g, (_,a,b)=>`\\(\\dfrac{${a.trim()}}{${b.trim()}}\\)`);
 
-  // Inline fractions like (a)/(b) or number/number  e.g. 2/3, (x+1)/(x-1)
+  // Inline fractions — most specific first
+  // (complex expr)/(complex expr)^n  e.g. (4x^2 - 2x - 12)/(4x-1)^2
+  s = s.replace(/\(([^()]+)\)\/\(([^()]+)\)\^([0-9]+)/g, (_,a,b,n)=>`\\(\\dfrac{${a}}{(${b})^{${n}}}\\)`);
+  // (complex expr)/(complex expr)
   s = s.replace(/\(([^()]+)\)\/\(([^()]+)\)/g, (_,a,b)=>`\\(\\dfrac{${a}}{${b}}\\)`);
-  s = s.replace(/([0-9]+)\/([0-9]+)/g, (_,a,b)=>`\\(\\dfrac{${a}}{${b}}\\)`);
+  // (complex expr)/(simple term) e.g. (x^2+1)/(2x)
+  s = s.replace(/\(([^()]+)\)\/([a-zA-Z0-9][a-zA-Z0-9^+\-*]*)/g, (_,a,b)=>`\\(\\dfrac{${a}}{${b}}\\)`);
+  // simple/simple with letters e.g. f'(x) notation, skip; but catch things like 2x/3, x^2/4
+  s = s.replace(/\b([a-zA-Z0-9]+\^[0-9]+)\/([a-zA-Z0-9]+(?:\^[0-9]+)?)\b/g, (_,a,b)=>`\\(\\dfrac{${a}}{${b}}\\)`);
+  // plain number/number e.g. 1/8, 3/4
+  s = s.replace(/\b([0-9]+)\/([0-9]+)\b/g, (_,a,b)=>`\\(\\dfrac{${a}}{${b}}\\)`);
 
   // e^(expr) and e^x
   s = s.replace(/\be\^\(([^)]+)\)/g, (_,x)=>`\\(e^{${x}}\\)`);
