@@ -481,6 +481,94 @@ function dlBlob(blob, name) {
   a.download = name; a.click();
 }
 
+// ─── Compare-mode exports (grouped by question number across versions) ─────────
+function buildQTICompare(versions, course) {
+  const numQ = versions[0]?.questions?.length || 0;
+  let items = "";
+  for (let qi = 0; qi < numQ; qi++) {
+    versions.forEach(v => {
+      const q = v.questions[qi];
+      if (!q) return;
+      const id = `q${qi+1}_v${v.label}`;
+      const title = `Q${qi+1} Version ${v.label}`;
+      const qtext = escapeXML(`Q${qi+1} [Version ${v.label}] ${q.question}`);
+      if (q.type === "Multiple Choice" && q.choices) {
+        const cx = q.choices.map((c,ci) => `<response_label ident="c${ci}"><material><mattext>${escapeXML(c)}</mattext></material></response_label>`).join("");
+        const correct = q.choices.findIndex(c => c === q.answer);
+        items += `<item ident="${id}" title="${title}"><presentation><material><mattext texttype="text/plain">${qtext}</mattext></material><response_lid ident="r${id}"><render_choice>${cx}</render_choice></response_lid></presentation><resprocessing><outcomes><decvar maxvalue="1" minvalue="0" varname="SCORE" vartype="Decimal"/></outcomes><respcondition continue="No"><conditionvar><varequal respident="r${id}">c${correct}</varequal></conditionvar><setvar action="Set" varname="SCORE">1</setvar></respcondition></resprocessing></item>\n`;
+      } else {
+        items += `<item ident="${id}" title="${title}"><presentation><material><mattext texttype="text/plain">${qtext}</mattext></material><response_str ident="r${id}" rcardinality="Single"><render_fib rows="5" columns="80"/></response_str></presentation><resprocessing><outcomes><decvar maxvalue="1" minvalue="0" varname="SCORE" vartype="Decimal"/></outcomes></resprocessing></item>\n`;
+      }
+    });
+  }
+  const vLabels = versions.map(v => v.label).join(", ");
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<questestinterop xmlns="http://www.imsglobal.org/xsd/ims_qtiasiv1p2">\n  <assessment title="${escapeXML(course)} — All Versions (${vLabels})">\n    <section ident="main">\n${items}    </section>\n  </assessment>\n</questestinterop>`;
+}
+
+async function buildDocxCompare(versions, course) {
+  const ns = `xmlns:wpc="http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math" xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml"`;
+
+  function para(text, opts={}) {
+    const {bold=false, size=24, color="000000", indent=0, spacing=120} = opts;
+    const rpr = `<w:rPr>${bold?'<w:b/>':''}<w:sz w:val="${size}"/><w:color w:val="${color}"/></w:rPr>`;
+    const ppr = `<w:pPr><w:spacing w:after="${spacing}"/>${indent?`<w:ind w:left="${indent}"/>`:''}</w:pPr>`;
+    return `<w:p>${ppr}<w:r>${rpr}<w:t xml:space="preserve">${String(text).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}</w:t></w:r></w:p>`;
+  }
+
+  const vLabels = versions.map(v => v.label).join(", ");
+  const numQ = versions[0]?.questions?.length || 0;
+  const vColors = ["1a7a4a","6d28d9","b45309","0e7490","be185d"];
+
+  let body = para(`${course} — All Versions (${vLabels})`, {bold:true, size:32, spacing:100});
+  body += para("Version Comparison — Grouped by Question Number", {size:22, color:"555555", spacing:200});
+
+  for (let qi = 0; qi < numQ; qi++) {
+    // Question group divider
+    body += `<w:p><w:pPr><w:spacing w:after="60"/><w:pBdr><w:top w:val="single" w:sz="6" w:space="1" w:color="334155"/></w:pBdr></w:pPr></w:p>`;
+    body += para(`Question ${qi+1} — ${versions[0]?.questions[qi]?.section || ""} — ${versions[0]?.questions[qi]?.difficulty || ""}`, {bold:true, size:26, color:"334155", spacing:80});
+
+    versions.forEach((v, vi) => {
+      const q = v.questions[qi];
+      if (!q) return;
+      const vc = vColors[vi % vColors.length];
+      body += para(`Version ${v.label}`, {bold:true, size:22, color:vc, spacing:60});
+      body += para(q.question, {size:22, spacing:60});
+      if (q.choices) q.choices.forEach((c,ci) => {
+        body += para(`${String.fromCharCode(65+ci)}. ${c}`, {indent:360, size:21, spacing:40});
+      });
+      body += para(`Answer: ${q.answer}`, {size:21, color:"1a7a4a", spacing:100});
+    });
+  }
+
+  const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document ${ns} mc:Ignorable="w14">
+<w:body>
+${body}
+<w:sectPr>
+  <w:pgSz w:w="12240" w:h="15840"/>
+  <w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/>
+</w:sectPr>
+</w:body>
+</w:document>`;
+
+  if (!window.JSZip) {
+    await new Promise((res, rej) => {
+      const s = document.createElement("script");
+      s.src = "https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js";
+      s.onload = res; s.onerror = rej;
+      document.head.appendChild(s);
+    });
+  }
+
+  const zip = new window.JSZip();
+  zip.file("[Content_Types].xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>`);
+  zip.file("_rels/.rels", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>`);
+  zip.file("word/document.xml", documentXml);
+  zip.file("word/_rels/document.xml.rels", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>`);
+
+  return await zip.generateAsync({type:"blob", mimeType:"application/vnd.openxmlformats-officedocument.wordprocessingml.document"});
+}
+
 function buildGeneratePrompt(course, selectedSections, sectionCounts, qType, diff) {
   const totalQ = selectedSections.reduce((a,s)=>a+(sectionCounts[s]||3),0);
   const breakdown = selectedSections.map(s=>s+": "+(sectionCounts[s]||3)+" question(s)").join("\n");
@@ -1318,8 +1406,18 @@ export default function TestBankApp() {
                         <span style={{fontSize:"0.72rem", color:text2}}>{filteredIndices.length} question{filteredIndices.length!==1?"s":""}</span>
                       </div>
 
-                      {/* Export buttons for compare view */}
+                      {/* Export buttons for compare view — grouped by question */}
                       <div style={{display:"flex", gap:"0.75rem", marginBottom:"1.25rem", flexWrap:"wrap"}}>
+                        <div style={{fontSize:"0.72rem", color:text2, alignSelf:"center", marginRight:"0.25rem"}}>Export grouped by question:</div>
+                        <button style={S.btn("#8b5cf6", false)} onClick={() => {
+                          const xml = buildQTICompare(versions, versions[0]?.questions[0]?.course || "Exam");
+                          dlFile(xml, "AllVersions_Grouped_QTI.xml", "text/xml");
+                        }}>⬇ QTI (grouped)</button>
+                        <button style={S.btn("#10b981", false)} onClick={async () => {
+                          const blob = await buildDocxCompare(versions, versions[0]?.questions[0]?.course || "Exam");
+                          dlBlob(blob, "AllVersions_Grouped.docx");
+                        }}>⬇ Word (grouped)</button>
+                        <div style={{fontSize:"0.72rem", color:text3, alignSelf:"center", marginLeft:"0.5rem"}}>or export separately:</div>
                         <button style={S.oBtn("#f59e0b")} onClick={() => versions.forEach(ver => dlFile(buildQTI(ver.questions,ver.questions[0]?.course||"Calculus",ver.label),"Version_"+ver.label+"_QTI.xml","text/xml"))}>⬇ All QTI</button>
                         <button style={S.oBtn("#f59e0b")} onClick={async () => { for(const ver of versions){ const blob=await buildDocx(ver.questions,ver.questions[0]?.course||"Calculus",ver.label); dlBlob(blob,"Version_"+ver.label+"_Exam.docx"); }}}>⬇ All Word</button>
                       </div>
