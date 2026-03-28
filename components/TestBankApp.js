@@ -315,6 +315,94 @@ async function logExport(examName, format, versionLabel) {
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
 function escapeXML(s) { return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
 
+// Convert plain-text math to HTML for Canvas QTI display
+function mathToHTML(s) {
+  let r = String(s ?? "");
+
+  // Escape HTML special chars first (we'll unescape selectively)
+  const esc = t => t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+  // Helper: wrap in superscript HTML
+  const sup = (base, exp) => `${base}<sup>${exp}</sup>`;
+  const frac = (n, d) => `<sup>${n}</sup>&frasl;<sub>${d}</sub>`;
+
+  // x^(n/m) fractional exponent — before other patterns
+  r = r.replace(/([a-zA-Z0-9\)])\^\((-?[0-9]+)\/([0-9]+)\)/g,
+    (_, base, n, d) => `${base}<sup>${n}/${d}</sup>`);
+
+  // x^(expr) parenthesized
+  r = r.replace(/([a-zA-Z0-9\)])\^\(([^)]+)\)/g,
+    (_, base, exp) => `${base}<sup>${exp}</sup>`);
+
+  // x^{expr}
+  r = r.replace(/([a-zA-Z0-9\)])\^\{([^}]+)\}/g,
+    (_, base, exp) => `${base}<sup>${exp}</sup>`);
+
+  // x^2, x^n single
+  r = r.replace(/([a-zA-Z0-9])\^(-?[0-9]+)/g,
+    (_, base, exp) => `${base}<sup>${exp}</sup>`);
+  r = r.replace(/([a-zA-Z])\^([a-zA-Z][a-zA-Z0-9]*)/g,
+    (_, base, exp) => `${base}<sup>${exp}</sup>`);
+
+  // sqrt(expr) → √(expr) with overline styling
+  r = r.replace(/sqrt\(([^)]+)\)/g, (_, inner) => `&radic;(${inner})`);
+  r = r.replace(/cbrt\(([^)]+)\)/g, (_, inner) => `&#8731;(${inner})`);
+
+  // frac(a,b)
+  r = r.replace(/frac\(([^,)]+),([^)]+)\)/g,
+    (_, n, d) => `(${n.trim()})&frasl;(${d.trim()})`);
+
+  // (a)/(b) fraction
+  r = r.replace(/\(([^()]+)\)\/\(([^()]+)\)/g,
+    (_, n, d) => `(${n})&frasl;(${d})`);
+
+  // number/number
+  r = r.replace(/\b([0-9]+)\/([0-9]+)\b/g,
+    (_, n, d) => `${n}&frasl;${d}`);
+
+  // trig/log functions
+  r = r.replace(/\b(sin|cos|tan|sec|csc|cot|ln|log|arcsin|arccos|arctan|sinh|cosh|tanh)\(([^)]+)\)/g,
+    (_, fn, arg) => `${fn}(${arg})`);
+
+  // lim as x->a
+  r = r.replace(/lim as ([a-z])\s*->\s*([^\s,.(]+)/gi,
+    (_, v, a) => `lim<sub>${v}&rarr;${a}</sub>`);
+
+  // d/dx
+  r = r.replace(/\bd\/d([a-z])\[([^\]]+)\]/g, (_, v, f) => `d/d${v}[${f}]`);
+  r = r.replace(/\bd([a-zA-Z])\/d([a-z])\b/g, (_, y, x) => `d${y}/d${x}`);
+  r = r.replace(/\bd\/d([a-z])\b/g, (_, v) => `d/d${v}`);
+
+  // integral from a to b of
+  r = r.replace(/integral from ([^\s]+) to ([^\s]+) of/gi,
+    (_, a, b) => `&int;<sub>${a}</sub><sup>${b}</sup>`);
+  r = r.replace(/\bintegral of\b/gi, '&int;');
+
+  // infinity
+  r = r.replace(/\binfinity\b/gi, '&infin;');
+  r = r.replace(/\binf\b/g, '&infin;');
+
+  // Greek letters
+  r = r.replace(/\bpi\b/g, '&pi;');
+  r = r.replace(/\btheta\b/gi, '&theta;');
+  r = r.replace(/\brho\b/gi, '&rho;');
+  r = r.replace(/\bphi\b/gi, '&phi;');
+  r = r.replace(/\balpha\b/gi, '&alpha;');
+  r = r.replace(/\bbeta\b/gi, '&beta;');
+  r = r.replace(/\bgamma\b/gi, '&gamma;');
+  r = r.replace(/\bdelta\b/gi, '&delta;');
+  r = r.replace(/\blambda\b/gi, '&lambda;');
+  r = r.replace(/\bsigma\b/gi, '&sigma;');
+
+  // Symbols
+  r = r.replace(/<=/g, '&le;').replace(/>=/g, '&ge;');
+  r = r.replace(/!=/g, '&ne;');
+  r = r.replace(/\*/g, '&middot;');
+  r = r.replace(/→/g, '&rarr;');
+
+  return r;
+}
+
 // Difficulty pattern: cycle Easy→Medium→Hard for any count
 function difficultyPattern(count) {
   const cycle = ["Easy", "Medium", "Hard"];
@@ -325,19 +413,19 @@ function buildQTI(questions, course, vLabel, useGroups=false, pointsPerQ=1) {
   const canvasQ = questions.filter(q => q.type !== "Branched");
 
   function makeItem(q, id, num) {
-    const qtext = `Q${num}. ` + escapeXML(q.question || "");
+    const qhtml = `Q${num}. ` + mathToHTML(q.question || "");
     const meta = `<itemmetadata><qtimetadata>`
       + `<qtimetadatafield><fieldlabel>question_type</fieldlabel><fieldentry>${q.type==="Multiple Choice"?"multiple_choice_question":"short_answer_question"}</fieldentry></qtimetadatafield>`
       + `<qtimetadatafield><fieldlabel>points_possible</fieldlabel><fieldentry>${pointsPerQ}</fieldentry></qtimetadatafield>`
       + `</qtimetadata></itemmetadata>`;
     if (q.type === "Multiple Choice" && q.choices) {
       const cx = q.choices.map((c,ci) =>
-        `<response_label ident="c${ci}"><material><mattext texttype="text/html">${escapeXML(c)}</mattext></material></response_label>`
+        `<response_label ident="c${ci}"><material><mattext texttype="text/html">${mathToHTML(c)}</mattext></material></response_label>`
       ).join("");
       const correct = q.choices.findIndex(c => c === q.answer);
-      return `<item ident="${id}" title="Q${num}">${meta}<presentation><material><mattext texttype="text/html">${qtext}</mattext></material><response_lid ident="r${id}" rcardinality="Single"><render_choice shuffle="false">${cx}</render_choice></response_lid></presentation><resprocessing><outcomes><decvar maxvalue="${pointsPerQ}" minvalue="0" varname="SCORE" vartype="Decimal"/></outcomes><respcondition continue="No"><conditionvar><varequal respident="r${id}">c${correct}</varequal></conditionvar><setvar action="Set" varname="SCORE">${pointsPerQ}</setvar></respcondition></resprocessing></item>`;
+      return `<item ident="${id}" title="Q${num}">${meta}<presentation><material><mattext texttype="text/html">${qhtml}</mattext></material><response_lid ident="r${id}" rcardinality="Single"><render_choice shuffle="false">${cx}</render_choice></response_lid></presentation><resprocessing><outcomes><decvar maxvalue="${pointsPerQ}" minvalue="0" varname="SCORE" vartype="Decimal"/></outcomes><respcondition continue="No"><conditionvar><varequal respident="r${id}">c${correct}</varequal></conditionvar><setvar action="Set" varname="SCORE">${pointsPerQ}</setvar></respcondition></resprocessing></item>`;
     }
-    return `<item ident="${id}" title="Q${num}">${meta}<presentation><material><mattext texttype="text/html">${qtext}</mattext></material><response_str ident="r${id}" rcardinality="Single"><render_fib rows="5" columns="80"/></response_str></presentation><resprocessing><outcomes><decvar maxvalue="${pointsPerQ}" minvalue="0" varname="SCORE" vartype="Decimal"/></outcomes></resprocessing></item>`;
+    return `<item ident="${id}" title="Q${num}">${meta}<presentation><material><mattext texttype="text/html">${qhtml}</mattext></material><response_str ident="r${id}" rcardinality="Single"><render_fib rows="5" columns="80"/></response_str></presentation><resprocessing><outcomes><decvar maxvalue="${pointsPerQ}" minvalue="0" varname="SCORE" vartype="Decimal"/></outcomes></resprocessing></item>`;
   }
 
   if (!useGroups) {
