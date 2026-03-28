@@ -657,7 +657,9 @@ function mathToOmml(raw) {
   }
 
   const inner = renderSegment(w);
-  return `<m:oMath>${inner}</m:oMath>`;
+  // Strip any leaked control characters that would break XML
+  const clean = inner.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
+  return `<m:oMath>${clean}</m:oMath>`;
 }
 
 // ─── Build proper .docx file ──────────────────────────────────────────────────
