@@ -675,8 +675,13 @@ async function buildDocx(questions, course, vLabel) {
   function mathPara(text, opts={}) {
     const {indent=0} = opts;
     const ppr = indent ? `<w:pPr><w:ind w:left="${indent}"/><w:spacing w:after="80"/></w:pPr>` : `<w:pPr><w:spacing w:after="80"/></w:pPr>`;
-    const omml = mathToOmml(text);
-    return `<w:p>${ppr}<m:oMathPara>${omml}</m:oMathPara></w:p>`;
+    try {
+      const omml = mathToOmml(text);
+      return `<w:p>${ppr}${omml}</w:p>`;
+    } catch(e) {
+      const safe = String(text).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+      return `<w:p>${ppr}<w:r><w:t xml:space="preserve">${safe}</w:t></w:r></w:p>`;
+    }
   }
 
   let body = "";
@@ -929,10 +934,15 @@ async function buildDocxCompare(versions, course) {
   }
 
   function mathPara(text, opts={}) {
-    const {indent=0, color=null} = opts;
+    const {indent=0} = opts;
     const ppr = `<w:pPr><w:spacing w:after="60"/>${indent?`<w:ind w:left="${indent}"/>`:''}</w:pPr>`;
-    const omml = mathToOmml(text);
-    return `<w:p>${ppr}<m:oMathPara>${omml}</m:oMathPara></w:p>`;
+    try {
+      const omml = mathToOmml(text);
+      return `<w:p>${ppr}${omml}</w:p>`;
+    } catch(e) {
+      const safe = String(text).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+      return `<w:p>${ppr}<w:r><w:t xml:space="preserve">${safe}</w:t></w:r></w:p>`;
+    }
   }
 
   const vLabels = versions.map(v => v.label).join(", ");
