@@ -482,119 +482,109 @@ ${groupSections}
 function mathToOmml(raw) {
   const s = String(raw ?? "");
 
-  function ommlFrac(num, den) {
-    return `<m:f><m:fPr><m:type m:val="bar"/></m:fPr><m:num><m:r><m:t xml:space="preserve">${num}</m:t></m:r></m:num><m:den><m:r><m:t xml:space="preserve">${den}</m:t></m:r></m:den></m:f>`;
+  // OMML builders
+  const X = t => t.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  const oT = t => `<m:r><m:t xml:space="preserve">${X(t)}</m:t></m:r>`;
+  const oSqrt = inner => `<m:rad><m:radPr><m:degHide m:val="1"/></m:radPr><m:deg/><m:e>${oT(inner)}</m:e></m:rad>`;
+  const oSup = (base, exp) => `<m:sSup><m:e>${oT(base)}</m:e><m:sup>${oT(exp)}</m:sup></m:sSup>`;
+  const oFrac = (n, d) => `<m:f><m:num>${oT(n)}</m:num><m:den>${oT(d)}</m:den></m:f>`;
+  const oInt = (a, b) => `<m:nary><m:naryPr><m:chr m:val="\u222B"/><m:limLoc m:val="subSup"/></m:naryPr><m:sub>${oT(a)}</m:sub><m:sup>${oT(b)}</m:sup><m:e>${oT(" ")}</m:e></m:nary>`;
+
+  // Step 1: replace Greek letters and symbols
+  let w = s
+    .replace(/\btheta\b/gi, 'θ')
+    .replace(/\bphi\b/gi, 'φ')
+    .replace(/\brho\b/gi, 'ρ')
+    .replace(/\bpi\b/g, 'π')
+    .replace(/\balpha\b/gi, 'α')
+    .replace(/\bbeta\b/gi, 'β')
+    .replace(/\bgamma\b/gi, 'γ')
+    .replace(/\bdelta\b/gi, 'δ')
+    .replace(/\blambda\b/gi, 'λ')
+    .replace(/\bsigma\b/gi, 'σ')
+    .replace(/\binfinity\b/gi, '∞')
+    .replace(/\binf\b/g, '∞');
+
+  // Step 2: parse and build OMML directly
+  // We'll do a single-pass conversion using a segment array
+  // Each segment is either {type:'text', val} or {type:'sqrt'|'sup'|'frac'|'int', ...}
+
+  // Process in priority order using replacements into a neutral token array
+  // Use simple unique separator strings unlikely to appear in math text
+  const SEP = '\x01';
+  const tokens = [];
+
+  function addToken(obj) { tokens.push(obj); return SEP + (tokens.length-1) + SEP; }
+
+  // sqrt(expr) — innermost first via repeated replacement
+  let prev;
+  do {
+    prev = w;
+    w = w.replace(/sqrt\(([^()]+)\)/g, (_,inner) => addToken({t:'sqrt', inner}));
+  } while (w !== prev);
+
+  // integral from a to b of
+  w = w.replace(/integral from ([^\s]+) to ([^\s]+) of/gi,
+    (_,a,b) => addToken({t:'int', a, b}));
+
+  // (expr)^(n/m)
+  w = w.replace(/(\([^()]+\)|\x01\d+\x01)\^\(([0-9]+)\/([0-9]+)\)/g,
+    (_,base,n,d) => addToken({t:'sup', base, exp:`${n}/${d}`}));
+
+  // (expr)^n or token^n
+  w = w.replace(/(\([^()]+\)|\x01\d+\x01)\^(-?[0-9a-zA-Zα-ωθφ]+)/g,
+    (_,base,exp) => addToken({t:'sup', base, exp}));
+
+  // x^(n/m)
+  w = w.replace(/([a-zA-Z0-9θφπα-ω])\^\(([0-9]+)\/([0-9]+)\)/g,
+    (_,base,n,d) => addToken({t:'sup', base, exp:`${n}/${d}`}));
+
+  // x^(expr)
+  w = w.replace(/([a-zA-Z0-9θφπα-ω])\^\(([^)]+)\)/g,
+    (_,base,exp) => addToken({t:'sup', base, exp}));
+
+  // x^{expr}
+  w = w.replace(/([a-zA-Z0-9θφπα-ω])\^\{([^}]+)\}/g,
+    (_,base,exp) => addToken({t:'sup', base, exp}));
+
+  // x^2 or x^n
+  w = w.replace(/([a-zA-Z0-9θφπα-ω])\^(-?[0-9]+(?:\.[0-9]+)?)/g,
+    (_,base,exp) => addToken({t:'sup', base, exp}));
+  w = w.replace(/([a-zA-Z])\^([a-zA-Z][a-zA-Z0-9]*)/g,
+    (_,base,exp) => addToken({t:'sup', base, exp}));
+
+  // (a)/(b) fraction — horizontal bar
+  w = w.replace(/\(([^()]+)\)\/\(([^()]+)\)/g,
+    (_,n,d) => addToken({t:'frac', n, d}));
+
+  // number/number
+  w = w.replace(/\b([0-9]+)\/([0-9]+)\b/g,
+    (_,n,d) => addToken({t:'frac', n, d}));
+
+  // Now render: split w by SEP tokens and build OMML
+  function renderToken(idx) {
+    const tok = tokens[idx];
+    if (!tok) return oT('?');
+    if (tok.t === 'sqrt') return oSqrt(renderSegment(tok.inner));
+    if (tok.t === 'sup') return oSup(renderSegment(tok.base), renderSegment(tok.exp));
+    if (tok.t === 'frac') return oFrac(renderSegment(tok.n), renderSegment(tok.d));
+    if (tok.t === 'int') return oInt(tok.a, tok.b);
+    return oT('?');
   }
-  function ommlSup(base, exp) {
-    return `<m:sSup><m:e><m:r><m:t xml:space="preserve">${base}</m:t></m:r></m:e><m:sup><m:r><m:t xml:space="preserve">${exp}</m:t></m:r></m:sup></m:sSup>`;
-  }
-  function ommlSqrt(inner) {
-    return `<m:rad><m:radPr><m:degHide m:val="1"/></m:radPr><m:deg/><m:e><m:r><m:t xml:space="preserve">${inner}</m:t></m:r></m:e></m:rad>`;
-  }
-  function ommlText(t) {
-    return `<m:r><m:t xml:space="preserve">${t.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}</m:t></m:r>`;
-  }
 
-  // Tokenize the string into math segments
-  // Strategy: replace known patterns with tokens, then build OMML
-  let work = s;
-
-  // 1. sqrt(expr) — handle nested parens by replacing innermost first
-  work = work.replace(/sqrt\(([^()]+)\)/g, (_,x) => `«SQRT:${x}»`);
-
-  // 2. (expr)^(n/m) — parenthesized base with fractional exponent
-  work = work.replace(/(\([^()]+\))\^\(([0-9]+)\/([0-9]+)\)/g,
-    (_,base,n,d) => `«SUP:${base}:${n}/${d}»`);
-
-  // 3. (expr)^n — parenthesized base with simple exponent
-  work = work.replace(/(\([^()]+\))\^(-?[0-9a-zA-Z]+)/g,
-    (_,base,exp) => `«SUP:${base}:${exp}»`);
-
-  // 4. x^(n/m) — letter/number with fractional exponent
-  work = work.replace(/([a-zA-Z0-9])\^\(([0-9]+)\/([0-9]+)\)/g,
-    (_,base,n,d) => `«SUP:${base}:${n}/${d}»`);
-
-  // 5. x^(expr) — letter/number with parenthesized exponent
-  work = work.replace(/([a-zA-Z0-9])\^\(([^)]+)\)/g,
-    (_,base,exp) => `«SUP:${base}:${exp}»`);
-
-  // 6. x^{expr}
-  work = work.replace(/([a-zA-Z0-9])\^\{([^}]+)\}/g,
-    (_,base,exp) => `«SUP:${base}:${exp}»`);
-
-  // 7. x^2, x^n simple
-  work = work.replace(/([a-zA-Z0-9])\^(-?[0-9]+(?:\.[0-9]+)?)/g,
-    (_,base,exp) => `«SUP:${base}:${exp}»`);
-  work = work.replace(/([a-zA-Z])\^([a-zA-Z][a-zA-Z0-9]*)/g,
-    (_,base,exp) => `«SUP:${base}:${exp}»`);
-
-  // 8. (a)/(b) fractions
-  work = work.replace(/\(([^()]+)\)\/\(([^()]+)\)/g,
-    (_,n,d) => `«FRAC:(${n}):(${d})»`);
-
-  // 9. number/number
-  work = work.replace(/\b([0-9]+)\/([0-9]+)\b/g,
-    (_,n,d) => `«FRAC:${n}:${d}»`);
-
-  // 10. lim
-  work = work.replace(/lim as ([a-z])\s*->\s*([^\s,.(]+)/gi,
-    (_,v,a) => `«TEXT:lim»«SUB:${v}→${a}»`);
-
-  // 11. integral
-  work = work.replace(/integral from ([^\s]+) to ([^\s]+) of/gi,
-    (_,a,b) => `«INT:${a}:${b}»`);
-
-  // 12. d/dx
-  work = work.replace(/\bd\/d([a-z])\b/g, (_,v) => `«TEXT:d/d${v}»`);
-
-  // Now build OMML from tokens
-  let omml = `<m:oMath>`;
-
-  // Split on token boundaries
-  const tokenRe = /«(SQRT|SUP|SUB|FRAC|INT|TEXT):([^»]*)»/g;
-  let lastIdx = 0;
-  let match;
-
-  while ((match = tokenRe.exec(work)) !== null) {
-    // Add text before this token
-    if (match.index > lastIdx) {
-      omml += ommlText(work.slice(lastIdx, match.index));
+  function renderSegment(seg) {
+    if (!seg) return '';
+    const parts = seg.split(/\x01(\d+)\x01/);
+    let out = '';
+    for (let i = 0; i < parts.length; i++) {
+      if (i % 2 === 0) { if (parts[i]) out += oT(parts[i]); }
+      else out += renderToken(parseInt(parts[i]));
     }
-    const [full, type, content] = match;
-    if (type === "SQRT") {
-      omml += ommlSqrt(content.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"));
-    } else if (type === "SUP") {
-      const colonIdx = content.indexOf(":");
-      const base = content.slice(0, colonIdx);
-      const exp = content.slice(colonIdx + 1);
-      omml += ommlSup(
-        base.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"),
-        exp.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
-      );
-    } else if (type === "FRAC") {
-      const colonIdx = content.indexOf(":");
-      const num = content.slice(0, colonIdx);
-      const den = content.slice(colonIdx + 1);
-      omml += ommlFrac(
-        num.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"),
-        den.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
-      );
-    } else if (type === "INT") {
-      const [a, b] = content.split(":");
-      omml += `<m:nary><m:naryPr><m:chr m:val="∫"/><m:limLoc m:val="subSup"/></m:naryPr><m:sub><m:r><m:t>${a}</m:t></m:r></m:sub><m:sup><m:r><m:t>${b}</m:t></m:r></m:sup><m:e><m:r><m:t xml:space="preserve"> </m:t></m:r></m:e></m:nary>`;
-    } else {
-      omml += ommlText(content);
-    }
-    lastIdx = match.index + full.length;
+    return out;
   }
 
-  // Remaining text
-  if (lastIdx < work.length) {
-    omml += ommlText(work.slice(lastIdx));
-  }
-
-  omml += `</m:oMath>`;
-  return omml;
+  const inner = renderSegment(w);
+  return `<m:oMath>${inner}</m:oMath>`;
 }
 
 // ─── Build proper .docx file ──────────────────────────────────────────────────
@@ -710,7 +700,7 @@ function buildQTICompare(versions, course, useGroups=false, pointsPerQ=1) {
   const vLabels = versions.map(v => v.label).join(", ");
 
   function makeCompareItem(q, id, title, qnum, vLabel) {
-    const qhtml = `Q${qnum} [Version ${vLabel}] ` + mathToHTML(q.question || "");
+    const qhtml = mathToHTML(q.question || "");
     const meta = `<itemmetadata><qtimetadata>`
       + `<qtimetadatafield><fieldlabel>question_type</fieldlabel><fieldentry>${q.type==="Multiple Choice"?"multiple_choice_question":"short_answer_question"}</fieldentry></qtimetadatafield>`
       + `<qtimetadatafield><fieldlabel>points_possible</fieldlabel><fieldentry>${pointsPerQ}</fieldentry></qtimetadatafield>`
