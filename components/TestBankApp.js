@@ -81,8 +81,8 @@ function toLatex(raw) {
       (m) => stash(m));
   } while (s !== pp);
 
-  // Stash fn(expr) calls like f(x), sin(x) etc — but NOT sqrt/cbrt which we handle separately
-  s = s.replace(/(?<!sqr)(?<!cbr)\b([a-zA-Z]{2,})'?\(([^()]*)\)/g, (m, fn) => {
+  // Stash fn(expr) calls — including single-letter like f(x), g(x), but NOT sqrt/cbrt
+  s = s.replace(/\b(?!sqrt\b|cbrt\b)([a-zA-Z][a-zA-Z0-9]*)'?\(([^()]*)\)/g, function(m, fn) {
     if (fn === 'sqrt' || fn === 'cbrt') return m;
     return stash(m);
   });
