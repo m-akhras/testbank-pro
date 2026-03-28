@@ -481,43 +481,118 @@ ${groupSections}
 // ─── Math text → OMML (Word native math) converter ───────────────────────────
 function mathToOmml(raw) {
   const s = String(raw ?? "");
-  // Convert common plain-text math patterns to OMML XML
+
   function ommlFrac(num, den) {
-    return `<m:f><m:fPr><m:type m:val="bar"/></m:fPr><m:num><m:r><m:t>${num}</m:t></m:r></m:num><m:den><m:r><m:t>${den}</m:t></m:r></m:den></m:f>`;
+    return `<m:f><m:fPr><m:type m:val="bar"/></m:fPr><m:num><m:r><m:t xml:space="preserve">${num}</m:t></m:r></m:num><m:den><m:r><m:t xml:space="preserve">${den}</m:t></m:r></m:den></m:f>`;
   }
   function ommlSup(base, exp) {
-    return `<m:sSup><m:e><m:r><m:t>${base}</m:t></m:r></m:e><m:sup><m:r><m:t>${exp}</m:t></m:r></m:sup></m:sSup>`;
+    return `<m:sSup><m:e><m:r><m:t xml:space="preserve">${base}</m:t></m:r></m:e><m:sup><m:r><m:t xml:space="preserve">${exp}</m:t></m:r></m:sup></m:sSup>`;
   }
   function ommlSqrt(inner) {
-    return `<m:rad><m:radPr><m:degHide m:val="1"/></m:radPr><m:deg/><m:e><m:r><m:t>${inner}</m:t></m:r></m:e></m:rad>`;
+    return `<m:rad><m:radPr><m:degHide m:val="1"/></m:radPr><m:deg/><m:e><m:r><m:t xml:space="preserve">${inner}</m:t></m:r></m:e></m:rad>`;
   }
-  // Build OMML runs from text - handles inline math patterns
-  let result = s
-    .replace(/sqrt\(([^)]+)\)/g, (_,x) => `§SQRT§${x}§/SQRT§`)
-    .replace(/frac\(([^,)]+),([^)]+)\)/g, (_,n,d) => `§FRAC§${n.trim()}§SEP§${d.trim()}§/FRAC§`)
-    .replace(/([a-zA-Z0-9]+)\^(\{[^}]+\}|[a-zA-Z0-9\-+]+)/g, (_,b,e) => `§SUP§${b}§SEP§${e.replace(/[{}]/g,"")}§/SUP§`)
-    .replace(/d\/d([a-z])/g, (_,v) => `d/d${v}`)
-    .replace(/lim as ([a-z])->([^\s,]+)/gi, (_,v,a) => `lim(${v}→${a})`);
+  function ommlText(t) {
+    return `<m:r><m:t xml:space="preserve">${t.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}</m:t></m:r>`;
+  }
 
-  // Build OMML paragraph runs
-  const parts = result.split(/§(SQRT|FRAC|SUP)§/);
+  // Tokenize the string into math segments
+  // Strategy: replace known patterns with tokens, then build OMML
+  let work = s;
+
+  // 1. sqrt(expr) — handle nested parens by replacing innermost first
+  work = work.replace(/sqrt\(([^()]+)\)/g, (_,x) => `«SQRT:${x}»`);
+
+  // 2. (expr)^(n/m) — parenthesized base with fractional exponent
+  work = work.replace(/(\([^()]+\))\^\(([0-9]+)\/([0-9]+)\)/g,
+    (_,base,n,d) => `«SUP:${base}:${n}/${d}»`);
+
+  // 3. (expr)^n — parenthesized base with simple exponent
+  work = work.replace(/(\([^()]+\))\^(-?[0-9a-zA-Z]+)/g,
+    (_,base,exp) => `«SUP:${base}:${exp}»`);
+
+  // 4. x^(n/m) — letter/number with fractional exponent
+  work = work.replace(/([a-zA-Z0-9])\^\(([0-9]+)\/([0-9]+)\)/g,
+    (_,base,n,d) => `«SUP:${base}:${n}/${d}»`);
+
+  // 5. x^(expr) — letter/number with parenthesized exponent
+  work = work.replace(/([a-zA-Z0-9])\^\(([^)]+)\)/g,
+    (_,base,exp) => `«SUP:${base}:${exp}»`);
+
+  // 6. x^{expr}
+  work = work.replace(/([a-zA-Z0-9])\^\{([^}]+)\}/g,
+    (_,base,exp) => `«SUP:${base}:${exp}»`);
+
+  // 7. x^2, x^n simple
+  work = work.replace(/([a-zA-Z0-9])\^(-?[0-9]+(?:\.[0-9]+)?)/g,
+    (_,base,exp) => `«SUP:${base}:${exp}»`);
+  work = work.replace(/([a-zA-Z])\^([a-zA-Z][a-zA-Z0-9]*)/g,
+    (_,base,exp) => `«SUP:${base}:${exp}»`);
+
+  // 8. (a)/(b) fractions
+  work = work.replace(/\(([^()]+)\)\/\(([^()]+)\)/g,
+    (_,n,d) => `«FRAC:(${n}):(${d})»`);
+
+  // 9. number/number
+  work = work.replace(/\b([0-9]+)\/([0-9]+)\b/g,
+    (_,n,d) => `«FRAC:${n}:${d}»`);
+
+  // 10. lim
+  work = work.replace(/lim as ([a-z])\s*->\s*([^\s,.(]+)/gi,
+    (_,v,a) => `«TEXT:lim»«SUB:${v}→${a}»`);
+
+  // 11. integral
+  work = work.replace(/integral from ([^\s]+) to ([^\s]+) of/gi,
+    (_,a,b) => `«INT:${a}:${b}»`);
+
+  // 12. d/dx
+  work = work.replace(/\bd\/d([a-z])\b/g, (_,v) => `«TEXT:d/d${v}»`);
+
+  // Now build OMML from tokens
   let omml = `<m:oMath>`;
-  let i = 0;
-  const tokens = result.split(/(§(?:SQRT|FRAC|SUP)§.*?§\/(?:SQRT|FRAC|SUP)§)/);
-  tokens.forEach(tok => {
-    if (tok.startsWith("§SQRT§")) {
-      const inner = tok.replace(/§SQRT§|§\/SQRT§/g,"");
-      omml += ommlSqrt(inner);
-    } else if (tok.startsWith("§FRAC§")) {
-      const [n,d] = tok.replace(/§FRAC§|§\/FRAC§/g,"").split("§SEP§");
-      omml += ommlFrac(n,d);
-    } else if (tok.startsWith("§SUP§")) {
-      const [b,e] = tok.replace(/§SUP§|§\/SUP§/g,"").split("§SEP§");
-      omml += ommlSup(b,e);
-    } else if (tok) {
-      omml += `<m:r><m:t xml:space="preserve">${tok.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}</m:t></m:r>`;
+
+  // Split on token boundaries
+  const tokenRe = /«(SQRT|SUP|SUB|FRAC|INT|TEXT):([^»]*)»/g;
+  let lastIdx = 0;
+  let match;
+
+  while ((match = tokenRe.exec(work)) !== null) {
+    // Add text before this token
+    if (match.index > lastIdx) {
+      omml += ommlText(work.slice(lastIdx, match.index));
     }
-  });
+    const [full, type, content] = match;
+    if (type === "SQRT") {
+      omml += ommlSqrt(content.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"));
+    } else if (type === "SUP") {
+      const colonIdx = content.indexOf(":");
+      const base = content.slice(0, colonIdx);
+      const exp = content.slice(colonIdx + 1);
+      omml += ommlSup(
+        base.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"),
+        exp.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+      );
+    } else if (type === "FRAC") {
+      const colonIdx = content.indexOf(":");
+      const num = content.slice(0, colonIdx);
+      const den = content.slice(colonIdx + 1);
+      omml += ommlFrac(
+        num.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"),
+        den.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+      );
+    } else if (type === "INT") {
+      const [a, b] = content.split(":");
+      omml += `<m:nary><m:naryPr><m:chr m:val="∫"/><m:limLoc m:val="subSup"/></m:naryPr><m:sub><m:r><m:t>${a}</m:t></m:r></m:sub><m:sup><m:r><m:t>${b}</m:t></m:r></m:sup><m:e><m:r><m:t xml:space="preserve"> </m:t></m:r></m:e></m:nary>`;
+    } else {
+      omml += ommlText(content);
+    }
+    lastIdx = match.index + full.length;
+  }
+
+  // Remaining text
+  if (lastIdx < work.length) {
+    omml += ommlText(work.slice(lastIdx));
+  }
+
   omml += `</m:oMath>`;
   return omml;
 }
@@ -630,27 +705,83 @@ function dlBlob(blob, name) {
 }
 
 // ─── Compare-mode exports (grouped by question number across versions) ─────────
-function buildQTICompare(versions, course) {
+function buildQTICompare(versions, course, useGroups=false, pointsPerQ=1) {
   const numQ = versions[0]?.questions?.length || 0;
-  let items = "";
-  for (let qi = 0; qi < numQ; qi++) {
-    versions.forEach(v => {
-      const q = v.questions[qi];
-      if (!q) return;
-      const id = `q${qi+1}_v${v.label}`;
-      const title = `Q${qi+1} Version ${v.label}`;
-      const qtext = escapeXML(`Q${qi+1} [Version ${v.label}] ${q.question}`);
-      if (q.type === "Multiple Choice" && q.choices) {
-        const cx = q.choices.map((c,ci) => `<response_label ident="c${ci}"><material><mattext>${escapeXML(c)}</mattext></material></response_label>`).join("");
-        const correct = q.choices.findIndex(c => c === q.answer);
-        items += `<item ident="${id}" title="${title}"><presentation><material><mattext texttype="text/plain">${qtext}</mattext></material><response_lid ident="r${id}"><render_choice>${cx}</render_choice></response_lid></presentation><resprocessing><outcomes><decvar maxvalue="1" minvalue="0" varname="SCORE" vartype="Decimal"/></outcomes><respcondition continue="No"><conditionvar><varequal respident="r${id}">c${correct}</varequal></conditionvar><setvar action="Set" varname="SCORE">1</setvar></respcondition></resprocessing></item>\n`;
-      } else {
-        items += `<item ident="${id}" title="${title}"><presentation><material><mattext texttype="text/plain">${qtext}</mattext></material><response_str ident="r${id}" rcardinality="Single"><render_fib rows="5" columns="80"/></response_str></presentation><resprocessing><outcomes><decvar maxvalue="1" minvalue="0" varname="SCORE" vartype="Decimal"/></outcomes></resprocessing></item>\n`;
-      }
-    });
-  }
   const vLabels = versions.map(v => v.label).join(", ");
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<questestinterop xmlns="http://www.imsglobal.org/xsd/ims_qtiasiv1p2">\n  <assessment title="${escapeXML(course)} — All Versions (${vLabels})">\n    <section ident="main">\n${items}    </section>\n  </assessment>\n</questestinterop>`;
+
+  function makeCompareItem(q, id, title, qnum, vLabel) {
+    const qhtml = `Q${qnum} [Version ${vLabel}] ` + mathToHTML(q.question || "");
+    const meta = `<itemmetadata><qtimetadata>`
+      + `<qtimetadatafield><fieldlabel>question_type</fieldlabel><fieldentry>${q.type==="Multiple Choice"?"multiple_choice_question":"short_answer_question"}</fieldentry></qtimetadatafield>`
+      + `<qtimetadatafield><fieldlabel>points_possible</fieldlabel><fieldentry>${pointsPerQ}</fieldentry></qtimetadatafield>`
+      + `</qtimetadata></itemmetadata>`;
+    if (q.type === "Multiple Choice" && q.choices) {
+      const cx = q.choices.map((c,ci) =>
+        `<response_label ident="c${ci}"><material><mattext texttype="text/html">${mathToHTML(c)}</mattext></material></response_label>`
+      ).join("");
+      const correct = q.choices.findIndex(c => c === q.answer);
+      return `<item ident="${id}" title="${title}">${meta}<presentation><material><mattext texttype="text/html">${qhtml}</mattext></material><response_lid ident="r${id}" rcardinality="Single"><render_choice shuffle="false">${cx}</render_choice></response_lid></presentation><resprocessing><outcomes><decvar maxvalue="${pointsPerQ}" minvalue="0" varname="SCORE" vartype="Decimal"/></outcomes><respcondition continue="No"><conditionvar><varequal respident="r${id}">c${correct}</varequal></conditionvar><setvar action="Set" varname="SCORE">${pointsPerQ}</setvar></respcondition></resprocessing></item>`;
+    }
+    return `<item ident="${id}" title="${title}">${meta}<presentation><material><mattext texttype="text/html">${qhtml}</mattext></material><response_str ident="r${id}" rcardinality="Single"><render_fib rows="5" columns="80"/></response_str></presentation><resprocessing><outcomes><decvar maxvalue="${pointsPerQ}" minvalue="0" varname="SCORE" vartype="Decimal"/></outcomes></resprocessing></item>`;
+  }
+
+  if (!useGroups) {
+    // Flat: Q1-VA, Q1-VB, Q2-VA, Q2-VB...
+    let items = "";
+    for (let qi = 0; qi < numQ; qi++) {
+      versions.forEach(v => {
+        const q = v.questions[qi];
+        if (!q || q.type === "Branched") return;
+        const id = `q${qi+1}_v${v.label}`;
+        items += makeCompareItem(q, id, `Q${qi+1} Version ${v.label}`, qi+1, v.label) + "\n";
+      });
+    }
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<questestinterop xmlns="http://www.imsglobal.org/xsd/ims_qtiasiv1p2">
+  <assessment title="${escapeXML(course)} — All Versions (${vLabels})" ident="assessment1">
+    <section ident="root_section">
+${items}    </section>
+  </assessment>
+</questestinterop>`;
+  }
+
+  // Grouped: one Canvas group per section per version
+  // e.g. "5.4 — Version A", "5.4 — Version B", "5.5 — Version A"...
+  const sectionMap = {};
+  versions.forEach(v => {
+    v.questions.filter(q => q.type !== "Branched").forEach((q, qi) => {
+      const sec = q.section || "General";
+      const key = `${sec}|||${v.label}`;
+      if (!sectionMap[key]) sectionMap[key] = {sec, vLabel: v.label, questions: []};
+      sectionMap[key].questions.push({q, qi});
+    });
+  });
+
+  const groupSections = Object.entries(sectionMap).map(([key, {sec, vLabel, questions}], gi) => {
+    const items = questions.map(({q, qi}, li) =>
+      makeCompareItem(q, `g${gi}q${li}`, `Q${qi+1} V${vLabel}`, qi+1, vLabel)
+    ).join("\n");
+    return `    <section ident="group_${gi}" title="${escapeXML(sec)} — Version ${vLabel}">
+      <selection_ordering>
+        <selection>
+          <selection_number>${questions.length}</selection_number>
+          <selection_extension>
+            <points_per_item>${pointsPerQ}</points_per_item>
+          </selection_extension>
+        </selection>
+      </selection_ordering>
+${items}
+    </section>`;
+  }).join("\n");
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<questestinterop xmlns="http://www.imsglobal.org/xsd/ims_qtiasiv1p2">
+  <assessment title="${escapeXML(course)} — All Versions (${vLabels})" ident="assessment1">
+    <section ident="root_section">
+${groupSections}
+    </section>
+  </assessment>
+</questestinterop>`;
 }
 
 async function buildDocxCompare(versions, course) {
@@ -1482,36 +1613,13 @@ export default function TestBankApp() {
                         ))}
                       </div>
 
-                      {/* Canvas QTI group settings */}
-                      <div style={{...S.card, borderColor:"#8b5cf644", marginBottom:"1rem", padding:"1rem"}}>
-                        <div style={{fontSize:"0.72rem", color:"#8b5cf6", fontWeight:"bold", marginBottom:"0.6rem", letterSpacing:"0.08em", textTransform:"uppercase"}}>Canvas Export Settings</div>
-                        <div style={{display:"flex", gap:"1rem", flexWrap:"wrap", alignItems:"center"}}>
-                          <label style={{display:"flex", alignItems:"center", gap:"0.4rem", fontSize:"0.78rem", color:text2, cursor:"pointer"}}>
-                            <input type="checkbox" checked={qtiUseGroups} onChange={e => setQtiUseGroups(e.target.checked)}
-                              style={{accentColor:"#8b5cf6", width:"14px", height:"14px"}} />
-                            Group by section (Canvas Classic Quizzes)
-                          </label>
-                          <label style={{display:"flex", alignItems:"center", gap:"0.4rem", fontSize:"0.78rem", color:text2}}>
-                            Points per question:
-                            <input type="number" min={1} max={100} value={qtiPointsPerQ}
-                              onChange={e => setQtiPointsPerQ(Number(e.target.value)||1)}
-                              style={{width:"52px", ...S.input, padding:"0.25rem 0.4rem", fontSize:"0.78rem"}} />
-                          </label>
-                          {qtiUseGroups && <span style={{fontSize:"0.7rem", color:text3}}>Each section becomes a Canvas group. Set pick count inside Canvas after import.</span>}
-                        </div>
-                      </div>
 
                       <div style={{display:"flex", gap:"0.75rem", marginBottom:"1.25rem", flexWrap:"wrap"}}>
-                        <button style={S.btn("#8b5cf6",false)} onClick={async () => {
-                          dlFile(buildQTI(v.questions,v.questions[0]?.course||"Calculus",v.label,qtiUseGroups,qtiPointsPerQ),"Version_"+v.label+"_QTI.xml","text/xml");
-                          if (examSaved && saveExamName) await logExport(saveExamName, "QTI", v.label);
-                        }}>⬇ QTI (.xml)</button>
                         <button style={S.btn("#10b981",false)} onClick={async () => {
                           const blob = await buildDocx(v.questions,v.questions[0]?.course||"Calculus",v.label);
                           dlBlob(blob,"Version_"+v.label+"_Exam.docx");
                           if (examSaved && saveExamName) await logExport(saveExamName, "Word", v.label);
                         }}>⬇ Word (.docx)</button>
-                        <button style={S.oBtn("#f59e0b")} onClick={() => versions.forEach(ver => dlFile(buildQTI(ver.questions,ver.questions[0]?.course||"Calculus",ver.label,qtiUseGroups,qtiPointsPerQ),"Version_"+ver.label+"_QTI.xml","text/xml"))}>⬇ All QTI</button>
                         <button style={S.oBtn("#f59e0b")} onClick={async () => { for(const ver of versions){ const blob=await buildDocx(ver.questions,ver.questions[0]?.course||"Calculus",ver.label); dlBlob(blob,"Version_"+ver.label+"_Exam.docx"); }}}>⬇ All Word</button>
                       </div>
 
@@ -1587,11 +1695,29 @@ export default function TestBankApp() {
                         <span style={{fontSize:"0.72rem", color:text2}}>{filteredIndices.length} question{filteredIndices.length!==1?"s":""}</span>
                       </div>
 
+                      {/* Canvas Export Settings */}
+                      <div style={{...S.card, borderColor:"#8b5cf644", marginBottom:"1rem", padding:"1rem"}}>
+                        <div style={{fontSize:"0.72rem", color:"#8b5cf6", fontWeight:"bold", marginBottom:"0.6rem", letterSpacing:"0.08em", textTransform:"uppercase"}}>Canvas Export Settings</div>
+                        <div style={{display:"flex", gap:"1rem", flexWrap:"wrap", alignItems:"center"}}>
+                          <label style={{display:"flex", alignItems:"center", gap:"0.4rem", fontSize:"0.78rem", color:text2, cursor:"pointer"}}>
+                            <input type="checkbox" checked={qtiUseGroups} onChange={e => setQtiUseGroups(e.target.checked)}
+                              style={{accentColor:"#8b5cf6", width:"14px", height:"14px"}} />
+                            Group by section per version
+                          </label>
+                          <label style={{display:"flex", alignItems:"center", gap:"0.4rem", fontSize:"0.78rem", color:text2}}>
+                            Points per question:
+                            <input type="number" min={1} max={100} value={qtiPointsPerQ}
+                              onChange={e => setQtiPointsPerQ(Number(e.target.value)||1)}
+                              style={{width:"52px", ...S.input, padding:"0.25rem 0.4rem", fontSize:"0.78rem"}} />
+                          </label>
+                        </div>
+                      </div>
+
                       {/* Export buttons for compare view — single grouped file */}
                       <div style={{display:"flex", gap:"0.75rem", marginBottom:"1.25rem", flexWrap:"wrap", alignItems:"center"}}>
                         <span style={{fontSize:"0.72rem", color:accent, fontWeight:"bold"}}>Canvas export — one file, all versions:</span>
                         <button style={S.btn("#8b5cf6", false)} onClick={() => {
-                          const xml = buildQTICompare(versions, versions[0]?.questions[0]?.course || "Exam");
+                          const xml = buildQTICompare(versions, versions[0]?.questions[0]?.course || "Exam", qtiUseGroups, qtiPointsPerQ);
                           dlFile(xml, "AllVersions_Grouped_QTI.xml", "text/xml");
                         }}>⬇ Export to Canvas (QTI)</button>
                         <button style={S.btn("#10b981", false)} onClick={async () => {
