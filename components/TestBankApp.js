@@ -396,7 +396,11 @@ function mathToHTML(s) {
     canvasEq(`${b}^{\\frac{${n}}{${d}}}`));
   r = r.replace(/([a-zA-Z0-9])\^(-?[0-9]+)/g, (_, b, e) => canvasEq(`${b}^{${e}}`));
 
-  // Greek letters
+  // Whole expressions with pi like 4pi/21, (pi/6), 2*pi/15 → single LaTeX
+  r = r.replace(/([0-9]*)\*?pi\s*\/\s*([0-9]+)/g, (_, n, d) =>
+    canvasEq(n ? `\\frac{${n}\\pi}{${d}}` : `\\frac{\\pi}{${d}}`));
+  r = r.replace(/([0-9]+)\*?pi\b/g, (_, n) => canvasEq(`${n}\\pi`));
+  // Greek letters standalone
   r = r.replace(/\bpi\b/g, canvasEq('\\pi'));
   r = r.replace(/\btheta\b/gi, canvasEq('\\theta'));
   r = r.replace(/\bphi\b/gi, canvasEq('\\phi'));
@@ -496,9 +500,9 @@ function mathToOmml(raw) {
   // OMML builders
   const X = t => t.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
   const oT = t => `<m:r><m:t xml:space="preserve">${X(t)}</m:t></m:r>`;
-  const oSqrt = inner => `<m:rad><m:radPr><m:degHide m:val="1"/></m:radPr><m:deg/><m:e>${oT(inner)}</m:e></m:rad>`;
-  const oSup = (base, exp) => `<m:sSup><m:e>${oT(base)}</m:e><m:sup>${oT(exp)}</m:sup></m:sSup>`;
-  const oFrac = (n, d) => `<m:f><m:num>${oT(n)}</m:num><m:den>${oT(d)}</m:den></m:f>`;
+  const oSqrt = inner => `<m:rad><m:radPr><m:degHide m:val="1"/></m:radPr><m:deg/><m:e>${inner}</m:e></m:rad>`;
+  const oSup = (base, exp) => `<m:sSup><m:e>${base}</m:e><m:sup>${exp}</m:sup></m:sSup>`;
+  const oFrac = (n, d) => `<m:f><m:num>${n}</m:num><m:den>${d}</m:den></m:f>`;
   const oInt = (a, b) => `<m:nary><m:naryPr><m:chr m:val="\u222B"/><m:limLoc m:val="subSup"/></m:naryPr><m:sub>${oT(a)}</m:sub><m:sup>${oT(b)}</m:sup><m:e>${oT(" ")}</m:e></m:nary>`;
 
   // Step 1: replace Greek letters and symbols
