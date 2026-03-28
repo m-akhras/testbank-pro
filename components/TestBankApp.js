@@ -3,6 +3,24 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "../lib/supabase";
 
 // ─── KaTeX helpers ───────────────────────────────────────────────────────────
+// Helper: convert plain math expression to LaTeX WITHOUT \(...\) wrapper
+function innerLatex(expr) {
+  let e = String(expr ?? "");
+  e = e.replace(/\btheta\b/gi, '\\theta');
+  e = e.replace(/\bphi\b/gi, '\\phi');
+  e = e.replace(/\bpi\b/g, '\\pi');
+  e = e.replace(/\bsqrt\(([^()]+)\)/g, (_,x) => `\\sqrt{${x}}`);
+  e = e.replace(/([a-zA-Z0-9])\^\(([^)]+)\)/g, (_,b,x) => {
+    const exp = x.replace(/(-?[0-9]+)\/([0-9]+)/g, (_,a,b2) => `\\frac{${a}}{${b2}}`);
+    return `${b}^{${exp}}`;
+  });
+  e = e.replace(/([a-zA-Z0-9])\^(-?[0-9]+)/g, (_,b,x) => `${b}^{${x}}`);
+  e = e.replace(/\(([^()]+)\)\/\(([^()]+)\)/g, (_,a,b) => `\\frac{${a}}{${b}}`);
+  e = e.replace(/\b([0-9]+)\/([0-9]+)\b/g, (_,a,b) => `\\frac{${a}}{${b}}`);
+  e = e.replace(/\b(sin|cos|tan|sec|csc|cot|ln|log|arcsin|arccos|arctan)\b/g, '\\$1');
+  return e;
+}
+
 function toLatex(raw) {
   let s = String(raw ?? "");
 
@@ -11,24 +29,6 @@ function toLatex(raw) {
 
   const inf = "\\infty";
   const fix = x => x.replace(/\binf(inity)?\b/gi, inf).trim();
-
-  // Helper: convert plain math expression to LaTeX WITHOUT \(...\) wrapper
-  function innerLatex(expr) {
-    let e = String(expr ?? "");
-    e = e.replace(/\btheta\b/gi, '\\theta');
-    e = e.replace(/\bphi\b/gi, '\\phi');
-    e = e.replace(/\bpi\b/g, '\\pi');
-    e = e.replace(/\bsqrt\(([^()]+)\)/g, (_,x) => `\\sqrt{${x}}`);
-    e = e.replace(/([a-zA-Z0-9])\^\(([^)]+)\)/g, (_,b,x) => {
-      const exp = x.replace(/(-?[0-9]+)\/([0-9]+)/g, (_,a,b) => `\\frac{${a}}{${b}}`);
-      return `${b}^{${exp}}`;
-    });
-    e = e.replace(/([a-zA-Z0-9])\^(-?[0-9]+)/g, (_,b,x) => `${b}^{${x}}`);
-    e = e.replace(/\(([^()]+)\)\/\(([^()]+)\)/g, (_,a,b) => `\\frac{${a}}{${b}}`);
-    e = e.replace(/\b([0-9]+)\/([0-9]+)\b/g, (_,a,b) => `\\frac{${a}}{${b}}`);
-    e = e.replace(/\b(sin|cos|tan|sec|csc|cot|ln|log|arcsin|arccos|arctan)\b/g, '\\$1');
-    return e;
-  }
 
   // Integrals — convert inner expression fully before wrapping
   s = s.replace(/\bintegral\s+from\s+(\S+)\s+to\s+(\S+)\s+of\s+(.+?)\s+d([a-z])\b/gi,
