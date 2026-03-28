@@ -316,91 +316,102 @@ function uid() { return Date.now().toString(36) + Math.random().toString(36).sli
 function escapeXML(s) { return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
 
 // Convert plain-text math to HTML for Canvas QTI display
+// Convert plain-text math expression to LaTeX string
+function mathToLatex(expr) {
+  let s = String(expr ?? "");
+  // Greek
+  s = s.replace(/\btheta\b/gi, '\\theta');
+  s = s.replace(/\bphi\b/gi, '\\phi');
+  s = s.replace(/\brho\b/gi, '\\rho');
+  s = s.replace(/\bpi\b/g, '\\pi');
+  s = s.replace(/\balpha\b/gi, '\\alpha');
+  s = s.replace(/\bbeta\b/gi, '\\beta');
+  s = s.replace(/\bgamma\b/gi, '\\gamma');
+  s = s.replace(/\bdelta\b/gi, '\\delta');
+  s = s.replace(/\blambda\b/gi, '\\lambda');
+  s = s.replace(/\bsigma\b/gi, '\\sigma');
+  s = s.replace(/\binfinity\b/gi, '\\infty');
+  s = s.replace(/\binf\b/g, '\\infty');
+  // trig functions
+  s = s.replace(/\b(sin|cos|tan|sec|csc|cot|ln|log|arcsin|arccos|arctan|sinh|cosh|tanh)\b/g, '\\$1');
+  // sqrt
+  s = s.replace(/sqrt\(([^()]+)\)/g, (_, inner) => `\\sqrt{${mathToLatex(inner)}}`);
+  // integral from a to b of
+  s = s.replace(/integral from ([^\s]+) to ([^\s]+) of/gi, (_, a, b) => `\\int_{${a}}^{${b}}`);
+  s = s.replace(/\bintegral of\b/gi, '\\int');
+  // lim as x->a
+  s = s.replace(/lim as ([a-z])\s*->\s*([^\s,.(]+)/gi, (_, v, a) => `\\lim_{${v}\\to ${a}}`);
+  // d/dx
+  s = s.replace(/\bd\/d([a-z])\b/g, (_, v) => `\\frac{d}{d${v}}`);
+  // (a)/(b) fraction
+  s = s.replace(/\(([^()]+)\)\/\(([^()]+)\)/g, (_, n, d) => `\\frac{${n}}{${d}}`);
+  // number/number or simple/simple
+  s = s.replace(/\b([0-9]+)\/([0-9]+)\b/g, (_, n, d) => `\\frac{${n}}{${d}}`);
+  // x^(n/m)
+  s = s.replace(/([a-zA-Z0-9])\^\(([0-9-]+)\/([0-9]+)\)/g, (_, b, n, d) => `${b}^{\\frac{${n}}{${d}}}`);
+  // x^(expr)
+  s = s.replace(/([a-zA-Z0-9])\^\(([^)]+)\)/g, (_, b, e) => `${b}^{${e}}`);
+  // x^{expr}
+  s = s.replace(/([a-zA-Z0-9])\^\{([^}]+)\}/g, (_, b, e) => `${b}^{${e}}`);
+  // x^2
+  s = s.replace(/([a-zA-Z0-9])\^(-?[0-9]+)/g, (_, b, e) => `${b}^{${e}}`);
+  // (expr)^n
+  s = s.replace(/\(([^()]+)\)\^(-?[0-9a-zA-Z]+)/g, (_, b, e) => `\\left(${b}\\right)^{${e}}`);
+  // |expr|
+  s = s.replace(/\|([^|]+)\|/g, (_, inner) => `\\left|${inner}\\right|`);
+  // * → cdot
+  s = s.replace(/\*/g, '\\cdot ');
+  // <= >=
+  s = s.replace(/<=/g, '\\leq').replace(/>=/g, '\\geq');
+  return s;
+}
+
+// Convert full text with inline math to HTML with Canvas equation images
 function mathToHTML(s) {
   let r = String(s ?? "");
 
-  // Escape HTML special chars first (we'll unescape selectively)
-  const esc = t => t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  // Patterns that indicate math — convert whole expression to LaTeX img
+  // We identify math chunks and wrap them
 
-  // Helper: wrap in superscript HTML
-  const sup = (base, exp) => `${base}<sup>${exp}</sup>`;
-  const frac = (n, d) => `<sup>${n}</sup>&frasl;<sub>${d}</sub>`;
+  // integral from ... to ... of ...
+  r = r.replace(/integral from ([^\s]+) to ([^\s]+) of ([^,.]+)/gi, (_, a, b, expr) => {
+    const latex = `\\int_{${mathToLatex(a)}}^{${mathToLatex(b)}} ${mathToLatex(expr)}`;
+    return canvasEq(latex);
+  });
 
-  // x^(n/m) fractional exponent — before other patterns
-  r = r.replace(/([a-zA-Z0-9\)])\^\((-?[0-9]+)\/([0-9]+)\)/g,
-    (_, base, n, d) => `${base}<sup>${n}/${d}</sup>`);
+  // sqrt(...)
+  r = r.replace(/sqrt\(([^()]+)\)/g, (_, inner) => canvasEq(`\\sqrt{${mathToLatex(inner)}}`));
 
-  // x^(expr) parenthesized
-  r = r.replace(/([a-zA-Z0-9\)])\^\(([^)]+)\)/g,
-    (_, base, exp) => `${base}<sup>${exp}</sup>`);
+  // (expr)^(n/m)
+  r = r.replace(/\(([^()]+)\)\^\(([0-9-]+)\/([0-9]+)\)/g, (_, b, n, d) =>
+    canvasEq(`\\left(${mathToLatex(b)}\\right)^{\\frac{${n}}{${d}}}`));
 
-  // x^{expr}
-  r = r.replace(/([a-zA-Z0-9\)])\^\{([^}]+)\}/g,
-    (_, base, exp) => `${base}<sup>${exp}</sup>`);
+  // number/number standalone fractions like (pi/6)
+  r = r.replace(/\(([^()]+)\/([^()]+)\)\s*\(/g, (match) => match); // skip — handled below
+  r = r.replace(/\(([a-zA-Z0-9\\*+\-. ]+)\/([a-zA-Z0-9\\*+\-. ]+)\)/g, (_, n, d) =>
+    canvasEq(`\\frac{${mathToLatex(n)}}{${mathToLatex(d)}}`));
 
-  // x^2, x^n single
-  r = r.replace(/([a-zA-Z0-9])\^(-?[0-9]+)/g,
-    (_, base, exp) => `${base}<sup>${exp}</sup>`);
-  r = r.replace(/([a-zA-Z])\^([a-zA-Z][a-zA-Z0-9]*)/g,
-    (_, base, exp) => `${base}<sup>${exp}</sup>`);
-
-  // sqrt(expr) → √(expr) with overline styling
-  r = r.replace(/sqrt\(([^)]+)\)/g, (_, inner) => `&radic;(${inner})`);
-  r = r.replace(/cbrt\(([^)]+)\)/g, (_, inner) => `&#8731;(${inner})`);
-
-  // frac(a,b)
-  r = r.replace(/frac\(([^,)]+),([^)]+)\)/g,
-    (_, n, d) => `(${n.trim()})&frasl;(${d.trim()})`);
-
-  // (a)/(b) fraction
-  r = r.replace(/\(([^()]+)\)\/\(([^()]+)\)/g,
-    (_, n, d) => `(${n})&frasl;(${d})`);
-
-  // number/number
-  r = r.replace(/\b([0-9]+)\/([0-9]+)\b/g,
-    (_, n, d) => `${n}&frasl;${d}`);
-
-  // trig/log functions
-  r = r.replace(/\b(sin|cos|tan|sec|csc|cot|ln|log|arcsin|arccos|arctan|sinh|cosh|tanh)\(([^)]+)\)/g,
-    (_, fn, arg) => `${fn}(${arg})`);
-
-  // lim as x->a
-  r = r.replace(/lim as ([a-z])\s*->\s*([^\s,.(]+)/gi,
-    (_, v, a) => `lim<sub>${v}&rarr;${a}</sub>`);
-
-  // d/dx
-  r = r.replace(/\bd\/d([a-z])\[([^\]]+)\]/g, (_, v, f) => `d/d${v}[${f}]`);
-  r = r.replace(/\bd([a-zA-Z])\/d([a-z])\b/g, (_, y, x) => `d${y}/d${x}`);
-  r = r.replace(/\bd\/d([a-z])\b/g, (_, v) => `d/d${v}`);
-
-  // integral from a to b of
-  r = r.replace(/integral from ([^\s]+) to ([^\s]+) of/gi,
-    (_, a, b) => `&int;<sub>${a}</sub><sup>${b}</sup>`);
-  r = r.replace(/\bintegral of\b/gi, '&int;');
-
-  // infinity
-  r = r.replace(/\binfinity\b/gi, '&infin;');
-  r = r.replace(/\binf\b/g, '&infin;');
+  // x^2, x^(n/m), x^n inline
+  r = r.replace(/([a-zA-Z0-9])\^\(([0-9-]+)\/([0-9]+)\)/g, (_, b, n, d) =>
+    canvasEq(`${b}^{\\frac{${n}}{${d}}}`));
+  r = r.replace(/([a-zA-Z0-9])\^(-?[0-9]+)/g, (_, b, e) => canvasEq(`${b}^{${e}}`));
 
   // Greek letters
-  r = r.replace(/\bpi\b/g, '&pi;');
-  r = r.replace(/\btheta\b/gi, '&theta;');
-  r = r.replace(/\brho\b/gi, '&rho;');
-  r = r.replace(/\bphi\b/gi, '&phi;');
-  r = r.replace(/\balpha\b/gi, '&alpha;');
-  r = r.replace(/\bbeta\b/gi, '&beta;');
-  r = r.replace(/\bgamma\b/gi, '&gamma;');
-  r = r.replace(/\bdelta\b/gi, '&delta;');
-  r = r.replace(/\blambda\b/gi, '&lambda;');
-  r = r.replace(/\bsigma\b/gi, '&sigma;');
+  r = r.replace(/\bpi\b/g, canvasEq('\\pi'));
+  r = r.replace(/\btheta\b/gi, canvasEq('\\theta'));
+  r = r.replace(/\bphi\b/gi, canvasEq('\\phi'));
+  r = r.replace(/\binfinity\b/gi, canvasEq('\\infty'));
 
-  // Symbols
-  r = r.replace(/<=/g, '&le;').replace(/>=/g, '&ge;');
-  r = r.replace(/!=/g, '&ne;');
+  // * → ·
   r = r.replace(/\*/g, '&middot;');
-  r = r.replace(/→/g, '&rarr;');
 
   return r;
+}
+
+// Wrap LaTeX in Canvas equation image tag — matches Canvas's exact HTML format
+function canvasEq(latex) {
+  const encoded = encodeURIComponent(encodeURIComponent(latex));
+  return `<img class="equation_image" title="${latex.replace(/"/g,'&quot;')}" src="/equation_images/${encoded}?scale=1" alt="LaTeX: ${latex.replace(/"/g,'&quot;')}" data-equation-content="${latex.replace(/"/g,'&quot;')}" data-ignore-a11y-check="">`;
 }
 
 // Difficulty pattern: cycle Easy→Medium→Hard for any count
