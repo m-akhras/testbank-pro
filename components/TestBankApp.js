@@ -9,15 +9,13 @@ function innerLatex(expr) {
   e = e.replace(/\btheta\b/gi, '\\theta');
   e = e.replace(/\bphi\b/gi, '\\phi');
   e = e.replace(/\bpi\b/g, '\\pi');
-  e = e.replace(/\bsqrt\(([^()]+)\)/g, (_,x) => `\\sqrt{${x}}`);
-  e = e.replace(/([a-zA-Z0-9])\^\(([^)]+)\)/g, (_,b,x) => {
-    const exp = x.replace(/(-?[0-9]+)\/([0-9]+)/g, (_,a,b2) => `\\frac{${a}}{${b2}}`);
-    return `${b}^{${exp}}`;
-  });
-  e = e.replace(/([a-zA-Z0-9])\^(-?[0-9]+)/g, (_,b,x) => `${b}^{${x}}`);
-  e = e.replace(/\(([^()]+)\)\/\(([^()]+)\)/g, (_,a,b) => `\\frac{${a}}{${b}}`);
-  e = e.replace(/\b([0-9]+)\/([0-9]+)\b/g, (_,a,b) => `\\frac{${a}}{${b}}`);
-  e = e.replace(/\b(sin|cos|tan|sec|csc|cot|ln|log|arcsin|arccos|arctan)\b/g, '\\$1');
+  e = e.replace(/\bsqrt\(([^()]+)\)/g, function(_,x){ return '\\sqrt{'+x+'}'; });
+  e = e.replace(/([a-zA-Z0-9])\^\((-?[0-9]+)\/([0-9]+)\)/g, function(_,base,n,d){ return base+'^{\\frac{'+n+'}{'+d+'}}'; });
+  e = e.replace(/([a-zA-Z0-9])\^\(([^)]+)\)/g, function(_,base,exp){ return base+'^{'+exp+'}'; });
+  e = e.replace(/([a-zA-Z0-9])\^(-?[0-9]+)/g, function(_,base,exp){ return base+'^{'+exp+'}'; });
+  e = e.replace(/\(([^()]+)\)\/\(([^()]+)\)/g, function(_,n,d){ return '\\frac{'+n+'}{'+d+'}'; });
+  e = e.replace(/\b([0-9]+)\/([0-9]+)\b/g, function(_,n,d){ return '\\frac{'+n+'}{'+d+'}'; });
+  e = e.replace(/\b(sin|cos|tan|sec|csc|cot|ln|log|arcsin|arccos|arctan)\b/g, function(_,fn){ return '\\'+fn; });
   return e;
 }
 
