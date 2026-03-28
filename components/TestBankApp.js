@@ -429,18 +429,47 @@ function buildQTI(questions, course, vLabel, useGroups=false, pointsPerQ=1) {
 
   function makeItem(q, id, num) {
     const qhtml = `Q${num}. ` + mathToHTML(q.question || "");
-    const meta = `<itemmetadata><qtimetadata>`
-      + `<qtimetadatafield><fieldlabel>question_type</fieldlabel><fieldentry>${q.type==="Multiple Choice"?"multiple_choice_question":"short_answer_question"}</fieldentry></qtimetadatafield>`
-      + `<qtimetadatafield><fieldlabel>points_possible</fieldlabel><fieldentry>${pointsPerQ}</fieldentry></qtimetadatafield>`
-      + `</qtimetadata></itemmetadata>`;
-    if (q.type === "Multiple Choice" && q.choices) {
+    const isMC = q.type === "Multiple Choice" && q.choices;
+    const qType = isMC ? "multiple_choice_question" : "short_answer_question";
+    const meta = `<itemmetadata>
+      <qtimetadata>
+        <qtimetadatafield><fieldlabel>cc_profile</fieldlabel><fieldentry>cc.multiple_choice.v0p1</fieldentry></qtimetadatafield>
+        <qtimetadatafield><fieldlabel>question_type</fieldlabel><fieldentry>${qType}</fieldentry></qtimetadatafield>
+        <qtimetadatafield><fieldlabel>points_possible</fieldlabel><fieldentry>${pointsPerQ}</fieldentry></qtimetadatafield>
+      </qtimetadata>
+    </itemmetadata>`;
+    if (isMC) {
       const cx = q.choices.map((c,ci) =>
         `<response_label ident="c${ci}"><material><mattext texttype="text/html">${mathToHTML(c)}</mattext></material></response_label>`
       ).join("");
       const correct = q.choices.findIndex(c => c === q.answer);
-      return `<item ident="${id}" title="Q${num}">${meta}<presentation><material><mattext texttype="text/html">${qhtml}</mattext></material><response_lid ident="r${id}" rcardinality="Single"><render_choice shuffle="false">${cx}</render_choice></response_lid></presentation><resprocessing><outcomes><decvar maxvalue="${pointsPerQ}" minvalue="0" varname="SCORE" vartype="Decimal"/></outcomes><respcondition continue="No"><conditionvar><varequal respident="r${id}">c${correct}</varequal></conditionvar><setvar action="Set" varname="SCORE">${pointsPerQ}</setvar></respcondition></resprocessing></item>`;
+      return `<item ident="${id}" title="Q${num}">
+  ${meta}
+  <presentation>
+    <material><mattext texttype="text/html">${qhtml}</mattext></material>
+    <response_lid ident="r${id}" rcardinality="Single">
+      <render_choice shuffle="false">${cx}</render_choice>
+    </response_lid>
+  </presentation>
+  <resprocessing>
+    <outcomes><decvar maxvalue="${pointsPerQ}" minvalue="0" varname="SCORE" vartype="Decimal"/></outcomes>
+    <respcondition continue="No">
+      <conditionvar><varequal respident="r${id}">c${correct}</varequal></conditionvar>
+      <setvar action="Set" varname="SCORE">${pointsPerQ}</setvar>
+    </respcondition>
+  </resprocessing>
+</item>`;
     }
-    return `<item ident="${id}" title="Q${num}">${meta}<presentation><material><mattext texttype="text/html">${qhtml}</mattext></material><response_str ident="r${id}" rcardinality="Single"><render_fib rows="5" columns="80"/></response_str></presentation><resprocessing><outcomes><decvar maxvalue="${pointsPerQ}" minvalue="0" varname="SCORE" vartype="Decimal"/></outcomes></resprocessing></item>`;
+    return `<item ident="${id}" title="Q${num}">
+  ${meta}
+  <presentation>
+    <material><mattext texttype="text/html">${qhtml}</mattext></material>
+    <response_str ident="r${id}" rcardinality="Single"><render_fib rows="5" columns="80"/></response_str>
+  </presentation>
+  <resprocessing>
+    <outcomes><decvar maxvalue="${pointsPerQ}" minvalue="0" varname="SCORE" vartype="Decimal"/></outcomes>
+  </resprocessing>
+</item>`;
   }
 
   if (!useGroups) {
@@ -617,7 +646,8 @@ async function buildDocx(questions, course, vLabel) {
   function mathPara(text, opts={}) {
     const {indent=0} = opts;
     const ppr = indent ? `<w:pPr><w:ind w:left="${indent}"/><w:spacing w:after="80"/></w:pPr>` : `<w:pPr><w:spacing w:after="80"/></w:pPr>`;
-    return `<w:p>${ppr}${mathToOmml(text)}</w:p>`;
+    const omml = mathToOmml(text);
+    return `<w:p>${ppr}<m:oMathPara>${omml}</m:oMathPara></w:p>`;
   }
 
   let body = "";
@@ -757,18 +787,47 @@ function buildQTICompare(versions, course, useGroups=false, pointsPerQ=1) {
 
   function makeCompareItem(q, id, title, qnum, vLabel) {
     const qhtml = mathToHTML(q.question || "");
-    const meta = `<itemmetadata><qtimetadata>`
-      + `<qtimetadatafield><fieldlabel>question_type</fieldlabel><fieldentry>${q.type==="Multiple Choice"?"multiple_choice_question":"short_answer_question"}</fieldentry></qtimetadatafield>`
-      + `<qtimetadatafield><fieldlabel>points_possible</fieldlabel><fieldentry>${pointsPerQ}</fieldentry></qtimetadatafield>`
-      + `</qtimetadata></itemmetadata>`;
-    if (q.type === "Multiple Choice" && q.choices) {
+    const isMC = q.type === "Multiple Choice" && q.choices;
+    const qType = isMC ? "multiple_choice_question" : "short_answer_question";
+    const meta = `<itemmetadata>
+      <qtimetadata>
+        <qtimetadatafield><fieldlabel>cc_profile</fieldlabel><fieldentry>cc.multiple_choice.v0p1</fieldentry></qtimetadatafield>
+        <qtimetadatafield><fieldlabel>question_type</fieldlabel><fieldentry>${qType}</fieldentry></qtimetadatafield>
+        <qtimetadatafield><fieldlabel>points_possible</fieldlabel><fieldentry>${pointsPerQ}</fieldentry></qtimetadatafield>
+      </qtimetadata>
+    </itemmetadata>`;
+    if (isMC) {
       const cx = q.choices.map((c,ci) =>
         `<response_label ident="c${ci}"><material><mattext texttype="text/html">${mathToHTML(c)}</mattext></material></response_label>`
       ).join("");
       const correct = q.choices.findIndex(c => c === q.answer);
-      return `<item ident="${id}" title="${title}">${meta}<presentation><material><mattext texttype="text/html">${qhtml}</mattext></material><response_lid ident="r${id}" rcardinality="Single"><render_choice shuffle="false">${cx}</render_choice></response_lid></presentation><resprocessing><outcomes><decvar maxvalue="${pointsPerQ}" minvalue="0" varname="SCORE" vartype="Decimal"/></outcomes><respcondition continue="No"><conditionvar><varequal respident="r${id}">c${correct}</varequal></conditionvar><setvar action="Set" varname="SCORE">${pointsPerQ}</setvar></respcondition></resprocessing></item>`;
+      return `<item ident="${id}" title="${escapeXML(title)}">
+  ${meta}
+  <presentation>
+    <material><mattext texttype="text/html">${qhtml}</mattext></material>
+    <response_lid ident="r${id}" rcardinality="Single">
+      <render_choice shuffle="false">${cx}</render_choice>
+    </response_lid>
+  </presentation>
+  <resprocessing>
+    <outcomes><decvar maxvalue="${pointsPerQ}" minvalue="0" varname="SCORE" vartype="Decimal"/></outcomes>
+    <respcondition continue="No">
+      <conditionvar><varequal respident="r${id}">c${correct}</varequal></conditionvar>
+      <setvar action="Set" varname="SCORE">${pointsPerQ}</setvar>
+    </respcondition>
+  </resprocessing>
+</item>`;
     }
-    return `<item ident="${id}" title="${title}">${meta}<presentation><material><mattext texttype="text/html">${qhtml}</mattext></material><response_str ident="r${id}" rcardinality="Single"><render_fib rows="5" columns="80"/></response_str></presentation><resprocessing><outcomes><decvar maxvalue="${pointsPerQ}" minvalue="0" varname="SCORE" vartype="Decimal"/></outcomes></resprocessing></item>`;
+    return `<item ident="${id}" title="${escapeXML(title)}">
+  ${meta}
+  <presentation>
+    <material><mattext texttype="text/html">${qhtml}</mattext></material>
+    <response_str ident="r${id}" rcardinality="Single"><render_fib rows="5" columns="80"/></response_str>
+  </presentation>
+  <resprocessing>
+    <outcomes><decvar maxvalue="${pointsPerQ}" minvalue="0" varname="SCORE" vartype="Decimal"/></outcomes>
+  </resprocessing>
+</item>`;
   }
 
   if (!useGroups) {
@@ -840,6 +899,13 @@ async function buildDocxCompare(versions, course) {
     return `<w:p>${ppr}<w:r>${rpr}<w:t xml:space="preserve">${String(text).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}</w:t></w:r></w:p>`;
   }
 
+  function mathPara(text, opts={}) {
+    const {indent=0, color=null} = opts;
+    const ppr = `<w:pPr><w:spacing w:after="60"/>${indent?`<w:ind w:left="${indent}"/>`:''}</w:pPr>`;
+    const omml = mathToOmml(text);
+    return `<w:p>${ppr}<m:oMathPara>${omml}</m:oMathPara></w:p>`;
+  }
+
   const vLabels = versions.map(v => v.label).join(", ");
   const numQ = versions[0]?.questions?.length || 0;
   const vColors = ["1a7a4a","6d28d9","b45309","0e7490","be185d"];
@@ -848,7 +914,6 @@ async function buildDocxCompare(versions, course) {
   body += para("Version Comparison — Grouped by Question Number", {size:22, color:"555555", spacing:200});
 
   for (let qi = 0; qi < numQ; qi++) {
-    // Question group divider
     body += `<w:p><w:pPr><w:spacing w:after="60"/><w:pBdr><w:top w:val="single" w:sz="6" w:space="1" w:color="334155"/></w:pBdr></w:pPr></w:p>`;
     body += para(`Question ${qi+1} — ${versions[0]?.questions[qi]?.section || ""} — ${versions[0]?.questions[qi]?.difficulty || ""}`, {bold:true, size:26, color:"334155", spacing:80});
 
@@ -857,11 +922,11 @@ async function buildDocxCompare(versions, course) {
       if (!q) return;
       const vc = vColors[vi % vColors.length];
       body += para(`Version ${v.label}`, {bold:true, size:22, color:vc, spacing:60});
-      body += para(q.question, {size:22, spacing:60});
+      body += mathPara(q.question);
       if (q.choices) q.choices.forEach((c,ci) => {
-        body += para(`${String.fromCharCode(65+ci)}. ${c}`, {indent:360, size:21, spacing:40});
+        body += mathPara(`${String.fromCharCode(65+ci)}. ${c}`, {indent:360});
       });
-      body += para(`Answer: ${q.answer}`, {size:21, color:"1a7a4a", spacing:100});
+      body += mathPara(`Answer: ${q.answer}`);
     });
   }
 
