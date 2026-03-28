@@ -709,6 +709,47 @@ function dlBlob(blob, name) {
   a.download = name; a.click();
 }
 
+// ─── Wrap QTI XML in Canvas-compatible ZIP ────────────────────────────────────
+async function buildQTIZip(qtiXml, title) {
+  if (!window.JSZip) {
+    await new Promise((res, rej) => {
+      const s = document.createElement("script");
+      s.src = "https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js";
+      s.onload = res; s.onerror = rej;
+      document.head.appendChild(s);
+    });
+  }
+
+  const safeTitle = title.replace(/[^a-zA-Z0-9]/g, '_');
+  const assessmentId = `assessment_${Date.now()}`;
+
+  // imsmanifest.xml — required by Canvas
+  const manifest = `<?xml version="1.0" encoding="UTF-8"?>
+<manifest identifier="${assessmentId}_manifest"
+  xmlns="http://www.imsglobal.org/xsd/imsccv1p1/imscp_v1p1"
+  xmlns:lom="http://ltsc.ieee.org/xsd/imsccv1p1/LOM/manifest"
+  xmlns:imsmd="http://www.imsglobal.org/xsd/imsmd_rootv1p2p1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://www.imsglobal.org/xsd/imsccv1p1/imscp_v1p1 http://www.imsglobal.org/xsd/imscp_v1p1.xsd">
+  <metadata>
+    <schema>IMS Content</schema>
+    <schemaversion>1.1</schemaversion>
+  </metadata>
+  <organizations/>
+  <resources>
+    <resource identifier="${assessmentId}" type="imsqti_xmlv1p2">
+      <file href="${safeTitle}_questions.xml"/>
+    </resource>
+  </resources>
+</manifest>`;
+
+  const zip = new window.JSZip();
+  zip.file("imsmanifest.xml", manifest);
+  zip.file(`${safeTitle}_questions.xml`, qtiXml);
+
+  return await zip.generateAsync({type:"blob", mimeType:"application/zip"});
+}
+
 // ─── Compare-mode exports (grouped by question number across versions) ─────────
 function buildQTICompare(versions, course, useGroups=false, pointsPerQ=1) {
   const numQ = versions[0]?.questions?.length || 0;
@@ -1721,9 +1762,10 @@ export default function TestBankApp() {
                       {/* Export buttons for compare view — single grouped file */}
                       <div style={{display:"flex", gap:"0.75rem", marginBottom:"1.25rem", flexWrap:"wrap", alignItems:"center"}}>
                         <span style={{fontSize:"0.72rem", color:accent, fontWeight:"bold"}}>Canvas export — one file, all versions:</span>
-                        <button style={S.btn("#8b5cf6", false)} onClick={() => {
+                        <button style={S.btn("#8b5cf6", false)} onClick={async () => {
                           const xml = buildQTICompare(versions, versions[0]?.questions[0]?.course || "Exam", qtiUseGroups, qtiPointsPerQ);
-                          dlFile(xml, "AllVersions_Grouped_QTI.xml", "text/xml");
+                          const blob = await buildQTIZip(xml, versions[0]?.questions[0]?.course || "Exam");
+                          dlBlob(blob, "AllVersions_Canvas_QTI.zip");
                         }}>⬇ Export to Canvas (QTI)</button>
                         <button style={S.btn("#10b981", false)} onClick={async () => {
                           const blob = await buildDocxCompare(versions, versions[0]?.questions[0]?.course || "Exam");
