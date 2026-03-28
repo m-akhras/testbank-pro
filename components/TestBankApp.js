@@ -706,8 +706,8 @@ async function buildDocx(questions, course, vLabel) {
       if (q.choices) q.choices.forEach((c,ci) => {
         body += mathPara(`${String.fromCharCode(65+ci)}. ${c}`, {indent:360});
       });
-      if (q.answer) body += para(`✓ Answer: ${q.answer}`, {indent:0, size:22, color:"1a7a4a", spacing:60});
-      if (q.explanation) body += para(`Note: ${q.explanation}`, {indent:0, size:20, color:"666666", spacing:120});
+      if (q.answer) body += mathPara(`✓ Answer: ${q.answer}`, {indent:0, size:22, color:"1a7a4a", spacing:60});
+      if (q.explanation) body += mathPara(`Note: ${q.explanation}`, {indent:0, size:20, color:"666666", spacing:120});
     }
     body += `<w:p><w:pPr><w:spacing w:after="40"/><w:pBdr><w:bottom w:val="single" w:sz="4" w:space="1" w:color="DDDDDD"/></w:pBdr></w:pPr></w:p>`;
   });
