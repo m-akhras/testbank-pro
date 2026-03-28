@@ -560,7 +560,37 @@ function mathToOmml(raw) {
 
   function addToken(obj) { tokens.push(obj); return SEP + (tokens.length-1) + SEP; }
 
-  // sqrt(expr) — innermost first via repeated replacement
+  // * → · (before tokenizing)
+  w = w.replace(/\s*\*\s*/g, '·');
+
+  // Process exponents FIRST (innermost), then sqrt can consume the results
+
+  // (expr)^(n/m)
+  let prev2;
+  do {
+    prev2 = w;
+    w = w.replace(/(\([^()]+\)|\x01\d+\x01)\^\(([0-9]+)\/([0-9]+)\)/g,
+      (_,base,n,d) => addToken({t:'sup', base, exp:`${n}/${d}`}));
+    // (expr)^n
+    w = w.replace(/(\([^()]+\)|\x01\d+\x01)\^(-?[0-9a-zA-Zα-ωθφ]+)/g,
+      (_,base,exp) => addToken({t:'sup', base, exp}));
+    // x^(n/m)
+    w = w.replace(/([a-zA-Z0-9θφπα-ω])\^\(([0-9]+)\/([0-9]+)\)/g,
+      (_,base,n,d) => addToken({t:'sup', base, exp:`${n}/${d}`}));
+    // x^(expr)
+    w = w.replace(/([a-zA-Z0-9θφπα-ω])\^\(([^)]+)\)/g,
+      (_,base,exp) => addToken({t:'sup', base, exp}));
+    // x^{expr}
+    w = w.replace(/([a-zA-Z0-9θφπα-ω])\^\{([^}]+)\}/g,
+      (_,base,exp) => addToken({t:'sup', base, exp}));
+    // x^2 or x^n
+    w = w.replace(/([a-zA-Z0-9θφπα-ω])\^(-?[0-9]+(?:\.[0-9]+)?)/g,
+      (_,base,exp) => addToken({t:'sup', base, exp}));
+    w = w.replace(/([a-zA-Z])\^([a-zA-Z][a-zA-Z0-9]*)/g,
+      (_,base,exp) => addToken({t:'sup', base, exp}));
+  } while (w !== prev2);
+
+  // NOW handle sqrt — innermost first, exponents inside already tokenized
   let prev;
   do {
     prev = w;
@@ -570,32 +600,6 @@ function mathToOmml(raw) {
   // integral from a to b of
   w = w.replace(/integral from ([^\s]+) to ([^\s]+) of/gi,
     (_,a,b) => addToken({t:'int', a, b}));
-
-  // (expr)^(n/m)
-  w = w.replace(/(\([^()]+\)|\x01\d+\x01)\^\(([0-9]+)\/([0-9]+)\)/g,
-    (_,base,n,d) => addToken({t:'sup', base, exp:`${n}/${d}`}));
-
-  // (expr)^n or token^n
-  w = w.replace(/(\([^()]+\)|\x01\d+\x01)\^(-?[0-9a-zA-Zα-ωθφ]+)/g,
-    (_,base,exp) => addToken({t:'sup', base, exp}));
-
-  // x^(n/m)
-  w = w.replace(/([a-zA-Z0-9θφπα-ω])\^\(([0-9]+)\/([0-9]+)\)/g,
-    (_,base,n,d) => addToken({t:'sup', base, exp:`${n}/${d}`}));
-
-  // x^(expr)
-  w = w.replace(/([a-zA-Z0-9θφπα-ω])\^\(([^)]+)\)/g,
-    (_,base,exp) => addToken({t:'sup', base, exp}));
-
-  // x^{expr}
-  w = w.replace(/([a-zA-Z0-9θφπα-ω])\^\{([^}]+)\}/g,
-    (_,base,exp) => addToken({t:'sup', base, exp}));
-
-  // x^2 or x^n
-  w = w.replace(/([a-zA-Z0-9θφπα-ω])\^(-?[0-9]+(?:\.[0-9]+)?)/g,
-    (_,base,exp) => addToken({t:'sup', base, exp}));
-  w = w.replace(/([a-zA-Z])\^([a-zA-Z][a-zA-Z0-9]*)/g,
-    (_,base,exp) => addToken({t:'sup', base, exp}));
 
   // (a)/(b) fraction — horizontal bar
   w = w.replace(/\(([^()]+)\)\/\(([^()]+)\)/g,
@@ -752,30 +756,30 @@ async function buildQTIZip(qtiXml, title) {
 
   const safeTitle = title.replace(/[^a-zA-Z0-9]/g, '_');
   const assessmentId = `assessment_${Date.now()}`;
+  const qtiFile = `${safeTitle}_questions.xml`;
 
-  // imsmanifest.xml — required by Canvas
+  // imsmanifest.xml — Canvas QTI 1.2 format
   const manifest = `<?xml version="1.0" encoding="UTF-8"?>
 <manifest identifier="${assessmentId}_manifest"
-  xmlns="http://www.imsglobal.org/xsd/imsccv1p1/imscp_v1p1"
-  xmlns:lom="http://ltsc.ieee.org/xsd/imsccv1p1/LOM/manifest"
-  xmlns:imsmd="http://www.imsglobal.org/xsd/imsmd_rootv1p2p1"
+  xmlns="http://www.imsglobal.org/xsd/imscp_v1p1"
+  xmlns:imsmd="http://www.imsglobal.org/xsd/imsmd_v1p2"
   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-  xsi:schemaLocation="http://www.imsglobal.org/xsd/imsccv1p1/imscp_v1p1 http://www.imsglobal.org/xsd/imscp_v1p1.xsd">
+  xsi:schemaLocation="http://www.imsglobal.org/xsd/imscp_v1p1 http://www.imsglobal.org/xsd/imscp_v1p1p4.xsd">
   <metadata>
     <schema>IMS Content</schema>
-    <schemaversion>1.1</schemaversion>
+    <schemaversion>1.1.3</schemaversion>
   </metadata>
   <organizations/>
   <resources>
     <resource identifier="${assessmentId}" type="imsqti_xmlv1p2">
-      <file href="${safeTitle}_questions.xml"/>
+      <file href="${qtiFile}"/>
     </resource>
   </resources>
 </manifest>`;
-
+  </metadata>
   const zip = new window.JSZip();
   zip.file("imsmanifest.xml", manifest);
-  zip.file(`${safeTitle}_questions.xml`, qtiXml);
+  zip.file(qtiFile, qtiXml);
 
   return await zip.generateAsync({type:"blob", mimeType:"application/zip"});
 }
