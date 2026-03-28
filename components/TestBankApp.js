@@ -8,11 +8,23 @@ function innerLatex(expr) {
   let e = String(expr ?? "");
   e = e.replace(/\btheta\b/gi, '\\theta');
   e = e.replace(/\bphi\b/gi, '\\phi');
-  e = e.replace(/\bpi\b/g, '\\pi');
-  e = e.replace(/\bsqrt\(([^()]+)\)/g, function(_,x){ return '\\sqrt{'+x+'}'; });
-  e = e.replace(/([a-zA-Z0-9])\^\((-?[0-9]+)\/([0-9]+)\)/g, function(_,base,n,d){ return base+'^{\\frac{'+n+'}{'+d+'}}'; });
-  e = e.replace(/([a-zA-Z0-9])\^\(([^)]+)\)/g, function(_,base,exp){ return base+'^{'+exp+'}'; });
-  e = e.replace(/([a-zA-Z0-9])\^(-?[0-9]+)/g, function(_,base,exp){ return base+'^{'+exp+'}'; });
+  e = e.replace(/(?<![a-zA-Z])pi(?![a-zA-Z])/g, '\\pi');
+  const toks = [];
+  function stash2(v) { toks.push(v); return '\x03'+(toks.length-1)+'\x03'; }
+  function unstash2(t) { return t.replace(/\x03(\d+)\x03/g, function(_,i){ return toks[parseInt(i)]; }); }
+  // Stash fn(x) calls but NOT sqrt/cbrt — use word boundary + negative lookahead
+  let p1; do { p1=e; e=e.replace(/\b(?!sqrt\b|cbrt\b)([a-zA-Z][a-zA-Z0-9]*)'?\(([^()]*)\)/g, function(m){ return stash2(m); }); } while(e!==p1);
+  // Step 2: NOW stash (expr)^n — parens are clean after fn stash
+  let p2;
+  do { p2=e; e=e.replace(/\(([^()]+)\)\^(-?[0-9a-zA-Z]+)/g, function(m){ return stash2(m); }); } while(e!==p2);
+  // Step 3: sqrt now sees flat content
+  let p3;
+  do { p3=e; e=e.replace(/sqrt\(([^()]*)\)/g, function(_,x){ return '\\sqrt{'+unstash2(x)+'}'; }); } while(e!==p3);
+  e = unstash2(e);
+  // Convert remaining math
+  e = e.replace(/\(([^()]+)\)\^\((-?[0-9]+)\/([0-9]+)\)/g, function(_,b,n,d){ return '\\left('+b+'\\right)^{\\frac{'+n+'}{'+d+'}}'; });
+  e = e.replace(/([a-zA-Z0-9])\^\((-?[0-9]+)\/([0-9]+)\)/g, function(_,b,n,d){ return b+'^{\\frac{'+n+'}{'+d+'}}'; });
+  e = e.replace(/([a-zA-Z0-9])\^(-?[0-9]+)/g, function(_,b,x){ return b+'^{'+x+'}'; });
   e = e.replace(/\(([^()]+)\)\/\(([^()]+)\)/g, function(_,n,d){ return '\\frac{'+n+'}{'+d+'}'; });
   e = e.replace(/\b([0-9]+)\/([0-9]+)\b/g, function(_,n,d){ return '\\frac{'+n+'}{'+d+'}'; });
   e = e.replace(/\b(sin|cos|tan|sec|csc|cot|ln|log|arcsin|arccos|arctan)\b/g, function(_,fn){ return '\\'+fn; });
@@ -54,13 +66,39 @@ function toLatex(raw) {
   s = s.replace(/\b(arcsin|arccos|arctan|sinh|cosh|tanh|sin|cos|tan|sec|csc|cot|ln|log)\(([^)]+)\)/g,
     (_,fn,arg)=>`\\(\\${fn}(${innerLatex(arg)})\\)`);
 
-  // sqrt, cbrt — handle nested parens with repeated replacement
+  // Pre-process for sqrt: temporarily replace f'(x), g(x) style calls and (expr)^n
+  // so sqrt() sees flat content with no nested parens
+  const tokens = [];
+  function stash(val) { tokens.push(val); return `\x02${tokens.length-1}\x02`; }
+  function unstash(t) { return t.replace(/\x02(\d+)\x02/g, (_,i) => tokens[parseInt(i)]); }
+
+  // Stash (expr)^n — innermost first
+  let pp;
+  do {
+    pp = s;
+    s = s.replace(/\(([^()]+)\)\^(\{[^}]+\}|-?[0-9]+(?:\.[0-9]+)?|[a-zA-Z])/g,
+      (m) => stash(m));
+  } while (s !== pp);
+
+  // Stash fn(expr) calls like f(x), sin(x) etc — but NOT sqrt/cbrt which we handle separately
+  s = s.replace(/(?<!sqr)(?<!cbr)\b([a-zA-Z]{2,})'?\(([^()]*)\)/g, (m, fn) => {
+    if (fn === 'sqrt' || fn === 'cbrt') return m;
+    return stash(m);
+  });
+
+  // NOW sqrt can see flat content
   let prev;
   do {
     prev = s;
-    s = s.replace(/\bsqrt\(([^()]+)\)/g, (_,x)=>`\\(\\sqrt{${innerLatex(x)}}\\)`);
+    s = s.replace(/sqrt\(([^()]*)\)/g, (_, x) => {
+      const inner = unstash(x);
+      return `\\(\\sqrt{${innerLatex(inner)}}\\)`;
+    });
   } while (s !== prev);
-  s = s.replace(/\bcbrt\(([^()]+)\)/g, (_,x)=>`\\(\\sqrt[3]{${x}}\\)`);
+  s = s.replace(/cbrt\(([^()]*)\)/g, (_, x) => `\\(\\sqrt[3]{${unstash(x)}}\\)`);
+
+  // Unstash remaining tokens
+  s = unstash(s);
 
   // Powers with fractional/complex exponents
   s = s.replace(/([a-zA-Z0-9])\^\(([^)]+)\)/g, (_,base,exp) => {
@@ -103,11 +141,11 @@ function toLatex(raw) {
   // Absolute value
   s = s.replace(/\|([a-zA-Z0-9 +\-*/^._]+)\|/g, (_,x)=>`\\(\\left|${x}\\right|\\)`);
 
-  // Symbols
+  // Symbols — use lookahead/lookbehind to catch pi after ( like (pi/6)
   s = s.replace(/\binfinity\b/gi, `\\(${inf}\\)`);
   s = s.replace(/\binf\b/g, `\\(${inf}\\)`);
   s = s.replace(/→/g, "\\(\\to\\)");
-  s = s.replace(/\bpi\b/g, "\\(\\pi\\)");
+  s = s.replace(/(?<![a-zA-Z])pi(?![a-zA-Z])/g, "\\(\\pi\\)");
   s = s.replace(/\btheta\b/gi, "\\(\\theta\\)");
   s = s.replace(/\brho\b/gi, "\\(\\rho\\)");
   s = s.replace(/\bphi\b/gi, "\\(\\phi\\)");
