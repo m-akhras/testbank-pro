@@ -322,54 +322,73 @@ function difficultyPattern(count) {
 }
 
 function buildQTI(questions, course, vLabel, useGroups=false, pointsPerQ=1) {
-  if (!useGroups) {
-    // Original flat export
-    const items = questions.map((q,i) => {
-      const isB = q.type==="Branched";
-      const parts = isB ? (q.parts||[]) : [q];
-      return parts.map((p,pi) => {
-        const id = "q"+(i+1)+(isB?String.fromCharCode(97+pi):"");
-        const t = isB?"Q"+(i+1)+" Part "+(pi+1):"Q"+(i+1);
-        const type = p.type||q.type;
-        const qnum = isB ? `Q${i+1}(${String.fromCharCode(97+pi)}) ` : `Q${i+1}. `;
-        const qtext = qnum + escapeXML(p.question||q.question);
-        if (type==="Multiple Choice" && p.choices) {
-          const cx = p.choices.map((c,ci)=>`<response_label ident="c${ci}"><material><mattext>${escapeXML(c)}</mattext></material></response_label>`).join("");
-          const correct = p.choices.findIndex(c=>c===p.answer);
-          return `<item ident="${id}" title="${t}"><itemmetadata><qtimetadata><qtimetadatafield><fieldlabel>points_possible</fieldlabel><fieldentry>${pointsPerQ}</fieldentry></qtimetadatafield></qtimetadata></itemmetadata><presentation><material><mattext texttype="text/plain">${qtext}</mattext></material><response_lid ident="r${id}"><render_choice>${cx}</render_choice></response_lid></presentation><resprocessing><outcomes><decvar maxvalue="${pointsPerQ}" minvalue="0" varname="SCORE" vartype="Decimal"/></outcomes><respcondition continue="No"><conditionvar><varequal respident="r${id}">c${correct}</varequal></conditionvar><setvar action="Set" varname="SCORE">${pointsPerQ}</setvar></respcondition></resprocessing></item>`;
-        }
-        return `<item ident="${id}" title="${t}"><itemmetadata><qtimetadata><qtimetadatafield><fieldlabel>points_possible</fieldlabel><fieldentry>${pointsPerQ}</fieldentry></qtimetadatafield></qtimetadata></itemmetadata><presentation><material><mattext texttype="text/plain">${qtext}</mattext></material><response_str ident="r${id}" rcardinality="Single"><render_fib rows="5" columns="80"/></response_str></presentation><resprocessing><outcomes><decvar maxvalue="${pointsPerQ}" minvalue="0" varname="SCORE" vartype="Decimal"/></outcomes></resprocessing></item>`;
-      }).join("\n");
-    }).join("\n");
-    return `<?xml version="1.0" encoding="UTF-8"?>\n<questestinterop xmlns="http://www.imsglobal.org/xsd/ims_qtiasiv1p2">\n  <assessment title="${escapeXML(course)} — Version ${vLabel}">\n    <section ident="main">\n${items}\n    </section>\n  </assessment>\n</questestinterop>`;
+  const canvasQ = questions.filter(q => q.type !== "Branched");
+
+  function makeItem(q, id, num) {
+    const qtext = `Q${num}. ` + escapeXML(q.question || "");
+    const meta = `<itemmetadata><qtimetadata>`
+      + `<qtimetadatafield><fieldlabel>question_type</fieldlabel><fieldentry>${q.type==="Multiple Choice"?"multiple_choice_question":"short_answer_question"}</fieldentry></qtimetadatafield>`
+      + `<qtimetadatafield><fieldlabel>points_possible</fieldlabel><fieldentry>${pointsPerQ}</fieldentry></qtimetadatafield>`
+      + `</qtimetadata></itemmetadata>`;
+    if (q.type === "Multiple Choice" && q.choices) {
+      const cx = q.choices.map((c,ci) =>
+        `<response_label ident="c${ci}"><material><mattext texttype="text/html">${escapeXML(c)}</mattext></material></response_label>`
+      ).join("");
+      const correct = q.choices.findIndex(c => c === q.answer);
+      return `<item ident="${id}" title="Q${num}">${meta}<presentation><material><mattext texttype="text/html">${qtext}</mattext></material><response_lid ident="r${id}" rcardinality="Single"><render_choice shuffle="false">${cx}</render_choice></response_lid></presentation><resprocessing><outcomes><decvar maxvalue="${pointsPerQ}" minvalue="0" varname="SCORE" vartype="Decimal"/></outcomes><respcondition continue="No"><conditionvar><varequal respident="r${id}">c${correct}</varequal></conditionvar><setvar action="Set" varname="SCORE">${pointsPerQ}</setvar></respcondition></resprocessing></item>`;
+    }
+    return `<item ident="${id}" title="Q${num}">${meta}<presentation><material><mattext texttype="text/html">${qtext}</mattext></material><response_str ident="r${id}" rcardinality="Single"><render_fib rows="5" columns="80"/></response_str></presentation><resprocessing><outcomes><decvar maxvalue="${pointsPerQ}" minvalue="0" varname="SCORE" vartype="Decimal"/></outcomes></resprocessing></item>`;
   }
 
-  // Canvas Classic Quizzes — grouped by section, pick-N random
+  if (!useGroups) {
+    const items = canvasQ.map((q,i) => makeItem(q, `q${i+1}`, i+1)).join("\n");
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<questestinterop xmlns="http://www.imsglobal.org/xsd/ims_qtiasiv1p2">
+  <assessment title="${escapeXML(course)} — Version ${vLabel}" ident="assessment1">
+    <section ident="root_section">
+${items}
+    </section>
+  </assessment>
+</questestinterop>`;
+  }
+
+  // Canvas Classic Quizzes grouped format
+  // Each section = one Canvas question group
   const sectionMap = {};
-  questions.forEach((q,i) => {
+  canvasQ.forEach((q,i) => {
     const sec = q.section || "General";
     if (!sectionMap[sec]) sectionMap[sec] = [];
-    sectionMap[sec].push({q, i});
+    sectionMap[sec].push({q, globalIdx: i});
   });
 
-  const sections = Object.entries(sectionMap).map(([sec, qs], gi) => {
-    const pickN = qs.length; // pick all by default — user can change in Canvas
-    const items = qs.map(({q,i}) => {
-      const id = `g${gi}_q${i+1}`;
-      const t = `Q${i+1}`;
-      const qtext = `Q${i+1}. ` + escapeXML(q.question || q.stem || "");
-      if (q.type==="Multiple Choice" && q.choices) {
-        const cx = q.choices.map((c,ci)=>`<response_label ident="c${ci}"><material><mattext>${escapeXML(c)}</mattext></material></response_label>`).join("");
-        const correct = q.choices.findIndex(c=>c===q.answer);
-        return `<item ident="${id}" title="${t}"><itemmetadata><qtimetadata><qtimetadatafield><fieldlabel>points_possible</fieldlabel><fieldentry>${pointsPerQ}</fieldentry></qtimetadatafield></qtimetadata></itemmetadata><presentation><material><mattext texttype="text/plain">${qtext}</mattext></material><response_lid ident="r${id}"><render_choice>${cx}</render_choice></response_lid></presentation><resprocessing><outcomes><decvar maxvalue="${pointsPerQ}" minvalue="0" varname="SCORE" vartype="Decimal"/></outcomes><respcondition continue="No"><conditionvar><varequal respident="r${id}">c${correct}</varequal></conditionvar><setvar action="Set" varname="SCORE">${pointsPerQ}</setvar></respcondition></resprocessing></item>`;
-      }
-      return `<item ident="${id}" title="${t}"><itemmetadata><qtimetadata><qtimetadatafield><fieldlabel>points_possible</fieldlabel><fieldentry>${pointsPerQ}</fieldentry></qtimetadatafield></qtimetadata></itemmetadata><presentation><material><mattext texttype="text/plain">${qtext}</mattext></material><response_str ident="r${id}" rcardinality="Single"><render_fib rows="5" columns="80"/></response_str></presentation><resprocessing><outcomes><decvar maxvalue="${pointsPerQ}" minvalue="0" varname="SCORE" vartype="Decimal"/></outcomes></resprocessing></item>`;
-    }).join("\n");
-    return `<section ident="group_${gi}" title="${escapeXML(sec)}" select="${pickN}" points_per_question="${pointsPerQ}">\n${items}\n</section>`;
+  const groupSections = Object.entries(sectionMap).map(([sec, qs], gi) => {
+    const pickCount = qs.length; // pick all — user can reduce in Canvas
+    const items = qs.map(({q, globalIdx}, li) =>
+      makeItem(q, `g${gi}q${li+1}`, globalIdx+1)
+    ).join("\n");
+    return `    <section ident="group_${gi}" title="${escapeXML(sec)}">
+      <selection_ordering>
+        <selection>
+          <selection_number>${pickCount}</selection_number>
+          <selection_extension>
+            <points_per_item>${pointsPerQ}</points_per_item>
+          </selection_extension>
+        </selection>
+      </selection_ordering>
+${items}
+    </section>`;
   }).join("\n");
 
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<questestinterop xmlns="http://www.imsglobal.org/xsd/ims_qtiasiv1p2">\n  <assessment title="${escapeXML(course)} — Version ${vLabel}">\n${sections}\n  </assessment>\n</questestinterop>`;
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<questestinterop xmlns="http://www.imsglobal.org/xsd/ims_qtiasiv1p2">
+  <assessment title="${escapeXML(course)} — Version ${vLabel}" ident="assessment1">
+    <section ident="root_section">
+${groupSections}
+    </section>
+  </assessment>
+</questestinterop>`;
 }
+
 
 // ─── Math text → OMML (Word native math) converter ───────────────────────────
 function mathToOmml(raw) {
