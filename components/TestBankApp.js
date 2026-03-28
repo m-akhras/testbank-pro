@@ -12,11 +12,12 @@ function innerLatex(expr) {
   const toks = [];
   function stash2(v) { toks.push(v); return '\x03'+(toks.length-1)+'\x03'; }
   function unstash2(t) { return t.replace(/\x03(\d+)\x03/g, function(_,i){ return toks[parseInt(i)]; }); }
-  // Stash fn(x) calls but NOT sqrt/cbrt — use word boundary + negative lookahead
+  // Stash fn(x) calls but NOT sqrt/cbrt
   let p1; do { p1=e; e=e.replace(/\b(?!sqrt\b|cbrt\b)([a-zA-Z][a-zA-Z0-9]*)'?\(([^()]*)\)/g, function(m){ return stash2(m); }); } while(e!==p1);
-  // Step 2: NOW stash (expr)^n — parens are clean after fn stash
-  let p2;
-  do { p2=e; e=e.replace(/\(([^()]+)\)\^(-?[0-9a-zA-Z]+)/g, function(m){ return stash2(m); }); } while(e!==p2);
+  // Stash (expr)^n
+  let p2; do { p2=e; e=e.replace(/\(([^()]+)\)\^(-?[0-9a-zA-Z]+)/g, function(m){ return stash2(m); }); } while(e!==p2);
+  // Stash (a)/(b) fractions inside sqrt args
+  let p4; do { p4=e; e=e.replace(/\(([^()]+)\)\/\(([^()]+)\)/g, function(m){ return stash2(m); }); } while(e!==p4);
   // Step 3: sqrt now sees flat content
   let p3;
   do { p3=e; e=e.replace(/sqrt\(([^()]*)\)/g, function(_,x){ return '\\sqrt{'+unstash2(x)+'}'; }); } while(e!==p3);
@@ -553,7 +554,7 @@ function mathToOmml(raw) {
     .replace(/\btheta\b/gi, 'θ')
     .replace(/\bphi\b/gi, 'φ')
     .replace(/\brho\b/gi, 'ρ')
-    .replace(/\bpi\b/g, 'π')
+    .replace(/(?<![a-zA-Z])pi(?![a-zA-Z])/g, 'π')
     .replace(/\balpha\b/gi, 'α')
     .replace(/\bbeta\b/gi, 'β')
     .replace(/\bgamma\b/gi, 'γ')
@@ -576,6 +577,15 @@ function mathToOmml(raw) {
 
   // * → · (before tokenizing)
   w = w.replace(/\s*\*\s*/g, '·');
+
+  // Stash fn(x) calls like f(x), g'(y), sin(x) — BEFORE exponent processing
+  // so (f'(x))^2 becomes (TOKEN)^2 which exponent handler can match
+  let prevFn;
+  do {
+    prevFn = w;
+    w = w.replace(/\b(?!sqrt\b|cbrt\b)([a-zA-Z][a-zA-Z0-9]*)'?\(([^()]*)\)/g,
+      (_, fn, arg) => addToken({t:'text', val: `${fn}(${arg})`}));
+  } while (w !== prevFn);
 
   // Process exponents FIRST (innermost), then sqrt can consume the results
 
@@ -604,11 +614,11 @@ function mathToOmml(raw) {
       (_,base,exp) => addToken({t:'sup', base, exp}));
   } while (w !== prev2);
 
-  // NOW handle sqrt — innermost first, exponents inside already tokenized
+  // NOW handle sqrt — fn calls and exponents already tokenized so parens are flat
   let prev;
   do {
     prev = w;
-    w = w.replace(/sqrt\(([^()]+)\)/g, (_,inner) => addToken({t:'sqrt', inner}));
+    w = w.replace(/sqrt\(([^()]*)\)/g, (_,inner) => addToken({t:'sqrt', inner}));
   } while (w !== prev);
 
   // integral from a to b of
@@ -627,6 +637,7 @@ function mathToOmml(raw) {
   function renderToken(idx) {
     const tok = tokens[idx];
     if (!tok) return oT('?');
+    if (tok.t === 'text') return oT(tok.val);
     if (tok.t === 'sqrt') return oSqrt(renderSegment(tok.inner));
     if (tok.t === 'sup') return oSup(renderSegment(tok.base), renderSegment(tok.exp));
     if (tok.t === 'frac') return oFrac(renderSegment(tok.n), renderSegment(tok.d));
