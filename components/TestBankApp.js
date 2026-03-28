@@ -583,8 +583,8 @@ function mathToOmml(raw) {
   let prevFn;
   do {
     prevFn = w;
-    w = w.replace(/\b(?!sqrt\b|cbrt\b)([a-zA-Z][a-zA-Z0-9]*)'?\(([^()]*)\)/g,
-      (_, fn, arg) => addToken({t:'text', val: `${fn}(${arg})`}));
+    w = w.replace(/\b(?!sqrt\b|cbrt\b)([a-zA-Z][a-zA-Z0-9]*)('?)\(([^()]*)\)/g,
+      (_, fn, prime, arg) => addToken({t:'text', val: `${fn}${prime}(${arg})`}));
   } while (w !== prevFn);
 
   // Process exponents FIRST (innermost), then sqrt can consume the results
