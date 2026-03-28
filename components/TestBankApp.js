@@ -753,7 +753,6 @@ async function buildQTIZip(qtiXml, title) {
     </resource>
   </resources>
 </manifest>`;
-  </metadata>
   const zip = new window.JSZip();
   zip.file("imsmanifest.xml", manifest);
   zip.file(qtiFile, qtiXml);
