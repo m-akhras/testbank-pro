@@ -12,19 +12,37 @@ function toLatex(raw) {
   const inf = "\\infty";
   const fix = x => x.replace(/\binf(inity)?\b/gi, inf).trim();
 
-  // Integrals
-  s = s.replace(/\bintegral\s+from\s+(\S+)\s+to\s+(\S+)\s+of\s+(.+?)\s+d([a-z])\b/gi,
-    (_,a,b,f,v)=>`\\(\\int_{${fix(a)}}^{${fix(b)}} ${f}\\,d${v}\\)`);
-  s = s.replace(/\bintegral\s+of\s+(.+?)\s+d([a-z])\b/gi,
-    (_,f,v)=>`\\(\\int ${f}\\,d${v}\\)`);
+  // Helper: convert plain math expression to LaTeX WITHOUT \(...\) wrapper
+  function innerLatex(expr) {
+    let e = String(expr ?? "");
+    e = e.replace(/\btheta\b/gi, '\\theta');
+    e = e.replace(/\bphi\b/gi, '\\phi');
+    e = e.replace(/\bpi\b/g, '\\pi');
+    e = e.replace(/\bsqrt\(([^()]+)\)/g, (_,x) => `\\sqrt{${x}}`);
+    e = e.replace(/([a-zA-Z0-9])\^\(([^)]+)\)/g, (_,b,x) => {
+      const exp = x.replace(/(-?[0-9]+)\/([0-9]+)/g, (_,a,b) => `\\frac{${a}}{${b}}`);
+      return `${b}^{${exp}}`;
+    });
+    e = e.replace(/([a-zA-Z0-9])\^(-?[0-9]+)/g, (_,b,x) => `${b}^{${x}}`);
+    e = e.replace(/\(([^()]+)\)\/\(([^()]+)\)/g, (_,a,b) => `\\frac{${a}}{${b}}`);
+    e = e.replace(/\b([0-9]+)\/([0-9]+)\b/g, (_,a,b) => `\\frac{${a}}{${b}}`);
+    e = e.replace(/\b(sin|cos|tan|sec|csc|cot|ln|log|arcsin|arccos|arctan)\b/g, '\\$1');
+    return e;
+  }
 
-  // Limits  — handles lim as (x,y)->(a,b) too
-  s = s.replace(/\blim(?:it)?\s+as\s+\(([^)]+)\)\s*(?:->|→|->)\s*\(([^)]+)\)/gi,
+  // Integrals — convert inner expression fully before wrapping
+  s = s.replace(/\bintegral\s+from\s+(\S+)\s+to\s+(\S+)\s+of\s+(.+?)\s+d([a-z])\b/gi,
+    (_,a,b,f,v)=>`\\(\\int_{${fix(innerLatex(a))}}^{${fix(innerLatex(b))}} ${innerLatex(f)}\\,d${v}\\)`);
+  s = s.replace(/\bintegral\s+of\s+(.+?)\s+d([a-z])\b/gi,
+    (_,f,v)=>`\\(\\int ${innerLatex(f)}\\,d${v}\\)`);
+
+  // Limits
+  s = s.replace(/\blim(?:it)?\s+as\s+\(([^)]+)\)\s*(?:->|→)\s*\(([^)]+)\)/gi,
     (_,v,a)=>`\\(\\lim_{(${v})\\to(${fix(a)})}\\)`);
   s = s.replace(/\blim(?:it)?\s+as\s+([a-zA-Z,\s]+?)\s*(?:->|→)\s*([^\s,;.(]+)/gi,
     (_,v,a)=>`\\(\\lim_{${v.trim()}\\to ${fix(a)}}\\)`);
 
-  // Derivatives — d/dx[f], dz/dx, d/dx
+  // Derivatives
   s = s.replace(/\bd\/d([a-z])\s*\[([^\]]+)\]/g, (_,v,f)=>`\\(\\dfrac{d}{d${v}}\\left[${f}\\right]\\)`);
   s = s.replace(/\bd\/d([a-z])\s*\(([^)]+)\)/g,  (_,v,f)=>`\\(\\dfrac{d}{d${v}}\\left(${f}\\right)\\)`);
   s = s.replace(/\bd\^2([a-zA-Z])\/d([a-z])\^2\b/g, (_,y,x)=>`\\(\\dfrac{d^2${y}}{d${x}^2}\\)`);
@@ -32,44 +50,38 @@ function toLatex(raw) {
   s = s.replace(/\bd\/d([a-z])\b/g,              (_,v)  =>`\\(\\dfrac{d}{d${v}}\\)`);
 
   // Partial derivatives
-  s = s.replace(/d\^2([a-zA-Z])\/d([a-z])d([a-z])/g, (_,f,v1,v2)=>`\\(\\dfrac{\\partial^2 ${f}}{\\partial ${v1}\\,\\partial ${v2}}\\)`);
-  s = s.replace(/∂([a-zA-Z0-9]*)\/∂([a-z])/g,   (_,f,v)=>`\\(\\dfrac{\\partial ${f}}{\\partial ${v}}\\)`);
-  s = s.replace(/\bd\^2([a-zA-Z])\/d([a-zA-Z])d([a-zA-Z])\b/g, (_,f,v1,v2)=>`\\(\\dfrac{\\partial^2 ${f}}{\\partial ${v1}\\,\\partial ${v2}}\\)`);
+  s = s.replace(/∂([a-zA-Z0-9]*)\/∂([a-z])/g, (_,f,v)=>`\\(\\dfrac{\\partial ${f}}{\\partial ${v}}\\)`);
 
   // Trig & log functions with args
   s = s.replace(/\b(arcsin|arccos|arctan|sinh|cosh|tanh|sin|cos|tan|sec|csc|cot|ln|log)\(([^)]+)\)/g,
-    (_,fn,arg)=>`\\(\\${fn}(${arg})\\)`);
+    (_,fn,arg)=>`\\(\\${fn}(${innerLatex(arg)})\\)`);
 
-  // sqrt, cbrt
-  s = s.replace(/\bsqrt\(([^)]+)\)/g, (_,x)=>`\\(\\sqrt{${x}}\\)`);
-  s = s.replace(/\bcbrt\(([^)]+)\)/g, (_,x)=>`\\(\\sqrt[3]{${x}}\\)`);
+  // sqrt, cbrt — handle nested parens with repeated replacement
+  let prev;
+  do {
+    prev = s;
+    s = s.replace(/\bsqrt\(([^()]+)\)/g, (_,x)=>`\\(\\sqrt{${innerLatex(x)}}\\)`);
+  } while (s !== prev);
+  s = s.replace(/\bcbrt\(([^()]+)\)/g, (_,x)=>`\\(\\sqrt[3]{${x}}\\)`);
 
-  // ── Powers with fractional/complex exponents — MUST run BEFORE fraction converter ──
-  // x^(2/3), x^(n/m), e^(xy+1) etc — parenthesized exponent
+  // Powers with fractional/complex exponents
   s = s.replace(/([a-zA-Z0-9])\^\(([^)]+)\)/g, (_,base,exp) => {
-    // Convert fraction inside exponent e.g. 2/3 → \frac{2}{3}
     const expLatex = exp.replace(/(-?[0-9]+)\/([0-9]+)/g, (_,a,b) => `\\frac{${a}}{${b}}`);
     return `\\(${base}^{${expLatex}}\\)`;
   });
-  // ^{...} curly brace form
   s = s.replace(/([a-zA-Z0-9])\^\{([^}]+)\}/g, (_,base,exp)=>`\\(${base}^{${exp}}\\)`);
 
-  // frac(a,b) explicit
+  // frac(a,b)
   s = s.replace(/\bfrac\(([^,)]+),\s*([^)]+)\)/g, (_,a,b)=>`\\(\\dfrac{${a.trim()}}{${b.trim()}}\\)`);
 
-  // Inline fractions — most specific first
-  // (complex expr)/(complex expr)^n  e.g. (4x^2 - 2x - 12)/(4x-1)^2
+  // Inline fractions
   s = s.replace(/\(([^()]+)\)\/\(([^()]+)\)\^([0-9]+)/g, (_,a,b,n)=>`\\(\\dfrac{${a}}{(${b})^{${n}}}\\)`);
-  // (complex expr)/(complex expr)
   s = s.replace(/\(([^()]+)\)\/\(([^()]+)\)/g, (_,a,b)=>`\\(\\dfrac{${a}}{${b}}\\)`);
-  // (complex expr)/(simple term) e.g. (x^2+1)/(2x)
   s = s.replace(/\(([^()]+)\)\/([a-zA-Z0-9][a-zA-Z0-9^+\-*]*)/g, (_,a,b)=>`\\(\\dfrac{${a}}{${b}}\\)`);
-  // simple/simple with letters e.g. f'(x) notation, skip; but catch things like 2x/3, x^2/4
   s = s.replace(/\b([a-zA-Z0-9]+\^[0-9]+)\/([a-zA-Z0-9]+(?:\^[0-9]+)?)\b/g, (_,a,b)=>`\\(\\dfrac{${a}}{${b}}\\)`);
-  // plain number/number e.g. 1/8, 3/4
   s = s.replace(/\b([0-9]+)\/([0-9]+)\b/g, (_,a,b)=>`\\(\\dfrac{${a}}{${b}}\\)`);
 
-  // e^(expr) and e^x
+  // e^(expr)
   s = s.replace(/\be\^\(([^)]+)\)/g, (_,x)=>`\\(e^{${x}}\\)`);
   s = s.replace(/\be\^(-?[a-zA-Z0-9]+)\b/g, (_,x)=>`\\(e^{${x}}\\)`);
 
@@ -79,23 +91,21 @@ function toLatex(raw) {
   s = s.replace(/\bprod(?:uct)?\s+from\s+([a-z])=(\S+)\s+to\s+(\S+)/gi,
     (_,v,a,b)=>`\\(\\prod_{${v}=${a}}^{${fix(b)}}\\)`);
 
-  // Powers — remaining simple cases (after fractional ones handled above)
-  // Simple ^N numeric: x^2, 10^6, 4x^2
+  // Simple powers
   s = s.replace(/([a-zA-Z0-9])\^(-?[0-9]+(?:\.[0-9]+)?)/g, (_,base,exp)=>`\\(${base}^{${exp}}\\)`);
-  // Simple ^var: x^n, e^x
   s = s.replace(/([a-zA-Z])\^([a-zA-Z][a-zA-Z0-9]*)/g, (_,base,exp)=>`\\(${base}^{${exp}}\\)`);
 
-  // Subscripts like x_0, v_0
+  // Subscripts
   s = s.replace(/\b([a-zA-Z])_\{([^}]+)\}/g, (_,b,sub)=>`\\(${b}_{${sub}}\\)`);
   s = s.replace(/\b([a-zA-Z])_([0-9a-zA-Z])\b/g, (_,b,sub)=>`\\(${b}_{${sub}}\\)`);
 
-  // Vectors <a,b,c>
+  // Vectors
   s = s.replace(/<(-?[^<>]+(?:,[^<>]+)+)>/g, (_,inner)=>`\\(\\langle ${inner} \\rangle\\)`);
 
-  // Absolute value |expr|
+  // Absolute value
   s = s.replace(/\|([a-zA-Z0-9 +\-*/^._]+)\|/g, (_,x)=>`\\(\\left|${x}\\right|\\)`);
 
-  // Arrow →
+  // Symbols
   s = s.replace(/\binfinity\b/gi, `\\(${inf}\\)`);
   s = s.replace(/\binf\b/g, `\\(${inf}\\)`);
   s = s.replace(/→/g, "\\(\\to\\)");
@@ -109,8 +119,6 @@ function toLatex(raw) {
   s = s.replace(/\balpha\b/gi, "\\(\\alpha\\)");
   s = s.replace(/\bbeta\b/gi, "\\(\\beta\\)");
   s = s.replace(/\bgamma\b/gi, "\\(\\gamma\\)");
-
-  // Multiplication dot ×
   s = s.replace(/\btimes\b/g, "\\(\\times\\)");
   s = s.replace(/\bcdot\b/g, "\\(\\cdot\\)");
 
@@ -1802,10 +1810,9 @@ export default function TestBankApp() {
                       {/* Export buttons for compare view — single grouped file */}
                       <div style={{display:"flex", gap:"0.75rem", marginBottom:"1.25rem", flexWrap:"wrap", alignItems:"center"}}>
                         <span style={{fontSize:"0.72rem", color:accent, fontWeight:"bold"}}>Canvas export — one file, all versions:</span>
-                        <button style={S.btn("#8b5cf6", false)} onClick={async () => {
+                        <button style={S.btn("#8b5cf6", false)} onClick={() => {
                           const xml = buildQTICompare(versions, versions[0]?.questions[0]?.course || "Exam", qtiUseGroups, qtiPointsPerQ);
-                          const blob = await buildQTIZip(xml, versions[0]?.questions[0]?.course || "Exam");
-                          dlBlob(blob, "AllVersions_Canvas_QTI.zip");
+                          dlFile(xml, "AllVersions_Canvas_QTI.xml", "text/xml");
                         }}>⬇ Export to Canvas (QTI)</button>
                         <button style={S.btn("#10b981", false)} onClick={async () => {
                           const blob = await buildDocxCompare(versions, versions[0]?.questions[0]?.course || "Exam");
