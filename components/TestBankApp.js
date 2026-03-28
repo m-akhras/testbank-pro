@@ -44,6 +44,16 @@ function toLatex(raw) {
   s = s.replace(/\bsqrt\(([^)]+)\)/g, (_,x)=>`\\(\\sqrt{${x}}\\)`);
   s = s.replace(/\bcbrt\(([^)]+)\)/g, (_,x)=>`\\(\\sqrt[3]{${x}}\\)`);
 
+  // ── Powers with fractional/complex exponents — MUST run BEFORE fraction converter ──
+  // x^(2/3), x^(n/m), e^(xy+1) etc — parenthesized exponent
+  s = s.replace(/([a-zA-Z0-9])\^\(([^)]+)\)/g, (_,base,exp) => {
+    // Convert fraction inside exponent e.g. 2/3 → \frac{2}{3}
+    const expLatex = exp.replace(/(-?[0-9]+)\/([0-9]+)/g, (_,a,b) => `\\frac{${a}}{${b}}`);
+    return `\\(${base}^{${expLatex}}\\)`;
+  });
+  // ^{...} curly brace form
+  s = s.replace(/([a-zA-Z0-9])\^\{([^}]+)\}/g, (_,base,exp)=>`\\(${base}^{${exp}}\\)`);
+
   // frac(a,b) explicit
   s = s.replace(/\bfrac\(([^,)]+),\s*([^)]+)\)/g, (_,a,b)=>`\\(\\dfrac{${a.trim()}}{${b.trim()}}\\)`);
 
@@ -69,11 +79,11 @@ function toLatex(raw) {
   s = s.replace(/\bprod(?:uct)?\s+from\s+([a-z])=(\S+)\s+to\s+(\S+)/gi,
     (_,v,a,b)=>`\\(\\prod_{${v}=${a}}^{${fix(b)}}\\)`);
 
-  // Powers — base^{exp} or base^exp
-  s = s.replace(/\b([a-zA-Z][a-zA-Z0-9]*|[0-9]+(?:\.[0-9]+)?)\^\{([^}]+)\}/g,
-    (_,base,exp)=>`\\(${base}^{${exp}}\\)`);
-  s = s.replace(/\b([a-zA-Z][a-zA-Z0-9]*|[0-9]+)\^(-?[0-9a-zA-Z]+)\b/g,
-    (_,base,exp)=>`\\(${base}^{${exp}}\\)`);
+  // Powers — remaining simple cases (after fractional ones handled above)
+  // Simple ^N numeric: x^2, 10^6, 4x^2
+  s = s.replace(/([a-zA-Z0-9])\^(-?[0-9]+(?:\.[0-9]+)?)/g, (_,base,exp)=>`\\(${base}^{${exp}}\\)`);
+  // Simple ^var: x^n, e^x
+  s = s.replace(/([a-zA-Z])\^([a-zA-Z][a-zA-Z0-9]*)/g, (_,base,exp)=>`\\(${base}^{${exp}}\\)`);
 
   // Subscripts like x_0, v_0
   s = s.replace(/\b([a-zA-Z])_\{([^}]+)\}/g, (_,b,sub)=>`\\(${b}_{${sub}}\\)`);
