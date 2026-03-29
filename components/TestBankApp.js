@@ -1038,18 +1038,80 @@ function buildVersionPrompt(selectedQuestions, mutationType, versionLabel) {
 }
 
 
-// Combined prompt for ALL versions at once
+// Single combined prompt for ALL classroom sections AND versions at once
 function buildAllVersionsPrompt(selectedQuestions, mutationType, labels, classSection=1, numClassSections=1) {
   const lines = selectedQuestions.map((q,i) => {
-    const mut = mutationType[q.id]||"numbers";
     const orig = q.type==="Branched" ? q.stem : q.question;
-    return (i+1)+". ["+q.section+"] ["+mut+" mutation] ["+q.type+"] Original: "+orig;
+    return (i+1)+". ["+q.section+"] ["+q.type+"] Original: "+orig;
   }).join("\n");
   const versionList = labels.join(", ");
-  const sectionNote = numClassSections > 1
-    ? `\nNOTE: This is Classroom Section ${classSection} of ${numClassSections}. ${classSection === 1 ? "Use numbers mutation — change only coefficients/constants." : `Use function mutation — change to DIFFERENT but equivalent-difficulty functions. Must be completely different from Section 1${classSection > 2 ? " and all previous sections" : ""}.`}`
-    : "";
-  return `TESTBANK_ALL_VERSIONS_REQUEST\nVersions to create: ${versionList}\n${sectionNote}\nFor each version, mutate ALL of the following questions:\n${lines}\n\nMUTATION RULES:\n- numbers mutation: keep exact same function type and concept, only change coefficients/constants. Same difficulty, same steps.\n- function mutation: change to different but equivalent-difficulty function of same concept. Same difficulty, same steps.\n- For Branched: mutate the shared stem and regenerate ALL parts consistently.\n- ALWAYS regenerate a correct answer key for each mutated version.\n- Keep same question type, section, and difficulty.\n- Each version must be DIFFERENT from all others.\n\nReturn a JSON object with one key per version label. Each value is a JSON array of mutated questions in the SAME order:\n{\n  "A": [{type, section, difficulty, question, choices, answer, explanation}, ...],\n  "B": [{type, section, difficulty, question, choices, answer, explanation}, ...],\n  ...\n}\nReply with ONLY valid JSON object, no markdown, no explanation.`;
+
+  if (numClassSections <= 1) {
+    // Single section — numbers mutation, one JSON object
+    return `TESTBANK_ALL_VERSIONS_REQUEST\nVersions to create: ${versionList}\n\nFor each version, mutate ALL of the following questions:\n${lines}\n\nMUTATION RULES:\n- numbers mutation: keep exact same function type and concept, only change coefficients/constants. Same difficulty, same steps.\n- ALWAYS regenerate a correct answer key for each mutated version.\n- Keep same question type, section, and difficulty.\n- Each version must be DIFFERENT from all others.\n\nReturn a JSON object with one key per version label. Each value is a JSON array of mutated questions in the SAME order:\n{\n  "A": [{type, section, difficulty, question, choices, answer, explanation}, ...],\n  "B": [{type, section, difficulty, question, choices, answer, explanation}, ...]\n}\nReply with ONLY valid JSON object, no markdown, no explanation.`;
+  }
+
+  // Multi-section: single prompt, all sections + versions
+  const sectionKeys = [];
+  for (let s = 1; s <= numClassSections; s++) {
+    for (const lbl of labels) {
+      sectionKeys.push(`S${s}_${lbl}`);
+    }
+  }
+
+  const sectionRules = Array.from({length: numClassSections}, (_,i) => {
+    const s = i+1;
+    if (s === 1) return `- Section 1 versions (S1_A, S1_B, ...): numbers mutation — change ONLY coefficients/constants. Keep same function types.`;
+    return `- Section ${s} versions (S${s}_A, S${s}_B, ...): function mutation — change to DIFFERENT but equivalent-difficulty functions. Must differ completely from Section 1${s > 2 ? " and all previous sections" : ""}.`;
+  }).join("\n");
+
+  const exampleKeys = sectionKeys.map(k => `"${k}": [{...}]`).join(",\n  ");
+
+  return `TESTBANK_ALL_SECTIONS_AND_VERSIONS_REQUEST\nClassroom Sections: ${numClassSections}\nVersions per section: ${versionList}\nTotal keys to generate: ${sectionKeys.join(", ")}\n\nFor each key, mutate ALL of the following questions:\n${lines}\n\nMUTATION RULES BY SECTION:\n${sectionRules}\n\nADDITIONAL RULES:\n- Within each section, versions (A, B, C...) must differ from each other by numbers only.\n- Across sections, questions must use completely different function types.\n- ALWAYS regenerate correct answer keys.\n- Keep same question type, section name, and difficulty throughout.\n- Each version must be a JSON array in the SAME question order.\n\nReturn a single JSON object with ALL keys:\n{\n  ${exampleKeys}\n}\nReply with ONLY valid JSON object, no markdown, no explanation.`;
+}
+
+// Single combined prompt for ALL classroom sections at once
+// Returns one prompt that asks for S1_A, S1_B, S2_A, S2_B etc.
+function buildAllSectionsPrompt(selectedQuestions, labels, numClassSections) {
+  const lines = selectedQuestions.map((q,i) => {
+    const orig = q.type==="Branched" ? q.stem : q.question;
+    return (i+1)+". ["+q.section+"] ["+q.type+"] Original: "+orig;
+  }).join("\n");
+  const versionList = labels.join(", ");
+
+  // Build version keys: S1_A, S1_B, S2_A, S2_B etc.
+  const allKeys = [];
+  for(let s=1; s<=numClassSections; s++) {
+    labels.forEach(v => allKeys.push(`S${s}_${v}`));
+  }
+
+  const sectionRules = Array.from({length:numClassSections},(_,i)=>i+1).map(s =>
+    `- Section ${s} versions (S${s}_A, S${s}_B, ...): ${s===1 ? "numbers mutation — change only coefficients/constants, keep same function types." : `function mutation — use COMPLETELY DIFFERENT but equivalent-difficulty functions from Section 1${s>2?" and all previous sections":""}. Different function types (e.g. if S1 used polynomial, use trig or exponential).`}`
+  ).join("\n");
+
+  const exampleKeys = allKeys.slice(0,4).map(k => `  "${k}": [{type, section, difficulty, question, choices, answer, explanation}, ...]`).join(",\n");
+
+  return `TESTBANK_ALL_SECTIONS_REQUEST
+Classroom sections: ${numClassSections}
+Versions per section: ${versionList}
+All version keys to generate: ${allKeys.join(", ")}
+
+For each version key, mutate ALL of the following questions:
+${lines}
+
+MUTATION RULES BY SECTION:
+${sectionRules}
+- Within each section: each version (A, B, C...) must differ from other versions by numbers only.
+- Across sections: each section must use different functions entirely.
+- ALWAYS regenerate a correct answer key for each mutated version.
+- Keep same question type, section name, and difficulty.
+
+Return a JSON object with one key per version label (${allKeys.join(", ")}):
+{
+${exampleKeys},
+  ...
+}
+Reply with ONLY valid JSON object, no markdown, no explanation.`;
 }
 
 function buildReplacePrompt(q) {
@@ -1234,10 +1296,37 @@ export default function TestBankApp() {
           }));
           return { label, questions: versioned, classSection };
         });
-        // Store under the class section
         setClassSectionVersions(prev => ({ ...prev, [classSection]: allVersions }));
         setVersions(allVersions); setActiveVersion(0);
         setActiveClassSection(classSection);
+        setPendingType(null); setPasteInput(""); setPendingMeta(null);
+        setExamSaved(false); setSaveExamName("");
+        setScreen("versions");
+        return;
+      }
+
+      // Single paste with all sections: {S1_A:[...], S1_B:[...], S2_A:[...], ...}
+      if (pendingType === "version_all_sections") {
+        const objMatch = raw.match(/\{[\s\S]*\}/);
+        if (!objMatch) throw new Error("No JSON object found.");
+        const parsed = JSON.parse(objMatch[0]);
+        const { selected, labels, numClassSections: ncs } = pendingMeta;
+        const newSectionVersions = {};
+        for(let s=1; s<=ncs; s++) {
+          newSectionVersions[s] = labels.map(label => {
+            const key = `S${s}_${label}`;
+            const qs = parsed[key] || [];
+            const versioned = qs.map((q,i) => ({
+              ...q, id: uid(), originalId: selected[i]?.id,
+              course: selected[i]?.course || course,
+              versionLabel: label, classSection: s, createdAt: Date.now()
+            }));
+            return { label, questions: versioned, classSection: s };
+          });
+        }
+        setClassSectionVersions(newSectionVersions);
+        setVersions(newSectionVersions[1]);
+        setActiveVersion(0); setActiveClassSection(1);
         setPendingType(null); setPasteInput(""); setPendingMeta(null);
         setExamSaved(false); setSaveExamName("");
         setScreen("versions");
@@ -1287,17 +1376,20 @@ export default function TestBankApp() {
     setPendingType("generate"); setPendingMeta({ course }); setPasteInput(""); setPasteError("");
   }
 
-  function triggerVersions(classSection) {
+  function triggerVersions() {
     const selected = bank.filter(q => selectedForExam.includes(q.id));
     const labels = VERSIONS.slice(0, versionCount);
-    // Section 1 = numbers mutation; Section 2+ = function mutation
-    const effectiveMutationType = classSection > 1
-      ? Object.fromEntries(selected.map(q => [q.id, "function"]))
-      : mutationType;
-    const prompt = buildAllVersionsPrompt(selected, effectiveMutationType, labels, classSection, numClassSections);
-    setGeneratedPrompt(prompt);
-    setPendingType("version_all");
-    setPendingMeta({ selected, labels, mutationType: effectiveMutationType, classSection });
+    if (numClassSections > 1) {
+      const prompt = buildAllSectionsPrompt(selected, labels, numClassSections);
+      setGeneratedPrompt(prompt);
+      setPendingType("version_all_sections");
+      setPendingMeta({ selected, labels, numClassSections });
+    } else {
+      const prompt = buildAllVersionsPrompt(selected, mutationType, labels, 1, 1);
+      setGeneratedPrompt(prompt);
+      setPendingType("version_all");
+      setPendingMeta({ selected, labels, mutationType, classSection: 1 });
+    }
     setPasteInput(""); setPasteError("");
   }
 
@@ -1677,21 +1769,12 @@ export default function TestBankApp() {
 
                 {/* Per-section build buttons */}
                 <div style={{display:"flex", gap:"0.5rem", flexWrap:"wrap", marginBottom:"0.5rem"}}>
-                  {Array.from({length:numClassSections},(_,i)=>i+1).map(sec => {
-                    const hasVersions = classSectionVersions[sec]?.length > 0;
-                    return (
-                      <button key={sec}
-                        style={{...S.btn(hasVersions ? "#10b981" : accent, false), fontSize:"0.75rem"}}
-                        onClick={() => triggerVersions(sec)}>
-                        {hasVersions ? "✓" : "✦"} {numClassSections > 1 ? `Section ${sec}` : "Build Versions"}
-                        {numClassSections > 1 && (sec === 1 ? " (numbers)" : " (function)")}
-                      </button>
-                    );
-                  })}
-                  {Object.keys(classSectionVersions).length > 1 && (
-                    <button style={{...S.btn("#8b5cf6", false), fontSize:"0.75rem"}}
-                      onClick={() => setScreen("versions")}>
-                      📋 View All Sections
+                  <button style={S.btn(accent, false)} onClick={() => triggerVersions()}>
+                    ✦ {numClassSections > 1 ? `Build All ${numClassSections} Sections (1 prompt)` : "Build Versions"}
+                  </button>
+                  {Object.keys(classSectionVersions).length > 0 && (
+                    <button style={{...S.oBtn("#10b981")}} onClick={() => setScreen("versions")}>
+                      📋 View Versions
                     </button>
                   )}
                 </div>
@@ -1707,12 +1790,30 @@ export default function TestBankApp() {
               <>
                 <hr style={S.divider} />
                 <div style={{fontSize:"0.78rem", color:accent, fontWeight:"bold", marginBottom:"0.5rem"}}>
-                  📋 Copy this prompt — {numClassSections > 1 ? `Classroom Section ${pendingMeta?.classSection} — ` : ""}generates ALL {pendingMeta?.labels?.join(", ")} versions at once:
+                  📋 Copy this prompt — generates ALL {pendingMeta?.labels?.join(", ")} versions at once:
                 </div>
                 <div style={S.promptBox}>{generatedPrompt}</div>
                 <button style={S.oBtn(accent)} onClick={() => navigator.clipboard.writeText(generatedPrompt)}>Copy Prompt</button>
                 <PastePanel
                   label={`Paste the JSON object with all versions ({"A":[...], "B":[...], ...}) here.`}
+                  S={S} text2={text2}
+                  pasteInput={pasteInput} setPasteInput={setPasteInput}
+                  pasteError={pasteError} handlePaste={handlePaste}
+                  onCancel={() => { setPendingType(null); setPasteInput(""); setGeneratedPrompt(""); }}
+                />
+              </>
+            )}
+
+            {pendingType === "version_all_sections" && generatedPrompt && (
+              <>
+                <hr style={S.divider} />
+                <div style={{fontSize:"0.78rem", color:accent, fontWeight:"bold", marginBottom:"0.5rem"}}>
+                  📋 Copy this prompt — generates ALL {pendingMeta?.numClassSections} sections × {pendingMeta?.labels?.join(", ")} versions in one go:
+                </div>
+                <div style={S.promptBox}>{generatedPrompt}</div>
+                <button style={S.oBtn(accent)} onClick={() => navigator.clipboard.writeText(generatedPrompt)}>Copy Prompt</button>
+                <PastePanel
+                  label={`Paste the JSON object with all section+version keys ({"S1_A":[...], "S1_B":[...], "S2_A":[...], ...}) here.`}
                   S={S} text2={text2}
                   pasteInput={pasteInput} setPasteInput={setPasteInput}
                   pasteError={pasteError} handlePaste={handlePaste}
