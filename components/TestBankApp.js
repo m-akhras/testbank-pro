@@ -663,7 +663,7 @@ function mathToOmml(raw) {
 }
 
 // ─── Build proper .docx file ──────────────────────────────────────────────────
-async function buildDocx(questions, course, vLabel) {
+async function buildDocx(questions, course, vLabel, classSection=null) {
   // We build the docx XML manually for full math support
   const ns = `xmlns:wpc="http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:wp14="http://schemas.microsoft.com/office/word/2010/wordprocessingDrawing" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:w10="urn:schemas-microsoft-com:office:word" xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml" xmlns:wpg="http://schemas.microsoft.com/office/word/2010/wordprocessingGroup" xmlns:wpi="http://schemas.microsoft.com/office/word/2010/wordprocessingInk" xmlns:wne="http://schemas.microsoft.com/office/word/2006/wordml" xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape"`;
 
@@ -688,7 +688,8 @@ async function buildDocx(questions, course, vLabel) {
 
   let body = "";
   // Title
-  body += para(`${course} — Exam Version ${vLabel}`, {bold:true, size:32, spacing:120});
+  const titleLabel = classSection ? `Section ${classSection} — Version ${vLabel}` : `Exam Version ${vLabel}`;
+  body += para(`${course} — ${titleLabel}`, {bold:true, size:32, spacing:120});
   body += para("Stewart: Early Transcendentals, 9th Edition", {size:22, color:"555555", spacing:200});
 
   questions.forEach((q, i) => {
@@ -1038,14 +1039,17 @@ function buildVersionPrompt(selectedQuestions, mutationType, versionLabel) {
 
 
 // Combined prompt for ALL versions at once
-function buildAllVersionsPrompt(selectedQuestions, mutationType, labels) {
+function buildAllVersionsPrompt(selectedQuestions, mutationType, labels, classSection=1, numClassSections=1) {
   const lines = selectedQuestions.map((q,i) => {
     const mut = mutationType[q.id]||"numbers";
     const orig = q.type==="Branched" ? q.stem : q.question;
     return (i+1)+". ["+q.section+"] ["+mut+" mutation] ["+q.type+"] Original: "+orig;
   }).join("\n");
   const versionList = labels.join(", ");
-  return `TESTBANK_ALL_VERSIONS_REQUEST\nVersions to create: ${versionList}\n\nFor each version, mutate ALL of the following questions:\n${lines}\n\nMUTATION RULES:\n- numbers mutation: keep exact same function type and concept, only change coefficients/constants. Same difficulty, same steps.\n- function mutation: change to different but equivalent-difficulty function of same concept. Same difficulty, same steps.\n- For Branched: mutate the shared stem and regenerate ALL parts consistently.\n- ALWAYS regenerate a correct answer key for each mutated version.\n- Keep same question type, section, and difficulty.\n- Each version must be DIFFERENT from all others.\n\nReturn a JSON object with one key per version label. Each value is a JSON array of mutated questions in the SAME order:\n{\n  "A": [{type, section, difficulty, question, choices, answer, explanation}, ...],\n  "B": [{type, section, difficulty, question, choices, answer, explanation}, ...],\n  ...\n}\nReply with ONLY valid JSON object, no markdown, no explanation.`;
+  const sectionNote = numClassSections > 1
+    ? `\nNOTE: This is Classroom Section ${classSection} of ${numClassSections}. ${classSection === 1 ? "Use numbers mutation — change only coefficients/constants." : `Use function mutation — change to DIFFERENT but equivalent-difficulty functions. Must be completely different from Section 1${classSection > 2 ? " and all previous sections" : ""}.`}`
+    : "";
+  return `TESTBANK_ALL_VERSIONS_REQUEST\nVersions to create: ${versionList}\n${sectionNote}\nFor each version, mutate ALL of the following questions:\n${lines}\n\nMUTATION RULES:\n- numbers mutation: keep exact same function type and concept, only change coefficients/constants. Same difficulty, same steps.\n- function mutation: change to different but equivalent-difficulty function of same concept. Same difficulty, same steps.\n- For Branched: mutate the shared stem and regenerate ALL parts consistently.\n- ALWAYS regenerate a correct answer key for each mutated version.\n- Keep same question type, section, and difficulty.\n- Each version must be DIFFERENT from all others.\n\nReturn a JSON object with one key per version label. Each value is a JSON array of mutated questions in the SAME order:\n{\n  "A": [{type, section, difficulty, question, choices, answer, explanation}, ...],\n  "B": [{type, section, difficulty, question, choices, answer, explanation}, ...],\n  ...\n}\nReply with ONLY valid JSON object, no markdown, no explanation.`;
 }
 
 function buildReplacePrompt(q) {
@@ -1193,6 +1197,11 @@ export default function TestBankApp() {
   const [selectedQIndices, setSelectedQIndices] = useState([]);
   const [qtiUseGroups, setQtiUseGroups] = useState(false);
   const [qtiPointsPerQ, setQtiPointsPerQ] = useState(1);
+  // ── Classroom sections ──
+  const [numClassSections, setNumClassSections] = useState(1);
+  const [currentClassSection, setCurrentClassSection] = useState(1);
+  const [classSectionVersions, setClassSectionVersions] = useState({}); // {1: [...versions], 2: [...versions]}
+  const [activeClassSection, setActiveClassSection] = useState(1);
 
   const accent = course ? COURSES[course].color : "#10b981";
 
@@ -1215,17 +1224,20 @@ export default function TestBankApp() {
         const objMatch = raw.match(/\{[\s\S]*\}/);
         if (!objMatch) throw new Error("No JSON object found. Make sure you copied the full response.");
         const parsed = JSON.parse(objMatch[0]);
-        const { selected, labels } = pendingMeta;
+        const { selected, labels, classSection } = pendingMeta;
         const allVersions = labels.map(label => {
           const qs = parsed[label] || [];
           const versioned = qs.map((q,i) => ({
             ...q, id: uid(), originalId: selected[i]?.id,
             course: selected[i]?.course || course,
-            versionLabel: label, createdAt: Date.now()
+            versionLabel: label, classSection, createdAt: Date.now()
           }));
-          return { label, questions: versioned };
+          return { label, questions: versioned, classSection };
         });
+        // Store under the class section
+        setClassSectionVersions(prev => ({ ...prev, [classSection]: allVersions }));
         setVersions(allVersions); setActiveVersion(0);
+        setActiveClassSection(classSection);
         setPendingType(null); setPasteInput(""); setPendingMeta(null);
         setExamSaved(false); setSaveExamName("");
         setScreen("versions");
@@ -1275,14 +1287,17 @@ export default function TestBankApp() {
     setPendingType("generate"); setPendingMeta({ course }); setPasteInput(""); setPasteError("");
   }
 
-  function triggerVersions() {
+  function triggerVersions(classSection) {
     const selected = bank.filter(q => selectedForExam.includes(q.id));
     const labels = VERSIONS.slice(0, versionCount);
-    // Use combined all-versions prompt — one paste for everything
-    const prompt = buildAllVersionsPrompt(selected, mutationType, labels);
+    // Section 1 = numbers mutation; Section 2+ = function mutation
+    const effectiveMutationType = classSection > 1
+      ? Object.fromEntries(selected.map(q => [q.id, "function"]))
+      : mutationType;
+    const prompt = buildAllVersionsPrompt(selected, effectiveMutationType, labels, classSection, numClassSections);
     setGeneratedPrompt(prompt);
     setPendingType("version_all");
-    setPendingMeta({ selected, labels, mutationType });
+    setPendingMeta({ selected, labels, mutationType: effectiveMutationType, classSection });
     setPasteInput(""); setPasteError("");
   }
 
@@ -1645,14 +1660,46 @@ export default function TestBankApp() {
                     {selectedForExam.length} question{selectedForExam.length!==1?"s":""} selected
                   </span>
                   <div style={{display:"flex", alignItems:"center", gap:"0.5rem"}}>
-                    <span style={{fontSize:"0.72rem", color:text2}}>Versions:</span>
+                    <span style={{fontSize:"0.72rem", color:text2}}>Versions per class:</span>
                     <select style={{...S.sel, width:"130px", padding:"0.4rem 0.6rem"}} value={versionCount} onChange={e => setVersionCount(Number(e.target.value))}>
                       {[1,2,3,4,5].map(n => <option key={n} value={n}>{n} version{n>1?"s":""}</option>)}
                     </select>
                   </div>
-                  <button style={S.btn(accent, false)} onClick={triggerVersions}>✦ Build Versions</button>
+                  <div style={{display:"flex", alignItems:"center", gap:"0.5rem"}}>
+                    <span style={{fontSize:"0.72rem", color:text2}}>Classroom sections:</span>
+                    <input
+                      type="number" min={1} max={10} value={numClassSections}
+                      onChange={e => setNumClassSections(Math.max(1, parseInt(e.target.value)||1))}
+                      style={{width:"52px", ...S.input, padding:"0.25rem 0.4rem", fontSize:"0.78rem"}}
+                    />
+                  </div>
                 </div>
-                <div style={{fontSize:"0.68rem", color:text3}}>Tip: set numbers/function mutation on each question card above ↑</div>
+
+                {/* Per-section build buttons */}
+                <div style={{display:"flex", gap:"0.5rem", flexWrap:"wrap", marginBottom:"0.5rem"}}>
+                  {Array.from({length:numClassSections},(_,i)=>i+1).map(sec => {
+                    const hasVersions = classSectionVersions[sec]?.length > 0;
+                    return (
+                      <button key={sec}
+                        style={{...S.btn(hasVersions ? "#10b981" : accent, false), fontSize:"0.75rem"}}
+                        onClick={() => triggerVersions(sec)}>
+                        {hasVersions ? "✓" : "✦"} {numClassSections > 1 ? `Section ${sec}` : "Build Versions"}
+                        {numClassSections > 1 && (sec === 1 ? " (numbers)" : " (function)")}
+                      </button>
+                    );
+                  })}
+                  {Object.keys(classSectionVersions).length > 1 && (
+                    <button style={{...S.btn("#8b5cf6", false), fontSize:"0.75rem"}}
+                      onClick={() => setScreen("versions")}>
+                      📋 View All Sections
+                    </button>
+                  )}
+                </div>
+                <div style={{fontSize:"0.68rem", color:text3}}>
+                  {numClassSections > 1
+                    ? "Section 1: numbers mutation (same time). Section 2+: function mutation (different time)."
+                    : "Tip: set numbers/function mutation on each question card above ↑"}
+                </div>
               </div>
             )}
 
@@ -1660,7 +1707,7 @@ export default function TestBankApp() {
               <>
                 <hr style={S.divider} />
                 <div style={{fontSize:"0.78rem", color:accent, fontWeight:"bold", marginBottom:"0.5rem"}}>
-                  📋 Copy this prompt — generates ALL {pendingMeta?.labels?.join(", ")} versions at once:
+                  📋 Copy this prompt — {numClassSections > 1 ? `Classroom Section ${pendingMeta?.classSection} — ` : ""}generates ALL {pendingMeta?.labels?.join(", ")} versions at once:
                 </div>
                 <div style={S.promptBox}>{generatedPrompt}</div>
                 <button style={S.oBtn(accent)} onClick={() => navigator.clipboard.writeText(generatedPrompt)}>Copy Prompt</button>
@@ -1698,7 +1745,21 @@ export default function TestBankApp() {
         {screen === "versions" && (
           <div>
             <h1 style={S.h1}>Exam Versions</h1>
-            <p style={S.sub}>{versions.length} version{versions.length !== 1 ? "s" : ""} created.</p>
+            <p style={S.sub}>{versions.length} version{versions.length !== 1 ? "s" : ""} created{Object.keys(classSectionVersions).length > 1 ? ` · ${Object.keys(classSectionVersions).length} classroom sections` : ""}.</p>
+
+            {/* Classroom section tabs */}
+            {Object.keys(classSectionVersions).length > 1 && (
+              <div style={{display:"flex", gap:"0.5rem", marginBottom:"1.25rem", flexWrap:"wrap", alignItems:"center"}}>
+                <span style={{fontSize:"0.72rem", color:text2}}>Classroom Section:</span>
+                {Object.keys(classSectionVersions).sort().map(sec => (
+                  <button key={sec}
+                    style={S.vTab(activeClassSection===Number(sec), Number(sec)===1?"#10b981":"#8b5cf6")}
+                    onClick={() => { setActiveClassSection(Number(sec)); setVersions(classSectionVersions[sec]); setActiveVersion(0); }}>
+                    Section {sec} {Number(sec)===1?"(numbers)":"(function)"}
+                  </button>
+                ))}
+              </div>
+            )}
 
             {versions.length === 0 && (
               <div style={{...S.card, textAlign:"center", color:text3, padding:"3rem"}}>
@@ -1768,11 +1829,30 @@ export default function TestBankApp() {
 
                       <div style={{display:"flex", gap:"0.75rem", marginBottom:"1.25rem", flexWrap:"wrap"}}>
                         <button style={S.btn("#10b981",false)} onClick={async () => {
-                          const blob = await buildDocx(v.questions,v.questions[0]?.course||"Calculus",v.label);
-                          dlBlob(blob,"Version_"+v.label+"_Exam.docx");
+                          const cs = v.questions[0]?.classSection || null;
+                          const blob = await buildDocx(v.questions,v.questions[0]?.course||"Calculus",v.label,cs);
+                          const secStr = cs ? `_S${cs}` : "";
+                          dlBlob(blob,`Version_${v.label}${secStr}_Exam.docx`);
                           if (examSaved && saveExamName) await logExport(saveExamName, "Word", v.label);
                         }}>⬇ Word (.docx)</button>
-                        <button style={S.oBtn("#f59e0b")} onClick={async () => { for(const ver of versions){ const blob=await buildDocx(ver.questions,ver.questions[0]?.course||"Calculus",ver.label); dlBlob(blob,"Version_"+ver.label+"_Exam.docx"); }}}>⬇ All Word</button>
+                        <button style={S.oBtn("#f59e0b")} onClick={async () => {
+                          for(const ver of versions){
+                            const cs = ver.questions[0]?.classSection || null;
+                            const blob=await buildDocx(ver.questions,ver.questions[0]?.course||"Calculus",ver.label,cs);
+                            const secStr = cs ? `_S${cs}` : "";
+                            dlBlob(blob,`Version_${ver.label}${secStr}_Exam.docx`);
+                          }
+                        }}>⬇ All Word</button>
+                        {Object.keys(classSectionVersions).length > 1 && (
+                          <button style={S.oBtn("#8b5cf6")} onClick={async () => {
+                            for(const [sec, secVers] of Object.entries(classSectionVersions)){
+                              for(const ver of secVers){
+                                const blob=await buildDocx(ver.questions,ver.questions[0]?.course||"Calculus",ver.label,Number(sec));
+                                dlBlob(blob,`S${sec}_Version_${ver.label}_Exam.docx`);
+                              }
+                            }
+                          }}>⬇ All Sections Word</button>
+                        )}
                       </div>
 
                       {v.questions.map((q,qi) => (
