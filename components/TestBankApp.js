@@ -199,7 +199,104 @@ function renderMath(latex) {
   }
 }
 
+// ─── Pipe table detector & renderer ──────────────────────────────────────────
+function isPipeTable(text) {
+  const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
+  return lines.length >= 2 && lines.filter(l => l.startsWith("|")).length >= 2;
+}
+
+function parsePipeTable(text) {
+  const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
+  const tableLines = lines.filter(l => l.startsWith("|"));
+  const rows = tableLines
+    .filter(l => !/^\|[-\s|:]+\|$/.test(l)) // remove separator rows
+    .map(l => l.replace(/^\||\|$/g,"").split("|").map(c => c.trim()));
+  return rows;
+}
+
+function PipeTableHTML({ text }) {
+  const rows = parsePipeTable(text);
+  if (!rows.length) return <span>{text}</span>;
+  return (
+    <table style={{
+      borderCollapse:"collapse", fontSize:"0.82rem", margin:"0.5rem 0",
+      width:"auto", maxWidth:"100%"
+    }}>
+      {rows.map((row, ri) => (
+        <tr key={ri}>
+          {row.map((cell, ci) => {
+            const Tag = ri === 0 ? "th" : "td";
+            return (
+              <Tag key={ci} style={{
+                border:"1px solid #2a2a4a",
+                padding:"0.3rem 0.6rem",
+                background: ri === 0 ? "#1a1a35" : ci === 0 ? "#141428" : "transparent",
+                color: ri === 0 ? "#a0a0c0" : "#d0d0cc",
+                fontWeight: ri === 0 || ci === 0 ? "bold" : "normal",
+                textAlign:"center",
+                whiteSpace:"nowrap"
+              }}>
+                <MathText>{cell}</MathText>
+              </Tag>
+            );
+          })}
+        </tr>
+      ))}
+    </table>
+  );
+}
+
+// Split text into table blocks and non-table blocks
+function splitTableBlocks(text) {
+  const lines = text.split("\n");
+  const blocks = [];
+  let current = [];
+  let inTable = false;
+
+  for (const line of lines) {
+    const isTableLine = line.trim().startsWith("|");
+    if (isTableLine) {
+      if (!inTable && current.length) {
+        blocks.push({ type:"text", content: current.join("\n") });
+        current = [];
+      }
+      inTable = true;
+      current.push(line);
+    } else {
+      if (inTable && current.length) {
+        blocks.push({ type:"table", content: current.join("\n") });
+        current = [];
+      }
+      inTable = false;
+      current.push(line);
+    }
+  }
+  if (current.length) blocks.push({ type: inTable ? "table" : "text", content: current.join("\n") });
+  return blocks;
+}
+
 function MathText({ children }) {
+  const ref = useRef(null);
+  const src = String(children ?? "");
+
+  // Check if text contains pipe table — if so use block renderer
+  if (src.includes("|") && isPipeTable(src)) {
+    const blocks = splitTableBlocks(src);
+    return (
+      <span>
+        {blocks.map((block, i) =>
+          block.type === "table"
+            ? <PipeTableHTML key={i} text={block.content} />
+            : <MathTextInline key={i}>{block.content}</MathTextInline>
+        )}
+      </span>
+    );
+  }
+
+  return <MathTextInline>{src}</MathTextInline>;
+}
+
+function MathTextInline({ children }) {
   const ref = useRef(null);
   const src = String(children ?? "");
   useEffect(() => {
@@ -674,9 +771,80 @@ async function buildDocx(questions, course, vLabel, classSection=null) {
     return `<w:p>${ppr}<w:r>${rpr}<w:t xml:space="preserve">${String(text).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}</w:t></w:r></w:p>`;
   }
 
+  // Convert pipe table text to Word table XML
+  function pipeTableToWordXml(text) {
+    const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
+    const tableLines = lines.filter(l => l.startsWith("|"));
+    const rows = tableLines
+      .filter(l => !/^\|[-\s|:]+\|$/.test(l))
+      .map(l => l.replace(/^\||\|$/g,"").split("|").map(c => c.trim()));
+    if (!rows.length) return "";
+
+    const numCols = Math.max(...rows.map(r => r.length));
+    const colWidth = Math.floor(8640 / numCols); // fit in content width (DXA)
+
+    const border = `<w:top w:val="single" w:sz="4" w:color="888888"/><w:left w:val="single" w:sz="4" w:color="888888"/><w:bottom w:val="single" w:sz="4" w:color="888888"/><w:right w:val="single" w:sz="4" w:color="888888"/>`;
+
+    const wordRows = rows.map((row, ri) => {
+      const isHeader = ri === 0;
+      const cells = Array.from({length: numCols}, (_,ci) => {
+        const cellText = row[ci] || "";
+        const shading = isHeader
+          ? `<w:shd w:val="clear" w:color="auto" w:fill="2D2D5A"/>`
+          : ci === 0 ? `<w:shd w:val="clear" w:color="auto" w:fill="1A1A3A"/>` : "";
+        const textColor = isHeader ? "A0A0CC" : ci === 0 ? "C0C0E0" : "D0D0CC";
+        const bold = isHeader || ci === 0;
+        const safe = cellText.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+        return `<w:tc>
+          <w:tcPr>
+            <w:tcW w:w="${colWidth}" w:type="dxa"/>
+            <w:tcBorders>${border}</w:tcBorders>
+            ${shading}
+            <w:tcMar><w:top w:w="60" w:type="dxa"/><w:left w:w="120" w:type="dxa"/><w:bottom w:w="60" w:type="dxa"/><w:right w:w="120" w:type="dxa"/></w:tcMar>
+          </w:tcPr>
+          <w:p><w:pPr><w:jc w:val="center"/><w:spacing w:after="0"/></w:pPr>
+            <w:r><w:rPr>${bold?'<w:b/>':''}<w:sz w:val="20"/><w:color w:val="${textColor}"/></w:rPr>
+              <w:t xml:space="preserve">${safe}</w:t>
+            </w:r>
+          </w:p>
+        </w:tc>`;
+      }).join("");
+      const rowProps = isHeader ? `<w:trPr><w:tblHeader/></w:trPr>` : "";
+      return `<w:tr>${rowProps}${cells}</w:tr>`;
+    }).join("");
+
+    return `<w:tbl>
+      <w:tblPr>
+        <w:tblW w:w="${numCols * colWidth}" w:type="dxa"/>
+        <w:tblBorders>${border.repeat ? border : border}</w:tblBorders>
+        <w:tblLook w:val="04A0"/>
+      </w:tblPr>
+      <w:tblGrid>${Array.from({length:numCols},()=>`<w:gridCol w:w="${colWidth}"/>`).join("")}</w:tblGrid>
+      ${wordRows}
+    </w:tbl>
+    <w:p><w:pPr><w:spacing w:after="80"/></w:pPr></w:p>`;
+  }
+
   function mathPara(text, opts={}) {
     const {indent=0} = opts;
     const ppr = indent ? `<w:pPr><w:ind w:left="${indent}"/><w:spacing w:after="80"/></w:pPr>` : `<w:pPr><w:spacing w:after="80"/></w:pPr>`;
+
+    // If text contains a pipe table, split and render each block
+    if (String(text).includes("|") && isPipeTable(String(text))) {
+      const blocks = splitTableBlocks(String(text));
+      return blocks.map(block => {
+        if (block.type === "table") return pipeTableToWordXml(block.content);
+        if (!block.content.trim()) return "";
+        try {
+          const omml = mathToOmml(block.content);
+          return `<w:p>${ppr}<m:oMathPara><m:oMathParaPr><m:jc m:val="left"/></m:oMathParaPr>${omml}</m:oMathPara></w:p>`;
+        } catch(e) {
+          const safe = block.content.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+          return `<w:p>${ppr}<w:r><w:t xml:space="preserve">${safe}</w:t></w:r></w:p>`;
+        }
+      }).join("");
+    }
+
     try {
       const omml = mathToOmml(text);
       return `<w:p>${ppr}<m:oMathPara><m:oMathParaPr><m:jc m:val="left"/></m:oMathParaPr>${omml}</m:oMathPara></w:p>`;
