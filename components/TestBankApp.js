@@ -817,6 +817,154 @@ async function buildQTIZip(qtiXml, title) {
   return await zip.generateAsync({type:"blob", mimeType:"application/zip"});
 }
 
+// ─── Classroom Sections Canvas QTI export ─────────────────────────────────────
+// Matches the exact structure of the uploaded MAT221 QTI files:
+// - One zip per classroom section (S1, S2, S3, S4)
+// - Grouped mode: one <section> per question number, each containing all versions of that question
+// - Flat mode: all items in a single <section>
+async function buildClassroomSectionsQTI(classSectionVersions, course, useGroups=true, pointsPerQ=1) {
+  if (!window.JSZip) {
+    await new Promise((res, rej) => {
+      const s = document.createElement("script");
+      s.src = "https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js";
+      s.onload = res; s.onerror = rej;
+      document.head.appendChild(s);
+    });
+  }
+
+  function uid8() { return Math.random().toString(16).slice(2,10).padEnd(8,'0'); }
+
+  function makeItem(q, ident, qnum) {
+    const qhtml = mathToHTML(q.question || "");
+    const isMC = q.type === "Multiple Choice" && q.choices;
+    const qType = isMC ? "multiple_choice_question" : "short_answer_question";
+    const meta = `<itemmetadata><qtimetadata>
+        <qtimetadatafield><fieldlabel>question_type</fieldlabel><fieldentry>${qType}</fieldentry></qtimetadatafield>
+        <qtimetadatafield><fieldlabel>points_possible</fieldlabel><fieldentry>${pointsPerQ}</fieldentry></qtimetadatafield>
+      </qtimetadata></itemmetadata>`;
+
+    if (isMC) {
+      const cx = q.choices.map((c,ci) =>
+        `<response_label ident="${ident}_${ci}"><material><mattext texttype="text/html"><![CDATA[<p>${mathToHTML(c)}</p>]]></mattext></material></response_label>`
+      ).join("\n          ");
+      const correct = q.choices.findIndex(c => c === q.answer);
+      const correctIdent = `${ident}_${correct}`;
+      return `    <item ident="${ident}" title="Q${qnum}">
+      ${meta}
+      <presentation>
+        <material><mattext texttype="text/html"><![CDATA[<p>${qhtml}</p>]]></mattext></material>
+        <response_lid ident="response1" rcardinality="Single">
+          <render_choice shuffle="No">
+          ${cx}
+          </render_choice>
+        </response_lid>
+      </presentation>
+      <resprocessing>
+        <outcomes><decvar maxvalue="100" minvalue="0" varname="SCORE" vartype="Decimal"/></outcomes>
+      <respcondition continue="No"><conditionvar><varequal respident="response1">${correctIdent}</varequal></conditionvar><setvar action="Set" varname="SCORE">100</setvar></respcondition>
+      </resprocessing>
+    </item>`;
+    }
+    return `    <item ident="${ident}" title="Q${qnum}">
+      ${meta}
+      <presentation>
+        <material><mattext texttype="text/html"><![CDATA[<p>${qhtml}</p>]]></mattext></material>
+        <response_str ident="response1" rcardinality="Single"><render_fib rows="5" columns="80"/></response_str>
+      </presentation>
+      <resprocessing>
+        <outcomes><decvar maxvalue="100" minvalue="0" varname="SCORE" vartype="Decimal"/></outcomes>
+      </resprocessing>
+    </item>`;
+  }
+
+  const sortedSecs = Object.keys(classSectionVersions).sort((a,b) => Number(a)-Number(b));
+  const blobs = {};
+
+  for (const sec of sortedSecs) {
+    const secVersions = classSectionVersions[sec]; // array of {label, questions}
+    const numQ = secVersions[0]?.questions?.length || 0;
+    const assessId = `mat_s${sec}_${uid8()}`;
+    const title = `${course} Section ${sec} Exam`;
+    const safeTitle = title.replace(/[^a-zA-Z0-9]/g, '_');
+    const qtiFile = `${safeTitle}/${safeTitle}_questions.xml`;
+
+    let sectionsXml = "";
+
+    if (useGroups) {
+      // Grouped: one <section title="Q1"> containing all versions of Q1, etc.
+      for (let qi = 0; qi < numQ; qi++) {
+        const sectionId = `g${uid8()}`;
+        let items = "";
+        secVersions.forEach((v) => {
+          const q = v.questions[qi];
+          if (!q || q.type === "Branched") return;
+          const ident = `i${uid8()}`;
+          items += makeItem(q, ident, qi+1) + "\n";
+        });
+        sectionsXml += `  <section ident="${sectionId}" title="Q${qi+1}">
+    <selection_ordering>
+      <selection>
+        <selection_number>1</selection_number>
+        <selection_extension><points_per_item>${pointsPerQ}</points_per_item></selection_extension>
+      </selection>
+    </selection_ordering>
+${items}  </section>\n`;
+      }
+    } else {
+      // Flat: all versions of all questions in one section, ordered V-A Q1, V-B Q1, V-A Q2, V-B Q2...
+      const sectionId = `g${uid8()}`;
+      let items = "";
+      for (let qi = 0; qi < numQ; qi++) {
+        secVersions.forEach((v) => {
+          const q = v.questions[qi];
+          if (!q || q.type === "Branched") return;
+          const ident = `i${uid8()}`;
+          items += makeItem(q, ident, qi+1) + "\n";
+        });
+      }
+      sectionsXml = `  <section ident="${sectionId}" title="All Questions">\n${items}  </section>\n`;
+    }
+
+    const qtiXml = `<?xml version="1.0" encoding="UTF-8"?>
+<questestinterop xmlns="http://www.imsglobal.org/xsd/ims_qtiasiv1p2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.imsglobal.org/xsd/ims_qtiasiv1p2 http://www.imsglobal.org/xsd/ims_qtiasiv1p2p1.xsd">
+  <assessment ident="${assessId}" title="${escapeXML(title)}">
+    <qtimetadata><qtimetadatafield><fieldlabel>cc_maxattempts</fieldlabel><fieldentry>1</fieldentry></qtimetadatafield></qtimetadata>
+${sectionsXml}  </assessment>
+</questestinterop>`;
+
+    const metaXml = `<?xml version="1.0" encoding="UTF-8"?>
+<quiz identifier="${assessId}" xmlns="http://canvas.instructure.com/xsd/cccv1p0">
+  <title>${escapeXML(title)}</title>
+  <shuffle_answers>false</shuffle_answers>
+  <scoring_policy>keep_highest</scoring_policy>
+  <quiz_type>assignment</quiz_type>
+  <points_possible>${numQ * pointsPerQ}</points_possible>
+  <allowed_attempts>1</allowed_attempts>
+  <show_correct_answers>false</show_correct_answers>
+</quiz>`;
+
+    const manifest = `<?xml version="1.0" encoding="UTF-8"?>
+<manifest identifier="${assessId}_manifest" xmlns="http://www.imsglobal.org/xsd/imsccv1p1/imscp_v1p1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.imsglobal.org/xsd/imsccv1p1/imscp_v1p1 http://www.imsglobal.org/xsd/imsccv1p1/imscp_v1p1.xsd">
+  <metadata><schema>IMS Content</schema><schemaversion>1.1</schemaversion></metadata>
+  <organizations/>
+  <resources>
+    <resource identifier="${assessId}" type="imsqti_xmlv1p2" href="${qtiFile}">
+      <file href="${qtiFile}"/>
+      <file href="${safeTitle}/${safeTitle}_meta.xml"/>
+    </resource>
+  </resources>
+</manifest>`;
+
+    const zip = new window.JSZip();
+    zip.file("imsmanifest.xml", manifest);
+    zip.file(qtiFile, qtiXml);
+    zip.file(`${safeTitle}/${safeTitle}_meta.xml`, metaXml);
+    blobs[sec] = await zip.generateAsync({type:"blob", mimeType:"application/zip"});
+  }
+
+  return blobs; // { "1": Blob, "2": Blob, ... }
+}
+
 // ─── Compare-mode exports (grouped by question number across versions) ─────────
 function buildQTICompare(versions, course, useGroups=false, pointsPerQ=1) {
   const numQ = versions[0]?.questions?.length || 0;
@@ -1017,6 +1165,28 @@ function buildGeneratePrompt(course, selectedSections, sectionCounts, qType, dif
     "Formula": "Include variables array [{name,min,max,precision}] with sensible ranges. Include answerFormula as math expression using variable names. Question text uses [varname] placeholders.",
     "Branched": "Include stem (shared given info), parts array [{question,answer,explanation}]. Decide number of parts (2-4) based on topic. All parts share the same stem.",
   };
+
+  const isQM = course === "Quantitative Methods I" || course === "Quantitative Methods II";
+  const tableInstructions = isQM ? `
+TABLE-BASED QUESTIONS (required for Quantitative Methods):
+- At least 40% of questions MUST present data in a table format embedded in the question text.
+- Use plain-text ASCII tables formatted like this example:
+  | X | P(X) |
+  |---|------|
+  | 0 | 0.10 |
+  | 1 | 0.35 |
+  | 2 | 0.40 |
+  | 3 | 0.15 |
+- Table types to use depending on section:
+  * Probability/frequency tables for Random Variables and Distributions sections
+  * Joint probability tables for Conditional Probability and Bivariate sections
+  * Contingency tables for Bayes Theorem sections
+  * Payoff/decision tables for Decision Analysis sections
+  * Data tables with x_i and f_i columns for Expected Value and Variance sections
+- After presenting the table, ask students to compute a specific value (probability, expected value, variance, conditional probability, covariance, etc.)
+- Non-table questions should still use specific numerical scenarios, not abstract formulas.
+` : "";
+
   const needsChoices = qType==="Multiple Choice"||qType==="True/False";
   const shape = qType==="Branched"
     ? `{"type":"Branched","section":"...","difficulty":"...","stem":"...","parts":[{"question":"...","answer":"...","explanation":"..."}]}`
@@ -1025,7 +1195,12 @@ function buildGeneratePrompt(course, selectedSections, sectionCounts, qType, dif
     : needsChoices
     ? `{"type":"${qType}","section":"...","difficulty":"...","question":"...","choices":[...],"answer":"...","explanation":"..."}`
     : `{"type":"${qType}","section":"...","difficulty":"...","question":"...","answer":"...","explanation":"..."}`;
-  return `TESTBANK_GENERATE_REQUEST\nCourse: ${course}\nType: ${qType}\nTotal questions: ${totalQ}\n\nSections, counts, and required difficulties:\n${breakdown}\n\nIMPORTANT: For each section, generate questions in the EXACT difficulty order listed (Easy=E, Medium=M, Hard=H). Follow the pattern strictly.\n\nType instructions: ${typeInstructions[qType]}\n\nYou are a college math professor writing a test bank from Stewart Calculus Early Transcendentals 9th Edition.\nUse plain-text math: x^2, sqrt(x), lim as x->0, d/dx, integral from a to b.\nBe rigorous, numerically specific, university-level.\nEach question must have a 'section' field with the exact section name.\nEach question must have a 'difficulty' field matching the required pattern above.\n\nReply with ONLY a valid JSON array, no markdown fences, no explanation:\n[${shape}, ...]`;
+
+  const courseText = isQM
+    ? "You are a college business/statistics professor writing a test bank for a Quantitative Methods course."
+    : "You are a college math professor writing a test bank from Stewart Calculus Early Transcendentals 9th Edition.";
+
+  return `TESTBANK_GENERATE_REQUEST\nCourse: ${course}\nType: ${qType}\nTotal questions: ${totalQ}\n\nSections, counts, and required difficulties:\n${breakdown}\n\nIMPORTANT: For each section, generate questions in the EXACT difficulty order listed (Easy=E, Medium=M, Hard=H). Follow the pattern strictly.\n\nType instructions: ${typeInstructions[qType]}\n${tableInstructions}\n${courseText}\nUse plain-text math: x^2, sqrt(x), fractions, summations.\nBe rigorous, numerically specific, university-level.\nEach question must have a 'section' field with the exact section name.\nEach question must have a 'difficulty' field matching the required pattern above.\n\nReply with ONLY a valid JSON array, no markdown fences, no explanation:\n[${shape}, ...]`;
 }
 
 function buildVersionPrompt(selectedQuestions, mutationType, versionLabel) {
@@ -1955,6 +2130,84 @@ export default function TestBankApp() {
                           }}>⬇ All Sections Word</button>
                         )}
                       </div>
+
+                      {/* Canvas QTI Export Panel */}
+                      {Object.keys(classSectionVersions).length > 1 ? (
+                        <div style={{...S.card, borderColor:"#8b5cf644", marginBottom:"1rem", padding:"1rem"}}>
+                          <div style={{fontSize:"0.72rem", color:"#8b5cf6", fontWeight:"bold", marginBottom:"0.6rem", letterSpacing:"0.08em", textTransform:"uppercase"}}>Canvas QTI Export — Classroom Sections</div>
+                          <div style={{display:"flex", gap:"1rem", flexWrap:"wrap", alignItems:"center", marginBottom:"0.75rem"}}>
+                            <label style={{display:"flex", alignItems:"center", gap:"0.4rem", fontSize:"0.78rem", color:text2, cursor:"pointer"}}>
+                              <input type="checkbox" checked={qtiUseGroups} onChange={e => setQtiUseGroups(e.target.checked)}
+                                style={{accentColor:"#8b5cf6", width:"14px", height:"14px"}} />
+                              Group by question number
+                            </label>
+                            <label style={{display:"flex", alignItems:"center", gap:"0.4rem", fontSize:"0.78rem", color:text2}}>
+                              Points per question:
+                              <input type="number" min={1} max={100} value={qtiPointsPerQ}
+                                onChange={e => setQtiPointsPerQ(Number(e.target.value)||1)}
+                                style={{width:"52px", ...S.input, padding:"0.25rem 0.4rem", fontSize:"0.78rem"}} />
+                            </label>
+                          </div>
+                          <div style={{fontSize:"0.72rem", color:text3, marginBottom:"0.75rem"}}>
+                            {qtiUseGroups
+                              ? "Grouped: one question group per question number — Canvas randomly picks 1 version per student."
+                              : "Flat: all question versions listed sequentially — no Canvas grouping."}
+                          </div>
+                          <div style={{display:"flex", gap:"0.5rem", flexWrap:"wrap"}}>
+                            {Object.keys(classSectionVersions).sort((a,b)=>Number(a)-Number(b)).map(sec => (
+                              <button key={sec} style={S.btn("#8b5cf6", false)} onClick={async () => {
+                                const blobs = await buildClassroomSectionsQTI(
+                                  {[sec]: classSectionVersions[sec]},
+                                  versions[0]?.questions[0]?.course || "Exam",
+                                  qtiUseGroups, qtiPointsPerQ
+                                );
+                                dlBlob(blobs[sec], `Section_${sec}_Canvas_QTI.zip`);
+                              }}>⬇ Section {sec} QTI (.zip)</button>
+                            ))}
+                            <button style={S.btn("#10b981", false)} onClick={async () => {
+                              const blobs = await buildClassroomSectionsQTI(
+                                classSectionVersions,
+                                versions[0]?.questions[0]?.course || "Exam",
+                                qtiUseGroups, qtiPointsPerQ
+                              );
+                              for(const [sec, blob] of Object.entries(blobs)){
+                                dlBlob(blob, `Section_${sec}_Canvas_QTI.zip`);
+                              }
+                            }}>⬇ All Sections QTI (.zip)</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div style={{...S.card, borderColor:"#8b5cf644", marginBottom:"1rem", padding:"1rem"}}>
+                          <div style={{fontSize:"0.72rem", color:"#8b5cf6", fontWeight:"bold", marginBottom:"0.6rem", letterSpacing:"0.08em", textTransform:"uppercase"}}>Canvas QTI Export</div>
+                          <div style={{display:"flex", gap:"1rem", flexWrap:"wrap", alignItems:"center", marginBottom:"0.75rem"}}>
+                            <label style={{display:"flex", alignItems:"center", gap:"0.4rem", fontSize:"0.78rem", color:text2, cursor:"pointer"}}>
+                              <input type="checkbox" checked={qtiUseGroups} onChange={e => setQtiUseGroups(e.target.checked)}
+                                style={{accentColor:"#8b5cf6", width:"14px", height:"14px"}} />
+                              Group by question number
+                            </label>
+                            <label style={{display:"flex", alignItems:"center", gap:"0.4rem", fontSize:"0.78rem", color:text2}}>
+                              Points per question:
+                              <input type="number" min={1} max={100} value={qtiPointsPerQ}
+                                onChange={e => setQtiPointsPerQ(Number(e.target.value)||1)}
+                                style={{width:"52px", ...S.input, padding:"0.25rem 0.4rem", fontSize:"0.78rem"}} />
+                            </label>
+                          </div>
+                          <div style={{display:"flex", gap:"0.5rem", flexWrap:"wrap"}}>
+                            {versions.map(v => (
+                              <button key={v.label} style={S.oBtn("#8b5cf6")} onClick={async () => {
+                                const xml = buildQTI(v.questions, v.questions[0]?.course||"Exam", v.label, qtiUseGroups, qtiPointsPerQ);
+                                const blob = await buildQTIZip(xml, `Version_${v.label}`);
+                                dlBlob(blob, `Version_${v.label}_Canvas_QTI.zip`);
+                              }}>⬇ V{v.label} QTI (.zip)</button>
+                            ))}
+                            <button style={S.btn("#8b5cf6", false)} onClick={async () => {
+                              const xml = buildQTICompare(versions, versions[0]?.questions[0]?.course || "Exam", qtiUseGroups, qtiPointsPerQ);
+                              const blob = await buildQTIZip(xml, "AllVersions");
+                              dlBlob(blob, "AllVersions_Canvas_QTI.zip");
+                            }}>⬇ All Versions QTI (.zip)</button>
+                          </div>
+                        </div>
+                      )}
 
                       {v.questions.map((q,qi) => (
                         <div key={q.id||qi} style={S.qCard}>
