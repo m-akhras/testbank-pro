@@ -201,8 +201,68 @@ function renderMath(latex) {
 
 // ─── Pipe table detector & renderer ──────────────────────────────────────────
 function isPipeTable(text) {
-  const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
-  return lines.length >= 2 && lines.filter(l => l.startsWith("|")).length >= 2;
+  const s = String(text);
+  // Newline-based table
+  const lines = s.split("\n").map(l => l.trim()).filter(Boolean);
+  if (lines.length >= 2 && lines.filter(l => l.startsWith("|")).length >= 2) return true;
+  // Inline table: text contains | cell | cell | pattern (at least 2 columns, 2 rows implied by || separator)
+  if (s.includes("|") && /\|[^|]+\|[^|]+\|/.test(s)) {
+    // Must have at least 3 pipe chars to be a real table
+    return (s.match(/\|/g)||[]).length >= 4;
+  }
+  return false;
+}
+
+// Normalize inline table (no newlines) to newline-based table
+function normalizePipeTable(text) {
+  const s = String(text);
+  if (s.includes("\n")) return s; // already has newlines
+
+  const pipeIdx = s.indexOf("|");
+  if (pipeIdx === -1) return s;
+
+  const before = s.slice(0, pipeIdx).trim();
+  const rest = s.slice(pipeIdx);
+
+  const sepMatch = rest.match(/\|[-| :]+\|/);
+  if (!sepMatch) return s;
+
+  const sepIdx = rest.indexOf(sepMatch[0]);
+  const headerPart = rest.slice(0, sepIdx).trim();
+  const afterSep = rest.slice(sepIdx + sepMatch[0].length).trim();
+  const headerRow = headerPart.replace(/^\||\|$/g,"").split("|").map(c => c.trim());
+  const numCols = headerRow.length;
+
+  const rows = [];
+  rows.push("| " + headerRow.join(" | ") + " |");
+  rows.push("|" + headerRow.map(() => "---").join("|") + "|");
+
+  const allParts = afterSep.split("|").map(p => p.trim());
+  let cellBuf = [];
+  let remaining = "";
+
+  for (let i = 0; i < allParts.length; i++) {
+    const p = allParts[i];
+    if (p === "") {
+      if (cellBuf.length === numCols) {
+        rows.push("| " + cellBuf.join(" | ") + " |");
+        cellBuf = [];
+      }
+      continue;
+    }
+    cellBuf.push(p);
+    if (cellBuf.length === numCols) {
+      rows.push("| " + cellBuf.join(" | ") + " |");
+      cellBuf = [];
+    }
+  }
+  if (cellBuf.length > 0 && cellBuf.length < numCols) {
+    remaining = cellBuf.join(" ").trim();
+  }
+
+  const tableText = rows.join("\n");
+  const result = (before ? before + "\n" : "") + tableText + (remaining ? "\n" + remaining : "");
+  return result;
 }
 
 function parsePipeTable(text) {
@@ -279,9 +339,10 @@ function MathText({ children }) {
   const ref = useRef(null);
   const src = String(children ?? "");
 
-  // Check if text contains pipe table — if so use block renderer
+  // Check if text contains pipe table — normalize then use block renderer
   if (src.includes("|") && isPipeTable(src)) {
-    const blocks = splitTableBlocks(src);
+    const normalized = normalizePipeTable(src);
+    const blocks = splitTableBlocks(normalized);
     return (
       <span>
         {blocks.map((block, i) =>
@@ -840,9 +901,11 @@ async function buildDocx(questions, course, vLabel, classSection=null) {
     const {indent=0} = opts;
     const ppr = indent ? `<w:pPr><w:ind w:left="${indent}"/><w:spacing w:after="80"/></w:pPr>` : `<w:pPr><w:spacing w:after="80"/></w:pPr>`;
 
-    // If text contains a pipe table, split and render each block
-    if (String(text).includes("|") && isPipeTable(String(text))) {
-      const blocks = splitTableBlocks(String(text));
+    // Normalize inline tables, then check for pipe tables
+    const normalized = isPipeTable(String(text)) ? normalizePipeTable(String(text)) : String(text);
+
+    if (normalized.includes("|") && isPipeTable(normalized)) {
+      const blocks = splitTableBlocks(normalized);
       return blocks.map(block => {
         if (block.type === "table") return pipeTableToWordXml(block.content);
         if (!block.content.trim()) return "";
@@ -857,10 +920,10 @@ async function buildDocx(questions, course, vLabel, classSection=null) {
     }
 
     try {
-      const omml = mathToOmml(text);
+      const omml = mathToOmml(normalized);
       return `<w:p>${ppr}<m:oMathPara><m:oMathParaPr><m:jc m:val="left"/></m:oMathParaPr>${omml}</m:oMathPara></w:p>`;
     } catch(e) {
-      const safe = String(text).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+      const safe = normalized.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
       return `<w:p>${ppr}<w:r><w:t xml:space="preserve">${safe}</w:t></w:r></w:p>`;
     }
   }
