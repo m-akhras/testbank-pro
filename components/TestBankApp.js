@@ -366,7 +366,18 @@ const COURSES = {
       { ch:"14", title:"Simple Linear Regression", sections:["14.1 Simple Linear Regression Model","14.2 Least Squares Method","14.3 Coefficient of Determination","14.4 Model Assumptions","14.5 Testing for Significance","14.6 Using the Estimated Regression Equation for Estimation and Prediction","14.7 Excel and Tools for Regression Analysis","14.8 Residual Analysis: Validating Model Assumptions","14.9 Residual Analysis: Outliers and Influential Observations"] },
     ],
   },
-  "Discrete Mathematics": {
+  "Precalculus": {
+    color: "#e879f9",
+    chapters: [
+      { ch:"A", title:"Fundamentals of Algebra", sections:["A.1 Exponents and Radicals","A.2 Polynomials and Factoring","A.3 Rational Expressions","A.4 Solving Equations","A.5 Linear Inequalities in One Variable"] },
+      { ch:"1", title:"Functions and Their Graphs", sections:["1.1 Rectangular Coordinates and Graphs of Equations","1.2 Linear Equations and Functions","1.3 Functions and Their Graphs","1.4 Analyzing Graphs of Functions","1.5 Parent Functions","1.6 Transformations of Functions","1.7 Composite and Inverse Functions"] },
+      { ch:"2", title:"Polynomial and Rational Functions", sections:["2.1 Quadratic Functions","2.2 Polynomial Functions","2.3 Synthetic Division","2.4 Complex Numbers","2.5 Zeros of Polynomial Functions","2.6 Rational Functions"] },
+      { ch:"3", title:"Exponential and Logarithmic Functions", sections:["3.1 Exponential Functions and Their Graphs","3.2 Logarithmic Functions and Their Graphs","3.3 Properties of Logarithms","3.4 Exponential and Logarithmic Equations","3.5 Exponential and Logarithmic Models"] },
+      { ch:"4", title:"Trigonometry", sections:["4.1 Radian and Degree Measure","4.2 The Unit Circle","4.3 Right Triangle Trigonometry","4.4 Trigonometric Functions of Any Angle","4.5 Graphs of Sine and Cosine Functions","4.6 Inverse Trigonometric Functions"] },
+      { ch:"5", title:"Analytic Trigonometry", sections:["5.1 Using Fundamental Identities","5.2 Verifying Trigonometric Identities","5.3 Solving Trigonometric Equations","5.4 Sum and Difference Formulas","5.5 Multiple-Angle and Product-to-Sum Formulas"] },
+    ],
+  },
+    "Discrete Mathematics": {
     color: "#a855f7",
     chapters: [
       { ch:"1", title:"Speaking Mathematically", sections:["1.1 Variables","1.2 The Language of Sets","1.3 The Language of Relations and Functions","1.4 The Language of Graphs"] },
@@ -1337,7 +1348,7 @@ function buildGeneratePrompt(course, selectedSections, sectionCounts, qType, dif
   const isQM = course === "Quantitative Methods I" || course === "Quantitative Methods II";
   const tableInstructions = isQM ? `
 TABLE-BASED QUESTIONS (required for Quantitative Methods):
-- At least 40% of questions MUST present data in a table format embedded in the question text.
+- Randomly mix table-based and non-table-based questions. Some questions should present data in a table, others should be purely text/numeric scenarios. Vary naturally — do not force all questions to use tables.
 - Use plain-text ASCII tables formatted like this example:
   | X | P(X) |
   |---|------|
@@ -1516,8 +1527,10 @@ function SavedExamsScreen({ S, text2, text3, border }) {
 
   return (
     <div>
-      <h1 style={S.h1}>Saved Exams</h1>
-      <p style={S.sub}>{exams.length} exam{exams.length !== 1 ? "s" : ""} saved in database.</p>
+      <div style={S.pageHeader}>
+        <h1 style={S.h1}>Saved Exams</h1>
+        <p style={S.sub}>{exams.length} exam{exams.length !== 1 ? "s" : ""} saved in database.</p>
+      </div>
 
       {exams.length === 0 && (
         <div style={{...S.card, textAlign:"center", color:text3, padding:"3rem"}}>
@@ -1602,6 +1615,8 @@ export default function TestBankApp() {
   const [selectedQIndices, setSelectedQIndices] = useState([]);
   const [qtiUseGroups, setQtiUseGroups] = useState(false);
   const [qtiPointsPerQ, setQtiPointsPerQ] = useState(1);
+  const [bankTabState, setBankTabState] = useState("browse");
+  const [expandedBatches, setExpandedBatches] = useState({});
   // ── Classroom sections ──
   const [numClassSections, setNumClassSections] = useState(1);
   const [currentClassSection, setCurrentClassSection] = useState(1);
@@ -1770,98 +1785,375 @@ export default function TestBankApp() {
     (filterDiff === "All" || q.difficulty === filterDiff) &&
     (filterSection === "All" || q.section === filterSection)
   );
-  const courseColors = { "Calculus 1":"#10b981","Calculus 2":"#8b5cf6","Calculus 3":"#f59e0b","Quantitative Methods I":"#06b6d4","Quantitative Methods II":"#f43f5e","Discrete Mathematics":"#a855f7" };
+  const courseColors = { "Calculus 1":"#10b981","Calculus 2":"#8b5cf6","Calculus 3":"#f59e0b","Quantitative Methods I":"#06b6d4","Quantitative Methods II":"#f43f5e","Precalculus":"#e879f9","Discrete Mathematics":"#a855f7" };
 
-  const bg0="#08080f", bg1="#0e0e1c", bg2="#13132a", border="#1e1e3a";
-  const text1="#e8e8e0", text2="#7070a0", text3="#404068";
+  // ── Design tokens ────────────────────────────────────────────────────────────
+  const bg0   = "#080c14";   // deepest bg
+  const bg1   = "#0d1321";   // card bg
+  const bg2   = "#111827";   // elevated card
+  const bg3   = "#1a2235";   // hover / subtle
+  const border = "#1e2d45";
+  const text1  = "#f0f4ff";
+  const text2  = "#7a92b8";
+  const text3  = "#3a4f6a";
 
   const S = {
-    app:{ minHeight:"100vh", background:bg0, fontFamily:"'Georgia',serif", color:text1 },
-    nav:{ display:"flex", alignItems:"center", gap:"0.25rem", padding:"1rem 1.5rem", borderBottom:"1px solid "+border, flexWrap:"wrap" },
-    navLogo:{ fontSize:"1.2rem", fontWeight:"bold", color:accent, marginRight:"1rem", letterSpacing:"-0.5px" },
-    navBtn:(a)=>({ background:a?bg2:"transparent", border:"1px solid "+(a?border:"transparent"), color:a?text1:text2, borderRadius:"6px", padding:"0.4rem 0.85rem", fontSize:"0.78rem", cursor:"pointer", fontFamily:"'Georgia',serif" }),
-    main:{ maxWidth:"940px", margin:"0 auto", padding:"2rem 1.5rem" },
-    h1:{ fontSize:"1.7rem", fontWeight:"normal", marginBottom:"0.3rem" },
-    sub:{ color:text2, fontSize:"0.84rem", marginBottom:"2rem" },
-    card:{ background:bg1, border:"1px solid "+border, borderRadius:"10px", padding:"1.5rem", marginBottom:"1rem" },
-    sGrid:{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:"0.4rem" },
-    sBtn:(sel)=>({ background:sel?bg2:bg1, border:"1.5px solid "+(sel?accent:border), borderRadius:"7px", padding:"0.6rem 0.8rem", cursor:"pointer", color:sel?accent:text2, fontSize:"0.79rem", textAlign:"left", fontFamily:"'Georgia',serif", display:"flex", alignItems:"center", gap:"0.45rem" }),
-    chk:(sel)=>({ width:"13px", height:"13px", borderRadius:"3px", border:"1.5px solid "+(sel?accent:text3), background:sel?accent:"transparent", flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center", fontSize:"9px", color:"#000", fontWeight:"bold" }),
-    row:{ display:"flex", gap:"1rem", marginBottom:"1.25rem", flexWrap:"wrap" },
-    field:{ flex:1, minWidth:"120px" },
-    lbl:{ display:"block", fontSize:"0.63rem", textTransform:"uppercase", letterSpacing:"0.12em", color:text3, marginBottom:"0.4rem" },
-    sel:{ width:"100%", background:bg1, border:"1.5px solid "+border, borderRadius:"7px", padding:"0.6rem 0.8rem", color:text1, fontSize:"0.84rem", fontFamily:"'Georgia',serif" },
-    btn:(bg,dis)=>({ background:dis?"#111128":bg, color:dis?text3:"#000", border:"none", borderRadius:"8px", padding:"0.75rem 1.5rem", fontSize:"0.84rem", fontWeight:"bold", cursor:dis?"not-allowed":"pointer", fontFamily:"'Georgia',serif", display:"inline-flex", alignItems:"center", gap:"0.5rem" }),
-    oBtn:(c)=>({ background:"transparent", color:c, border:"1.5px solid "+c, borderRadius:"8px", padding:"0.6rem 1.2rem", fontSize:"0.78rem", cursor:"pointer", fontFamily:"'Georgia',serif" }),
-    smBtn:{ background:bg2, border:"1px solid "+border, color:text2, borderRadius:"5px", padding:"0.25rem 0.6rem", fontSize:"0.7rem", cursor:"pointer", fontFamily:"'Georgia',serif" },
-    tag:(c)=>({ display:"inline-block", background:(c||accent)+"18", border:"1px solid "+(c||accent)+"44", color:(c||accent), borderRadius:"4px", padding:"0.15rem 0.5rem", fontSize:"0.65rem", marginRight:"0.3rem" }),
-    divider:{ border:"none", borderTop:"1px solid "+border, margin:"1.75rem 0" },
-    qCard:{ background:bg1, border:"1px solid "+border, borderRadius:"8px", padding:"1.2rem", marginBottom:"0.7rem" },
-    qMeta:{ fontSize:"0.62rem", color:text3, letterSpacing:"0.08em", textTransform:"uppercase", marginBottom:"0.35rem", display:"flex", gap:"0.5rem", alignItems:"center", flexWrap:"wrap" },
-    qText:{ fontSize:"0.9rem", color:"#d0d0cc", lineHeight:1.65, marginBottom:"0.7rem" },
-    cList:{ listStyle:"none", padding:0, margin:0, marginBottom:"0.5rem" },
-    cItem:(correct)=>({ padding:"0.3rem 0.6rem", marginBottom:"0.2rem", borderRadius:"5px", background:correct?"#10b98118":"transparent", border:"1px solid "+(correct?"#10b98144":border), color:correct?"#10b981":text2, fontSize:"0.84rem" }),
-    ans:{ fontSize:"0.82rem", color:"#10b981", background:"#10b98112", border:"1px solid #10b98130", borderRadius:"6px", padding:"0.4rem 0.75rem", marginBottom:"0.4rem" },
-    expl:{ fontSize:"0.78rem", color:text2, fontStyle:"italic", marginTop:"0.2rem" },
-    vTab:(active, c)=>({ background:active?c+"22":"transparent", border:"1.5px solid "+(active?c:border), color:active?c:text2, borderRadius:"7px", padding:"0.45rem 1rem", fontSize:"0.78rem", cursor:"pointer", fontFamily:"'Georgia',serif" }),
-    pasteBox:{ background:bg2, border:"1.5px solid "+accent+"44", borderRadius:"10px", padding:"1.25rem", marginTop:"1.5rem" },
-    textarea:{ width:"100%", minHeight:"120px", background:bg1, border:"1.5px solid "+border, borderRadius:"7px", padding:"0.75rem", color:text1, fontSize:"0.82rem", fontFamily:"monospace", resize:"vertical" },
-    promptBox:{ background:"#0a0a18", border:"1px solid "+border, borderRadius:"8px", padding:"1rem", marginBottom:"1rem", fontSize:"0.75rem", color:text2, fontFamily:"monospace", whiteSpace:"pre-wrap", wordBreak:"break-word", maxHeight:"200px", overflowY:"auto" },
-    input:{ background:bg1, border:"1.5px solid "+border, borderRadius:"7px", padding:"0.6rem 0.8rem", color:text1, fontSize:"0.84rem", fontFamily:"'Georgia',serif", width:"100%" },
+    // Layout
+    app: { display:"flex", minHeight:"100vh", background:bg0, fontFamily:"'Inter',system-ui,sans-serif", color:text1 },
+    sidebar: {
+      width:"220px", flexShrink:0, background:bg1, borderRight:"1px solid "+border,
+      display:"flex", flexDirection:"column", padding:"0", position:"sticky", top:0, height:"100vh", overflowY:"auto"
+    },
+    sidebarLogo: {
+      padding:"1.5rem 1.25rem 1rem", borderBottom:"1px solid "+border,
+      display:"flex", alignItems:"center", gap:"0.6rem"
+    },
+    logoMark: {
+      width:"32px", height:"32px", borderRadius:"8px",
+      background:"linear-gradient(135deg, "+accent+" 0%, "+accent+"88 100%)",
+      display:"flex", alignItems:"center", justifyContent:"center",
+      fontSize:"0.9rem", fontWeight:"900", color:"#000", flexShrink:0
+    },
+    logoText: { fontSize:"1rem", fontWeight:"700", letterSpacing:"-0.02em", color:text1 },
+    logoSub: { fontSize:"0.6rem", color:text2, letterSpacing:"0.05em", textTransform:"uppercase" },
+    navSection: { padding:"1rem 0.75rem 0.25rem", fontSize:"0.6rem", letterSpacing:"0.12em", textTransform:"uppercase", color:text3, fontWeight:"600" },
+    navBtn: (a) => ({
+      display:"flex", alignItems:"center", gap:"0.6rem",
+      padding:"0.55rem 0.75rem", margin:"0.1rem 0.5rem",
+      borderRadius:"8px", border:"none", cursor:"pointer",
+      background: a ? accent+"22" : "transparent",
+      color: a ? accent : text2,
+      fontSize:"0.82rem", fontWeight: a ? "600" : "400",
+      textAlign:"left", width:"calc(100% - 1rem)",
+      transition:"all 0.15s", fontFamily:"'Inter',system-ui,sans-serif",
+      borderLeft: a ? "2px solid "+accent : "2px solid transparent"
+    }),
+    navIcon: { fontSize:"0.95rem", width:"18px", textAlign:"center", flexShrink:0 },
+    navBadge: (c) => ({
+      marginLeft:"auto", background:c+"22", color:c, border:"1px solid "+c+"44",
+      borderRadius:"10px", padding:"0.05rem 0.4rem", fontSize:"0.6rem", fontWeight:"700"
+    }),
+    main: { flex:1, minWidth:0, padding:"2rem 2.5rem", maxWidth:"960px" },
+    pageHeader: { marginBottom:"2rem" },
+    h1: { fontSize:"1.6rem", fontWeight:"700", letterSpacing:"-0.03em", marginBottom:"0.25rem", color:text1 },
+    h2: { fontSize:"1.1rem", fontWeight:"600", letterSpacing:"-0.02em", marginBottom:"0.5rem", color:text1 },
+    sub: { color:text2, fontSize:"0.83rem", marginBottom:"0", lineHeight:1.5 },
+    // Cards
+    card: {
+      background:bg1, border:"1px solid "+border, borderRadius:"12px",
+      padding:"1.5rem", marginBottom:"1rem"
+    },
+    cardSm: {
+      background:bg1, border:"1px solid "+border, borderRadius:"10px",
+      padding:"1rem", marginBottom:"0.75rem"
+    },
+    statCard: (c) => ({
+      background:bg1, border:"1px solid "+border, borderRadius:"12px",
+      padding:"1.25rem", position:"relative", overflow:"hidden"
+    }),
+    statAccent: (c) => ({
+      position:"absolute", top:0, left:0, right:0, height:"2px",
+      background:"linear-gradient(90deg, "+c+", "+c+"44)"
+    }),
+    // Course chips
+    courseChip: (c, active) => ({
+      display:"inline-flex", alignItems:"center", gap:"0.4rem",
+      padding:"0.4rem 0.9rem", borderRadius:"20px", cursor:"pointer", border:"none",
+      background: active ? c+"22" : bg2,
+      color: active ? c : text2,
+      fontSize:"0.78rem", fontWeight: active ? "600" : "400",
+      outline: active ? "1.5px solid "+c+"66" : "1px solid "+border,
+      fontFamily:"'Inter',system-ui,sans-serif", transition:"all 0.15s"
+    }),
+    courseDot: (c) => ({
+      width:"7px", height:"7px", borderRadius:"50%", background:c, flexShrink:0
+    }),
+    // Section buttons
+    sGrid: { display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:"0.35rem" },
+    sBtn: (sel) => ({
+      background: sel ? accent+"15" : bg2,
+      border: "1px solid "+(sel ? accent+"55" : border),
+      borderRadius:"8px", padding:"0.55rem 0.75rem", cursor:"pointer",
+      color: sel ? accent : text2, fontSize:"0.78rem", textAlign:"left",
+      fontFamily:"'Inter',system-ui,sans-serif", display:"flex", alignItems:"center", gap:"0.45rem",
+      transition:"all 0.15s"
+    }),
+    chk: (sel) => ({
+      width:"14px", height:"14px", borderRadius:"4px",
+      border:"1.5px solid "+(sel ? accent : text3),
+      background: sel ? accent : "transparent", flexShrink:0,
+      display:"flex", alignItems:"center", justifyContent:"center",
+      fontSize:"9px", color:"#000", fontWeight:"bold"
+    }),
+    // Form elements
+    row: { display:"flex", gap:"1rem", marginBottom:"1.25rem", flexWrap:"wrap" },
+    field: { flex:1, minWidth:"120px" },
+    lbl: { display:"block", fontSize:"0.65rem", textTransform:"uppercase", letterSpacing:"0.1em", color:text3, marginBottom:"0.4rem", fontWeight:"600" },
+    sel: {
+      width:"100%", background:bg2, border:"1px solid "+border, borderRadius:"8px",
+      padding:"0.6rem 0.8rem", color:text1, fontSize:"0.83rem",
+      fontFamily:"'Inter',system-ui,sans-serif"
+    },
+    input: {
+      background:bg2, border:"1px solid "+border, borderRadius:"8px",
+      padding:"0.6rem 0.8rem", color:text1, fontSize:"0.83rem",
+      fontFamily:"'Inter',system-ui,sans-serif", width:"100%"
+    },
+    // Buttons
+    btn: (bg, dis) => ({
+      background: dis ? bg3 : bg, color: dis ? text3 : "#000",
+      border:"none", borderRadius:"8px", padding:"0.65rem 1.4rem",
+      fontSize:"0.83rem", fontWeight:"600", cursor: dis ? "not-allowed" : "pointer",
+      fontFamily:"'Inter',system-ui,sans-serif", display:"inline-flex",
+      alignItems:"center", gap:"0.45rem", transition:"opacity 0.15s"
+    }),
+    oBtn: (c) => ({
+      background:"transparent", color:c, border:"1px solid "+c+"66",
+      borderRadius:"8px", padding:"0.55rem 1.1rem", fontSize:"0.78rem",
+      cursor:"pointer", fontFamily:"'Inter',system-ui,sans-serif",
+      display:"inline-flex", alignItems:"center", gap:"0.4rem"
+    }),
+    smBtn: {
+      background:bg3, border:"1px solid "+border, color:text2, borderRadius:"6px",
+      padding:"0.2rem 0.55rem", fontSize:"0.68rem", cursor:"pointer",
+      fontFamily:"'Inter',system-ui,sans-serif"
+    },
+    ghostBtn: (c) => ({
+      background:c+"12", color:c, border:"none", borderRadius:"6px",
+      padding:"0.25rem 0.6rem", fontSize:"0.7rem", cursor:"pointer",
+      fontFamily:"'Inter',system-ui,sans-serif", fontWeight:"500"
+    }),
+    // Tags
+    tag: (c) => ({
+      display:"inline-flex", alignItems:"center", gap:"0.25rem",
+      background:(c||accent)+"15", border:"1px solid "+(c||accent)+"33",
+      color:(c||accent), borderRadius:"5px", padding:"0.1rem 0.45rem",
+      fontSize:"0.65rem", fontWeight:"500", marginRight:"0.25rem"
+    }),
+    diffTag: (d) => {
+      const dc = d==="Easy"?"#10b981":d==="Medium"?"#f59e0b":"#f43f5e";
+      return { display:"inline-block", background:dc+"18", color:dc, border:"1px solid "+dc+"33",
+        borderRadius:"4px", padding:"0.1rem 0.4rem", fontSize:"0.62rem", fontWeight:"600" };
+    },
+    divider: { border:"none", borderTop:"1px solid "+border, margin:"1.5rem 0" },
+    // Question cards
+    qCard: {
+      background:bg1, border:"1px solid "+border, borderRadius:"10px",
+      padding:"1.1rem", marginBottom:"0.6rem", transition:"border-color 0.15s"
+    },
+    qMeta: {
+      fontSize:"0.62rem", color:text3, letterSpacing:"0.05em",
+      textTransform:"uppercase", marginBottom:"0.4rem",
+      display:"flex", gap:"0.4rem", alignItems:"center", flexWrap:"wrap"
+    },
+    qText: { fontSize:"0.88rem", color:"#c8d8f0", lineHeight:1.7, marginBottom:"0.65rem" },
+    cList: { listStyle:"none", padding:0, margin:0, marginBottom:"0.5rem" },
+    cItem: (correct) => ({
+      padding:"0.35rem 0.65rem", marginBottom:"0.2rem", borderRadius:"6px",
+      background: correct ? "#10b98115" : "transparent",
+      border: "1px solid "+(correct ? "#10b98144" : border),
+      color: correct ? "#10b981" : text2, fontSize:"0.83rem",
+      display:"flex", alignItems:"flex-start", gap:"0.5rem"
+    }),
+    ans: {
+      fontSize:"0.8rem", color:"#10b981", background:"#10b98110",
+      border:"1px solid #10b98130", borderRadius:"6px",
+      padding:"0.35rem 0.7rem", marginBottom:"0.35rem",
+      display:"flex", alignItems:"center", gap:"0.4rem"
+    },
+    expl: { fontSize:"0.76rem", color:text2, fontStyle:"italic", marginTop:"0.2rem", lineHeight:1.6 },
+    vTab: (active, c) => ({
+      background: active ? c+"20" : "transparent",
+      border: "1px solid "+(active ? c+"66" : border),
+      color: active ? c : text2, borderRadius:"8px",
+      padding:"0.4rem 0.9rem", fontSize:"0.78rem", cursor:"pointer",
+      fontFamily:"'Inter',system-ui,sans-serif", fontWeight: active ? "600" : "400"
+    }),
+    // Paste/prompt
+    pasteBox: {
+      background:bg2, border:"1px solid "+accent+"33", borderRadius:"10px",
+      padding:"1.25rem", marginTop:"1.5rem"
+    },
+    textarea: {
+      width:"100%", minHeight:"110px", background:bg0,
+      border:"1px solid "+border, borderRadius:"8px",
+      padding:"0.75rem", color:text1, fontSize:"0.8rem",
+      fontFamily:"'JetBrains Mono','Fira Code',monospace", resize:"vertical"
+    },
+    promptBox: {
+      background:bg0, border:"1px solid "+border, borderRadius:"8px",
+      padding:"1rem", marginBottom:"1rem", fontSize:"0.72rem", color:text2,
+      fontFamily:"'JetBrains Mono','Fira Code',monospace",
+      whiteSpace:"pre-wrap", wordBreak:"break-word", maxHeight:"180px", overflowY:"auto"
+    },
   };
 
+  // ── Sidebar nav items ────────────────────────────────────────────────────────
   const navItems = [
-    { id:"home", label:"Home" },
-    { id:"generate", label:"Generate" },
-    { id:"review", label:"Review" + (lastGenerated.length ? ` (${lastGenerated.length})` : "") },
-    { id:"bank", label:"Bank" + (bank.length ? ` (${bank.length})` : "") },
-    { id:"versions", label:"Versions" },
-    { id:"saved", label:"Saved Exams" },
+    { id:"home",     icon:"⌂",  label:"Dashboard" },
+    { id:"generate", icon:"✦",  label:"Generate",  badge: null },
+    { id:"review",   icon:"◉",  label:"Review",    badge: lastGenerated.length || null },
+    { id:"bank",     icon:"▦",  label:"Question Bank", badge: bank.length || null },
+    { id:"versions", icon:"⊞",  label:"Exam Builder" },
+    { id:"saved",    icon:"◈",  label:"Saved Exams" },
   ];
+
+  // ── Sidebar component ────────────────────────────────────────────────────────
+  const Sidebar = () => (
+    <aside style={S.sidebar}>
+      {/* Logo */}
+      <div style={S.sidebarLogo}>
+        <div style={S.logoMark}>T</div>
+        <div>
+          <div style={S.logoText}>TestBank</div>
+          <div style={S.logoSub}>Pro</div>
+        </div>
+      </div>
+
+      {/* Nav */}
+      <div style={{padding:"0.75rem 0", flex:1}}>
+        <div style={S.navSection}>Navigation</div>
+        {navItems.map(n => (
+          <button key={n.id} style={S.navBtn(screen===n.id)} onClick={() => setScreen(n.id)}>
+            <span style={S.navIcon}>{n.icon}</span>
+            <span style={{flex:1}}>{n.label}</span>
+            {n.badge ? <span style={S.navBadge(accent)}>{n.badge}</span> : null}
+          </button>
+        ))}
+      </div>
+
+      {/* Course indicator */}
+      {course && (
+        <div style={{padding:"0.75rem 1rem", borderTop:"1px solid "+border, margin:"0"}}>
+          <div style={{fontSize:"0.6rem", color:text3, textTransform:"uppercase", letterSpacing:"0.1em", marginBottom:"0.3rem"}}>Active Course</div>
+          <div style={{display:"flex", alignItems:"center", gap:"0.5rem"}}>
+            <div style={{width:"8px", height:"8px", borderRadius:"50%", background:accent, flexShrink:0}}/>
+            <span style={{fontSize:"0.75rem", color:accent, fontWeight:"600", lineHeight:1.3}}>{course}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Version */}
+      <div style={{padding:"0.6rem 1rem", borderTop:"1px solid "+border}}>
+        <div style={{fontSize:"0.6rem", color:text3, textAlign:"center"}}>v50 · TestBank Pro</div>
+      </div>
+    </aside>
+  );
 
   return (
     <div style={S.app}>
-      {/* NAV */}
-      <nav style={S.nav}>
-        <span style={S.navLogo}>TestBank Pro</span>
-        {navItems.map(n => (
-          <button key={n.id} style={S.navBtn(screen === n.id)} onClick={() => setScreen(n.id)}>{n.label}</button>
-        ))}
-      </nav>
-
+      <Sidebar />
       <main style={S.main}>
 
-        {/* HOME */}
+        {/* ── DASHBOARD ── */}
         {screen === "home" && (
           <div>
-            <h1 style={S.h1}>TestBank Pro</h1>
-            <p style={S.sub}>AI-powered exam question generator · Backed by Supabase · Deployed on Vercel</p>
-            <div style={{display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))", gap:"1rem", marginTop:"1rem"}}>
-              {Object.entries(COURSES).map(([name, { color }]) => (
-                <div key={name} style={{...S.card, borderColor:color+"44", cursor:"pointer"}}
-                  onClick={() => { setCourse(name); setScreen("generate"); }}>
-                  <div style={{color, fontSize:"0.7rem", fontWeight:"bold", letterSpacing:"0.1em", textTransform:"uppercase", marginBottom:"0.4rem"}}>Course</div>
-                  <div style={{fontSize:"1rem"}}>{name}</div>
-                  <div style={{fontSize:"0.72rem", color:text3, marginTop:"0.5rem"}}>{COURSES[name].chapters.length} chapters</div>
+            <div style={S.pageHeader}>
+              <h1 style={S.h1}>Dashboard</h1>
+              <p style={S.sub}>Welcome back. Your exam toolkit is ready.</p>
+            </div>
+
+            {/* Stats row */}
+            <div style={{display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:"1rem", marginBottom:"1.5rem"}}>
+              {[
+                { label:"Questions in Bank", value:bank.length, color:"#10b981", icon:"▦" },
+                { label:"Exams Created", value:"—", color:"#8b5cf6", icon:"◈" },
+                { label:"Last Generated", value: lastGenerated.length ? lastGenerated.length+" questions" : "None yet", color:"#f59e0b", icon:"✦" },
+              ].map((s,i) => (
+                <div key={i} style={S.statCard(s.color)}>
+                  <div style={S.statAccent(s.color)}/>
+                  <div style={{fontSize:"1.4rem", marginBottom:"0.1rem"}}>{s.icon}</div>
+                  <div style={{fontSize:"1.5rem", fontWeight:"700", color:s.color, letterSpacing:"-0.02em"}}>{s.value}</div>
+                  <div style={{fontSize:"0.72rem", color:text2, marginTop:"0.15rem"}}>{s.label}</div>
                 </div>
               ))}
             </div>
+
+            {/* Quick actions */}
+            <div style={{...S.card, marginBottom:"1.5rem"}}>
+              <div style={{...S.h2, marginBottom:"1rem"}}>Quick Actions</div>
+              <div style={{display:"flex", gap:"0.75rem", flexWrap:"wrap"}}>
+                <button style={S.btn(accent, false)} onClick={() => setScreen("generate")}>
+                  ✦ Generate Questions
+                </button>
+                <button style={S.oBtn(text2)} onClick={() => setScreen("bank")}>
+                  ▦ Browse Bank
+                </button>
+                <button style={S.oBtn(text2)} onClick={() => setScreen("versions")}>
+                  ⊞ Build Exam
+                </button>
+              </div>
+            </div>
+
+            {/* Courses grid */}
+            <div style={{...S.h2, marginBottom:"0.75rem"}}>Courses</div>
+            <div style={{display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))", gap:"0.75rem", marginBottom:"1.5rem"}}>
+              {Object.entries(COURSES).map(([name, { color, chapters }]) => {
+                const qCount = bank.filter(q => q.course === name).length;
+                return (
+                  <div key={name}
+                    style={{
+                      background:bg1, borderRadius:"12px", padding:"1.1rem",
+                      border:"1px solid "+border, cursor:"pointer",
+                      borderTop:"3px solid "+color, transition:"border-color 0.15s"
+                    }}
+                    onClick={() => { setCourse(name); setSelectedSections([]); setSectionCounts({}); setScreen("generate"); }}>
+                    <div style={{fontSize:"0.82rem", fontWeight:"600", color:text1, marginBottom:"0.35rem"}}>{name}</div>
+                    <div style={{fontSize:"0.7rem", color:text2}}>{chapters.length} chapters</div>
+                    {qCount > 0 && <div style={{fontSize:"0.68rem", color:color, marginTop:"0.3rem", fontWeight:"500"}}>{qCount} questions in bank</div>}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Recent questions */}
+            {bank.length > 0 && (
+              <div>
+                <div style={{...S.h2, marginBottom:"0.75rem"}}>Recent Questions</div>
+                {bank.slice(0,3).map((q,i) => (
+                  <div key={i} style={{...S.cardSm, display:"flex", alignItems:"flex-start", gap:"0.75rem"}}>
+                    <div style={{flexShrink:0, width:"28px", height:"28px", borderRadius:"6px",
+                      background:(courseColors[q.course]||accent)+"20",
+                      display:"flex", alignItems:"center", justifyContent:"center",
+                      fontSize:"0.7rem", color:courseColors[q.course]||accent, fontWeight:"700"}}>
+                      {(q.section||"?").split(" ")[0]}
+                    </div>
+                    <div style={{flex:1, minWidth:0}}>
+                      <div style={{fontSize:"0.75rem", color:text2, marginBottom:"0.2rem"}}>
+                        <span style={S.tag(courseColors[q.course])}>{q.course}</span>
+                        <span style={S.diffTag(q.difficulty)}>{q.difficulty}</span>
+                      </div>
+                      <div style={{fontSize:"0.83rem", color:text1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
+                        {q.type==="Branched" ? q.stem : q.question}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                <button style={{...S.oBtn(text2), fontSize:"0.75rem", marginTop:"0.5rem"}} onClick={() => setScreen("bank")}>
+                  View all {bank.length} questions →
+                </button>
+              </div>
+            )}
           </div>
         )}
 
         {/* GENERATE */}
         {screen === "generate" && (
           <div>
-            <h1 style={S.h1}>Generate Questions</h1>
-            <p style={S.sub}>Configure your question set and copy the prompt to Claude.</p>
+            <div style={S.pageHeader}>
+              <h1 style={S.h1}>Generate Questions</h1>
+              <p style={S.sub}>Select a course, pick sections, and copy the prompt to Claude.</p>
+            </div>
 
             {/* Course picker */}
             <div style={S.card}>
               <div style={S.lbl}>Course</div>
-              <div style={{display:"flex", gap:"0.5rem", flexWrap:"wrap"}}>
+              <div style={{display:"flex", gap:"0.5rem", flexWrap:"wrap", marginTop:"0.5rem"}}>
                 {Object.entries(COURSES).map(([name, { color }]) => (
-                  <button key={name} style={{...S.oBtn(course === name ? color : text3), background: course === name ? color+"22" : "transparent"}}
+                  <button key={name}
+                    style={S.courseChip(color, course===name)}
                     onClick={() => { setCourse(name); setSelectedSections([]); setSectionCounts({}); }}>
+                    <span style={S.courseDot(color)}/>
                     {name}
                   </button>
                 ))}
@@ -1958,8 +2250,10 @@ export default function TestBankApp() {
         {/* REVIEW */}
         {screen === "review" && (
           <div>
-            <h1 style={S.h1}>Review Generated Questions</h1>
-            <p style={S.sub}>{lastGenerated.length} questions generated and saved to your bank.</p>
+            <div style={S.pageHeader}>
+              <h1 style={S.h1}>Review Generated Questions</h1>
+              <p style={S.sub}>{lastGenerated.length} questions generated and saved to your bank.</p>
+            </div>
             {lastGenerated.length === 0 && (
               <div style={{...S.card, textAlign:"center", color:text3, padding:"3rem"}}>No questions generated yet. Go to Generate.</div>
             )}
@@ -2000,9 +2294,30 @@ export default function TestBankApp() {
         {/* BANK */}
         {screen === "bank" && (
           <div>
-            <h1 style={S.h1}>Question Bank</h1>
-            <p style={S.sub}>{bank.length} questions saved in Supabase.</p>
+            <div style={S.pageHeader}>
+              <h1 style={S.h1}>Question Bank</h1>
+              <p style={S.sub}>{bank.length} questions saved · filter and select for exams.</p>
+            </div>
 
+            {/* Tab switcher */}
+            <div style={{display:"flex", gap:"0.5rem", marginBottom:"1.5rem", borderBottom:"1px solid "+border, paddingBottom:"0"}}>
+              {[{id:"browse",label:"Browse Questions"},{id:"history",label:"Generation History"}].map(tab => (
+                <button key={tab.id}
+                  style={{
+                    background:"transparent", border:"none", color: bankTabState===tab.id ? accent : text2,
+                    fontSize:"0.85rem", fontWeight: bankTabState===tab.id ? "600" : "400",
+                    padding:"0.5rem 0.25rem", cursor:"pointer",
+                    borderBottom: "2px solid "+(bankTabState===tab.id ? accent : "transparent"),
+                    marginBottom:"-1px", fontFamily:"'Inter',system-ui,sans-serif"
+                  }}
+                  onClick={() => setBankTabState(tab.id)}>
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {/* ── BROWSE TAB ── */}
+            {bankTabState === "browse" && (<>
             <div style={{display:"flex", gap:"0.75rem", marginBottom:"1.25rem", flexWrap:"wrap"}}>
               <select style={{...S.sel, width:"155px"}} value={filterCourse} onChange={e => { setFilterCourse(e.target.value); setFilterSection("All"); }}>
                 <option>All</option>{Object.keys(COURSES).map(c => <option key={c}>{c}</option>)}
@@ -2182,14 +2497,114 @@ export default function TestBankApp() {
                 />
               </>
             )}
+            </>)}
+
+            {/* ── HISTORY TAB ── */}
+            {bankTabState === "history" && (() => {
+              // Group questions by date batch (same createdAt minute = same batch)
+              const batches = [];
+              const seen = new Set();
+              [...bank].sort((a,b) => b.createdAt - a.createdAt).forEach(q => {
+                const minute = Math.floor((q.createdAt||0) / 60000);
+                const key = `${q.course}__${minute}`;
+                if (!seen.has(key)) {
+                  seen.add(key);
+                  batches.push({
+                    key,
+                    course: q.course,
+                    minute,
+                    createdAt: q.createdAt,
+                    questions: bank.filter(bq => {
+                      const bMinute = Math.floor((bq.createdAt||0) / 60000);
+                      return bq.course === q.course && bMinute === minute;
+                    })
+                  });
+                }
+              });
+
+              if (batches.length === 0) return (
+                <div style={{...S.card, textAlign:"center", color:text3, padding:"3rem"}}>
+                  No generation history yet. Generate questions to see batches here.
+                </div>
+              );
+
+              return (
+                <div>
+                  {batches.map((batch, bi) => {
+                    const color = courseColors[batch.course] || accent;
+                    const sections = [...new Set(batch.questions.map(q => q.section).filter(Boolean))];
+                    const date = new Date(batch.createdAt);
+                    const dateStr = date.toLocaleDateString("en-US", {month:"short", day:"numeric", year:"numeric"});
+                    const timeStr = date.toLocaleTimeString("en-US", {hour:"2-digit", minute:"2-digit"});
+                    const expanded = expandedBatches[batch.key] || false;
+                    const toggleExpand = () => setExpandedBatches(prev => ({...prev, [batch.key]: !prev[batch.key]}));
+                    return (
+                      <div key={batch.key} style={{...S.card, borderLeft:`3px solid ${color}`, marginBottom:"0.75rem"}}>
+                        <div style={{display:"flex", alignItems:"center", gap:"0.75rem", flexWrap:"wrap"}}>
+                          <div style={{flex:1}}>
+                            <div style={{display:"flex", alignItems:"center", gap:"0.5rem", marginBottom:"0.35rem"}}>
+                              <div style={{width:"8px", height:"8px", borderRadius:"50%", background:color, flexShrink:0}}/>
+                              <span style={{fontSize:"0.85rem", fontWeight:"600", color:text1}}>{batch.course}</span>
+                              <span style={S.tag(color)}>{batch.questions.length} questions</span>
+                            </div>
+                            <div style={{fontSize:"0.72rem", color:text2, marginBottom:"0.25rem"}}>
+                              {dateStr} · {timeStr}
+                            </div>
+                            <div style={{fontSize:"0.7rem", color:text3}}>
+                              {sections.slice(0,4).join(" · ")}{sections.length > 4 ? ` +${sections.length-4} more` : ""}
+                            </div>
+                          </div>
+                          <div style={{display:"flex", gap:"0.5rem", alignItems:"center", flexWrap:"wrap"}}>
+                            <button style={S.ghostBtn(color)}
+                              onClick={() => toggleExpand()}>
+                              {expanded ? "▲ Hide" : "▼ Show"} questions
+                            </button>
+                            <button style={S.ghostBtn(text2)}
+                              onClick={() => {
+                                setSelectedForExam(prev => {
+                                  const ids = batch.questions.map(q => q.id);
+                                  const allIn = ids.every(id => prev.includes(id));
+                                  return allIn ? prev.filter(id => !ids.includes(id)) : [...new Set([...prev, ...ids])];
+                                });
+                                setScreen("versions");
+                              }}>
+                              + Add to Exam
+                            </button>
+                          </div>
+                        </div>
+
+                        {expanded && (
+                          <div style={{marginTop:"0.75rem", borderTop:"1px solid "+border, paddingTop:"0.75rem"}}>
+                            {batch.questions.map((q, qi) => (
+                              <div key={q.id} style={{padding:"0.4rem 0", borderBottom: qi < batch.questions.length-1 ? "1px solid "+border+"44" : "none", display:"flex", gap:"0.5rem", alignItems:"flex-start"}}>
+                                <span style={{...S.diffTag(q.difficulty), flexShrink:0, marginTop:"0.1rem"}}>{q.difficulty[0]}</span>
+                                <div style={{flex:1, minWidth:0}}>
+                                  <div style={{fontSize:"0.75rem", color:text2, marginBottom:"0.1rem"}}>{q.section}</div>
+                                  <div style={{fontSize:"0.82rem", color:text1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
+                                    {q.type==="Branched" ? q.stem : q.question}
+                                  </div>
+                                </div>
+                                <span style={{...S.tag(), flexShrink:0}}>{q.type.split(" ")[0]}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </div>
         )}
 
         {/* VERSIONS */}
         {screen === "versions" && (
           <div>
-            <h1 style={S.h1}>Exam Versions</h1>
-            <p style={S.sub}>{versions.length} version{versions.length !== 1 ? "s" : ""} created{Object.keys(classSectionVersions).length > 1 ? ` · ${Object.keys(classSectionVersions).length} classroom sections` : ""}.</p>
+            <div style={S.pageHeader}>
+              <h1 style={S.h1}>Exam Builder</h1>
+              <p style={S.sub}>{versions.length} version{versions.length !== 1 ? "s" : ""} created{Object.keys(classSectionVersions).length > 1 ? ` · ${Object.keys(classSectionVersions).length} classroom sections` : ""}.</p>
+            </div>
 
             {/* Classroom section tabs */}
             {Object.keys(classSectionVersions).length > 1 && (
