@@ -2443,60 +2443,6 @@ export default function TestBankApp() {
                 </div>
               </div>
             )}
-
-            {pendingType === "version_all" && generatedPrompt && (
-              <>
-                <hr style={S.divider} />
-                <div style={{fontSize:"0.78rem", color:accent, fontWeight:"bold", marginBottom:"0.5rem"}}>
-                  📋 Copy this prompt — generates ALL {pendingMeta?.labels?.join(", ")} versions at once:
-                </div>
-                <div style={S.promptBox}>{generatedPrompt}</div>
-                <button style={S.oBtn(accent)} onClick={() => navigator.clipboard.writeText(generatedPrompt)}>Copy Prompt</button>
-                <PastePanel
-                  label={`Paste the JSON object with all versions ({"A":[...], "B":[...], ...}) here.`}
-                  S={S} text2={text2}
-                  pasteInput={pasteInput} setPasteInput={setPasteInput}
-                  pasteError={pasteError} handlePaste={handlePaste}
-                  onCancel={() => { setPendingType(null); setPasteInput(""); setGeneratedPrompt(""); }}
-                />
-              </>
-            )}
-
-            {pendingType === "version_all_sections" && generatedPrompt && (
-              <>
-                <hr style={S.divider} />
-                <div style={{fontSize:"0.78rem", color:accent, fontWeight:"bold", marginBottom:"0.5rem"}}>
-                  📋 Copy this prompt — generates ALL {pendingMeta?.numClassSections} sections × {pendingMeta?.labels?.join(", ")} versions in one go:
-                </div>
-                <div style={S.promptBox}>{generatedPrompt}</div>
-                <button style={S.oBtn(accent)} onClick={() => navigator.clipboard.writeText(generatedPrompt)}>Copy Prompt</button>
-                <PastePanel
-                  label={`Paste the JSON object with all section+version keys ({"S1_A":[...], "S1_B":[...], "S2_A":[...], ...}) here.`}
-                  S={S} text2={text2}
-                  pasteInput={pasteInput} setPasteInput={setPasteInput}
-                  pasteError={pasteError} handlePaste={handlePaste}
-                  onCancel={() => { setPendingType(null); setPasteInput(""); setGeneratedPrompt(""); }}
-                />
-              </>
-            )}
-
-            {pendingType === "version" && generatedPrompt && (
-              <>
-                <hr style={S.divider} />
-                <div style={{fontSize:"0.78rem", color:accent, fontWeight:"bold", marginBottom:"0.5rem"}}>
-                  📋 Copy this prompt for Version {pendingMeta?.label}:
-                </div>
-                <div style={S.promptBox}>{generatedPrompt}</div>
-                <button style={S.oBtn(accent)} onClick={() => navigator.clipboard.writeText(generatedPrompt)}>Copy Prompt</button>
-                <PastePanel
-                  label={`Paste Claude's response for Version ${pendingMeta?.label}.`}
-                  S={S} text2={text2}
-                  pasteInput={pasteInput} setPasteInput={setPasteInput}
-                  pasteError={pasteError} handlePaste={handlePaste}
-                  onCancel={() => { setPendingType(null); setPasteInput(""); setGeneratedPrompt(""); }}
-                />
-              </>
-            )}
             </>)}
 
             {/* ── HISTORY TAB ── */}
@@ -2620,11 +2566,106 @@ export default function TestBankApp() {
               </div>
             )}
 
-            {versions.length === 0 && (
+            {versions.length === 0 && selectedForExam.length === 0 && (
               <div style={{...S.card, textAlign:"center", color:text3, padding:"3rem"}}>
-                No versions yet. Select questions in the Bank tab and build versions.
+                No questions selected yet. Go to <button style={{background:"none", border:"none", color:accent, cursor:"pointer", fontSize:"inherit", padding:0}} onClick={() => setScreen("bank")}>Question Bank</button> or use Generation History to add questions.
               </div>
             )}
+
+            {/* ── READY TO BUILD panel — questions selected but not yet built ── */}
+            {versions.length === 0 && selectedForExam.length > 0 && (() => {
+              const selected = bank.filter(q => selectedForExam.includes(q.id));
+              return (
+                <div>
+                  {/* Selected questions summary */}
+                  <div style={{...S.card, borderColor:accent+"44", marginBottom:"1rem"}}>
+                    <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"0.75rem", flexWrap:"wrap", gap:"0.5rem"}}>
+                      <div>
+                        <div style={{fontSize:"0.95rem", fontWeight:"600", color:text1, marginBottom:"0.2rem"}}>
+                          {selected.length} questions selected
+                        </div>
+                        <div style={{fontSize:"0.72rem", color:text2}}>
+                          {[...new Set(selected.map(q => q.course))].join(", ")} · {[...new Set(selected.map(q => q.section))].length} sections
+                        </div>
+                      </div>
+                      <button style={S.ghostBtn("#f87171")} onClick={() => setSelectedForExam([])}>
+                        ✕ Clear selection
+                      </button>
+                    </div>
+
+                    {/* Question list */}
+                    <div style={{display:"flex", flexDirection:"column", gap:"0.3rem", marginBottom:"1rem"}}>
+                      {selected.map((q,i) => (
+                        <div key={q.id} style={{display:"flex", alignItems:"center", gap:"0.5rem", padding:"0.35rem 0", borderBottom: i < selected.length-1 ? "1px solid "+border+"44" : "none"}}>
+                          <span style={S.diffTag(q.difficulty)}>{q.difficulty[0]}</span>
+                          <span style={{...S.tag(courseColors[q.course]), flexShrink:0}}>{(q.section||"").split(" ").slice(0,2).join(" ")}</span>
+                          <span style={{fontSize:"0.8rem", color:text2, flex:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
+                            {q.type==="Branched" ? q.stem : q.question}
+                          </span>
+                          <button style={{...S.smBtn, color:"#f87171", border:"none", padding:"0.1rem 0.3rem"}}
+                            onClick={() => setSelectedForExam(p => p.filter(id => id !== q.id))}>✕</button>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Config row */}
+                    <div style={{display:"flex", gap:"1rem", flexWrap:"wrap", alignItems:"flex-end"}}>
+                      <div>
+                        <div style={S.lbl}>Versions per class</div>
+                        <select style={{...S.sel, width:"120px"}} value={versionCount} onChange={e => setVersionCount(Number(e.target.value))}>
+                          {[1,2,3,4,5].map(n => <option key={n} value={n}>{n} version{n>1?"s":""}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <div style={S.lbl}>Classroom sections</div>
+                        <input type="number" min={1} max={10} value={numClassSections}
+                          style={{...S.input, width:"80px"}}
+                          onChange={e => setNumClassSections(Math.max(1, Number(e.target.value)||1))} />
+                      </div>
+                      <button
+                        style={S.btn(accent, false)}
+                        onClick={triggerVersions}>
+                        ✦ {numClassSections > 1 ? `Build All ${numClassSections} Sections (1 prompt)` : "Build Versions"}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Prompt + paste panel */}
+                  {pendingType === "version_all" && generatedPrompt && (
+                    <>
+                      <div style={{fontSize:"0.78rem", color:accent, fontWeight:"600", marginBottom:"0.5rem"}}>
+                        📋 Copy this prompt — paste to Claude — paste response back:
+                      </div>
+                      <div style={S.promptBox}>{generatedPrompt}</div>
+                      <button style={{...S.oBtn(accent), marginBottom:"1rem"}} onClick={() => navigator.clipboard.writeText(generatedPrompt)}>Copy Prompt</button>
+                      <PastePanel
+                        label="Paste Claude's JSON response here."
+                        S={S} text2={text2}
+                        pasteInput={pasteInput} setPasteInput={setPasteInput}
+                        pasteError={pasteError} handlePaste={handlePaste}
+                        onCancel={() => { setPendingType(null); setPasteInput(""); setGeneratedPrompt(""); }}
+                      />
+                    </>
+                  )}
+                  {pendingType === "version_all_sections" && generatedPrompt && (
+                    <>
+                      <div style={{fontSize:"0.78rem", color:accent, fontWeight:"600", marginBottom:"0.5rem"}}>
+                        📋 Copy this prompt — generates ALL {pendingMeta?.numClassSections} sections × {pendingMeta?.labels?.join(", ")} versions in one go:
+                      </div>
+                      <div style={S.promptBox}>{generatedPrompt}</div>
+                      <button style={{...S.oBtn(accent), marginBottom:"1rem"}} onClick={() => navigator.clipboard.writeText(generatedPrompt)}>Copy Prompt</button>
+                      <PastePanel
+                        label="Paste the combined JSON response (all sections + versions)."
+                        S={S} text2={text2}
+                        pasteInput={pasteInput} setPasteInput={setPasteInput}
+                        pasteError={pasteError} handlePaste={handlePaste}
+                        onCancel={() => { setPendingType(null); setPasteInput(""); setGeneratedPrompt(""); }}
+                      />
+                    </>
+                  )}
+                </div>
+              );
+            })()}
 
             {versions.length > 0 && (
               <>
