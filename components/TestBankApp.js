@@ -1360,11 +1360,49 @@ async function buildDocxCompare(versions, course) {
   function mathPara(text, opts={}) {
     const {indent=0} = opts;
     const ppr = `<w:pPr><w:spacing w:after="60"/>${indent?`<w:ind w:left="${indent}"/>`:''}</w:pPr>`;
+
+    // Normalize and detect pipe tables
+    const normalized = isPipeTable(String(text)) ? normalizePipeTable(String(text)) : String(text);
+    if (normalized.includes("|") && isPipeTable(normalized)) {
+      const blocks = splitTableBlocks(normalized);
+      return blocks.map(block => {
+        if (block.type === "table") {
+          // Build Word table XML inline
+          const lines = block.content.split("\n").map(l => l.trim()).filter(Boolean);
+          const rows = lines.filter(l => !/^\|[-\s|:]+\|$/.test(l))
+            .map(l => l.replace(/^\||\|$/g,"").split("|").map(c => c.trim()));
+          if (!rows.length) return "";
+          const numCols = Math.max(...rows.map(r => r.length));
+          const colWidth = Math.floor(8640 / numCols);
+          const border = `<w:top w:val="single" w:sz="4" w:color="888888"/><w:left w:val="single" w:sz="4" w:color="888888"/><w:bottom w:val="single" w:sz="4" w:color="888888"/><w:right w:val="single" w:sz="4" w:color="888888"/>`;
+          const wordRows = rows.map((row, ri) => {
+            const isHeader = ri === 0;
+            const cells = Array.from({length: numCols}, (_,ci) => {
+              const cellText = (row[ci]||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+              const shading = isHeader ? `<w:shd w:val="clear" w:color="auto" w:fill="2D2D5A"/>` : ci===0 ? `<w:shd w:val="clear" w:color="auto" w:fill="1A1A3A"/>` : "";
+              const textColor = isHeader ? "A0A0CC" : ci===0 ? "C0C0E0" : "D0D0CC";
+              return `<w:tc><w:tcPr><w:tcW w:w="${colWidth}" w:type="dxa"/><w:tcBorders>${border}</w:tcBorders>${shading}<w:tcMar><w:top w:w="60" w:type="dxa"/><w:left w:w="120" w:type="dxa"/><w:bottom w:w="60" w:type="dxa"/><w:right w:w="120" w:type="dxa"/></w:tcMar></w:tcPr><w:p><w:pPr><w:jc w:val="center"/><w:spacing w:after="0"/></w:pPr><w:r><w:rPr>${isHeader?'<w:b/>':''}<w:sz w:val="20"/><w:color w:val="${textColor}"/></w:rPr><w:t xml:space="preserve">${cellText}</w:t></w:r></w:p></w:tc>`;
+            }).join("");
+            return `<w:tr>${isHeader?'<w:trPr><w:tblHeader/></w:trPr>':''}${cells}</w:tr>`;
+          }).join("");
+          return `<w:tbl><w:tblPr><w:tblW w:w="${numCols*colWidth}" w:type="dxa"/></w:tblPr><w:tblGrid>${Array.from({length:numCols},()=>`<w:gridCol w:w="${colWidth}"/>`).join("")}</w:tblGrid>${wordRows}</w:tbl><w:p><w:pPr><w:spacing w:after="60"/></w:pPr></w:p>`;
+        }
+        if (!block.content.trim()) return "";
+        try {
+          const omml = mathToOmml(block.content);
+          return `<w:p>${ppr}<m:oMathPara><m:oMathParaPr><m:jc m:val="left"/></m:oMathParaPr>${omml}</m:oMathPara></w:p>`;
+        } catch(e) {
+          const safe = block.content.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+          return `<w:p>${ppr}<w:r><w:t xml:space="preserve">${safe}</w:t></w:r></w:p>`;
+        }
+      }).join("");
+    }
+
     try {
-      const omml = mathToOmml(text);
+      const omml = mathToOmml(normalized);
       return `<w:p>${ppr}<m:oMathPara><m:oMathParaPr><m:jc m:val="left"/></m:oMathParaPr>${omml}</m:oMathPara></w:p>`;
     } catch(e) {
-      const safe = String(text).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+      const safe = normalized.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
       return `<w:p>${ppr}<w:r><w:t xml:space="preserve">${safe}</w:t></w:r></w:p>`;
     }
   }
@@ -1562,8 +1600,11 @@ ${exampleKeys},
 Reply with ONLY valid JSON object, no markdown, no explanation.`;
 }
 
-function buildReplacePrompt(q) {
-  return `TESTBANK_REPLACE_REQUEST\nGenerate 1 replacement question.\nSection: ${q.section} | Type: ${q.type} | Difficulty: ${q.difficulty}\nOriginal: ${q.type==="Branched" ? q.stem : q.question}\nRequirements: same section, same type, same difficulty, DIFFERENT question.\nUse plain-text math notation.\n${q.type==="Multiple Choice"?"Include 4 choices and correct answer.":""}\n${q.type==="Formula"?"Include variables array and answerFormula.":""}\n${q.type==="Branched"?"Include stem and parts array.":""}\nReply with ONLY a JSON array containing exactly 1 item, no markdown.`;
+function buildReplacePrompt(q, mutationType="numbers") {
+  const mutationRule = mutationType === "function"
+    ? "Use a DIFFERENT function type (e.g. if original uses polynomial, use exponential or trigonometric). Same concept area, same difficulty, same steps count."
+    : "Keep the same function type, change only the numbers/coefficients.";
+  return `TESTBANK_REPLACE_REQUEST\nGenerate 1 replacement question.\nSection: ${q.section} | Type: ${q.type} | Difficulty: ${q.difficulty}\nOriginal: ${q.type==="Branched" ? q.stem : q.question}\nMutation: ${mutationType} — ${mutationRule}\nRequirements: same section, same question type, same difficulty, DIFFERENT question.\nUse plain-text math notation.\n${q.type==="Multiple Choice"?"Include 4 choices and correct answer.":""}\n${q.type==="Formula"?"Include variables array and answerFormula.":""}\n${q.type==="Branched"?"Include stem and parts array.":""}\nReply with ONLY a JSON array containing exactly 1 item, no markdown.`;
 }
 
 // ─── Paste Panel ──────────────────────────────────────────────────────────────
@@ -1815,8 +1856,26 @@ export default function TestBankApp() {
         }
       } else if (pendingType === "replace") {
         const { vIdx, qIdx } = pendingMeta;
-        const newQ = { ...parsed[0], id: uid(), course: versions[vIdx].questions[qIdx]?.course || course, versionLabel: versions[vIdx].label };
-        setVersions(versions.map((v,vi) => vi !== vIdx ? v : { ...v, questions: v.questions.map((q,qi) => qi !== qIdx ? q : newQ) }));
+        const newQ = { ...parsed[0], id: uid(), course: versions[vIdx].questions[qIdx]?.course || course, versionLabel: versions[vIdx].label, classSection: versions[vIdx].questions[qIdx]?.classSection };
+        const updatedVersions = versions.map((v,vi) => vi !== vIdx ? v : { ...v, questions: v.questions.map((q,qi) => qi !== qIdx ? q : newQ) });
+        setVersions(updatedVersions);
+        // Also update classSectionVersions so exports use the replaced question
+        const cs = versions[vIdx]?.classSection || versions[vIdx]?.questions[0]?.classSection;
+        if (cs) {
+          setClassSectionVersions(prev => ({
+            ...prev,
+            [cs]: (prev[cs] || []).map((v,vi) => vi !== vIdx ? v : { ...v, questions: v.questions.map((q,qi) => qi !== qIdx ? q : newQ) })
+          }));
+        } else {
+          // Single section — sync all classSectionVersions entries
+          setClassSectionVersions(prev => {
+            const updated = {...prev};
+            Object.keys(updated).forEach(sec => {
+              updated[sec] = updated[sec].map((v,vi) => vi !== vIdx ? v : { ...v, questions: v.questions.map((q,qi) => qi !== qIdx ? q : newQ) });
+            });
+            return updated;
+          });
+        }
         setPendingType(null); setPasteInput(""); setPendingMeta(null);
       }
     } catch(e) { setPasteError("Error: " + e.message); }
@@ -1845,8 +1904,8 @@ export default function TestBankApp() {
     setPasteInput(""); setPasteError("");
   }
 
-  function triggerReplace(vIdx, qIdx) {
-    const prompt = buildReplacePrompt(versions[vIdx].questions[qIdx]);
+  function triggerReplace(vIdx, qIdx, mutationType="numbers") {
+    const prompt = buildReplacePrompt(versions[vIdx].questions[qIdx], mutationType);
     setGeneratedPrompt(prompt);
     setPendingType("replace"); setPendingMeta({ vIdx, qIdx }); setPasteInput(""); setPasteError("");
   }
@@ -2926,7 +2985,12 @@ export default function TestBankApp() {
                             <span style={S.tag("#f43f5e")}>{q.type}</span>
                             <span style={S.tag()}>{q.section}</span>
                             <span style={S.tag()}>{q.difficulty}</span>
-                            <button style={{...S.smBtn,marginLeft:"auto",color:"#f59e0b",border:"1px solid #f59e0b44"}} onClick={() => triggerReplace(activeVersion,qi)}>↻ Replace</button>
+                            <div style={{marginLeft:"auto", display:"flex", gap:"0.3rem"}}>
+                              <button style={{...S.smBtn, color:"#f59e0b", border:"1px solid #f59e0b44"}}
+                                onClick={() => triggerReplace(activeVersion,qi,"numbers")}>↻ Replace</button>
+                              <button style={{...S.smBtn, color:"#e879f9", border:"1px solid #e879f944"}}
+                                onClick={() => triggerReplace(activeVersion,qi,"function")}>↻ Diff. Function</button>
+                            </div>
                           </div>
                           {q.type==="Branched" ? (
                             <>
