@@ -1478,6 +1478,8 @@ function buildGeneratePrompt(course, selectedSections, sectionCounts, qType, dif
   };
 
   const isQM = course === "Quantitative Methods I" || course === "Quantitative Methods II";
+  const isDiscrete = course === "Discrete Mathematics";
+
   const tableInstructions = isQM ? `
 TABLE-BASED QUESTIONS (required for Quantitative Methods):
 - Randomly mix table-based and non-table-based questions. Some questions should present data in a table, others should be purely text/numeric scenarios. Vary naturally — do not force all questions to use tables.
@@ -1496,6 +1498,26 @@ TABLE-BASED QUESTIONS (required for Quantitative Methods):
   * Data tables with x_i and f_i columns for Expected Value and Variance sections
 - After presenting the table, ask students to compute a specific value (probability, expected value, variance, conditional probability, covariance, etc.)
 - Non-table questions should still use specific numerical scenarios, not abstract formulas.
+` : isDiscrete ? `
+DISCRETE MATHEMATICS QUESTION GUIDELINES:
+- Base questions on Susanna Epp "Discrete Mathematics with Applications" textbook structure.
+- Questions must follow the exact style and structure of exercises from that book — you may change variable names, propositions, or specific values but keep the question structure identical.
+- For Ch.2 Logic sections: MUST include truth table questions. Present a compound proposition and ask for the truth value in a specific row, or ask to identify logical equivalence. Format truth tables as pipe tables using True/False (NOT 0/1):
+  | p | q | p AND q | p OR q |
+  |---|---|---------|--------|
+  | True | True | True | True |
+  | True | False | False | True |
+  | False | True | False | True |
+  | False | False | False | False |
+- For 2.1 (Logical Equivalence): Ask whether two propositions are logically equivalent; provide specific truth table rows.
+- For 2.2 (Conditional Statements): "If p then q" structure; ask for converse, inverse, contrapositive, or truth value for given p and q.
+- For 2.3 (Valid Arguments): Give a specific argument with premises and conclusion; ask if it is valid.
+- For 3.x (Quantifiers): Use specific domains and predicates with concrete values.
+- For 4.x (Proofs): Give specific integer/rational claims; ask to identify proof type or verify a specific step.
+- For 5.x (Induction): Give specific n values; ask to verify base case or inductive step.
+- For 6.x (Sets): Use sets with explicitly listed elements; ask for union, intersection, complement, power set, or cardinality.
+- For 9.x (Counting/Probability): Use specific counting scenarios from the book style.
+- Always use concrete specific values — never ask about abstract symbols without grounding them.
 ` : "";
 
   const needsChoices = qType==="Multiple Choice"||qType==="True/False";
@@ -1508,7 +1530,9 @@ TABLE-BASED QUESTIONS (required for Quantitative Methods):
     : `{"type":"${qType}","section":"...","difficulty":"...","question":"...","answer":"...","explanation":"..."}`;
 
   const courseText = isQM
-    ? "You are a college business/statistics professor writing a test bank for a Quantitative Methods course."
+    ? "You are a college business/statistics professor writing a test bank for a Quantitative Methods course (Anderson, Sweeney, Williams textbook)."
+    : isDiscrete
+    ? "You are a college professor writing a test bank for Discrete Mathematics based on Susanna Epp's Discrete Mathematics with Applications. Follow the exact question style and structure from the book — change values but not structure."
     : "You are a college math professor writing a test bank from Stewart Calculus Early Transcendentals 9th Edition.";
 
   return `TESTBANK_GENERATE_REQUEST\nCourse: ${course}\nType: ${qType}\nTotal questions: ${totalQ}\n\nSections, counts, and required difficulties:\n${breakdown}\n\nIMPORTANT: For each section, generate questions in the EXACT difficulty order listed (Easy=E, Medium=M, Hard=H). Follow the pattern strictly.\n\nType instructions: ${typeInstructions[qType]}\n${tableInstructions}\n${courseText}\nUse plain-text math: x^2, sqrt(x), fractions, summations.\nBe rigorous, numerically specific, university-level.\nEach question must have a 'section' field with the exact section name.\nEach question must have a 'difficulty' field matching the required pattern above.\n\nReply with ONLY a valid JSON array, no markdown fences, no explanation:\n[${shape}, ...]`;
@@ -2594,6 +2618,30 @@ export default function TestBankApp() {
                     ? "Section 1: numbers mutation (same time). Section 2+: function mutation (different time)."
                     : "Tip: set numbers/function mutation on each question card above ↑"}
                 </div>
+
+                {/* Prompt + paste panel — appears after Build is clicked */}
+                {(pendingType === "version_all" || pendingType === "version_all_sections") && generatedPrompt && (
+                  <div style={{marginTop:"1rem"}}>
+                    <div style={{fontSize:"0.78rem", color:accent, fontWeight:"600", marginBottom:"0.5rem"}}>
+                      📋 {pendingType === "version_all_sections"
+                        ? `Copy this prompt — generates ALL ${pendingMeta?.numClassSections} sections × ${pendingMeta?.labels?.join(", ")} versions in one go:`
+                        : `Copy this prompt — generates ${pendingMeta?.labels?.join(", ")} versions:`}
+                    </div>
+                    <div style={S.promptBox}>{generatedPrompt}</div>
+                    <button style={{...S.oBtn(accent), marginBottom:"1rem"}} onClick={() => navigator.clipboard.writeText(generatedPrompt)}>
+                      Copy Prompt
+                    </button>
+                    <PastePanel
+                      label={pendingType === "version_all_sections"
+                        ? `Paste the JSON object with all section+version keys ({"S1_A":[...], "S1_B":[...], "S2_A":[...], ...}) here.`
+                        : `Paste the JSON object with all versions ({"A":[...], "B":[...], ...}) here.`}
+                      S={S} text2={text2}
+                      pasteInput={pasteInput} setPasteInput={setPasteInput}
+                      pasteError={pasteError} handlePaste={handlePaste}
+                      onCancel={() => { setPendingType(null); setPasteInput(""); setGeneratedPrompt(""); }}
+                    />
+                  </div>
+                )}
               </div>
             )}
             </>)}
