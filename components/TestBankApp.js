@@ -1249,7 +1249,7 @@ function buildQTICompare(versions, course, useGroups=false, pointsPerQ=1) {
   const numQ = versions[0]?.questions?.length || 0;
   const vLabels = versions.map(v => v.label).join(", ");
 
-  function makeCompareItem(q, id, title, qnum, vLabel) {
+  function makeItem(q, id, pointsPer) {
     const qhtml = mathToHTML(q.question || "");
     const isMC = q.type === "Multiple Choice" && q.choices;
     const qType = isMC ? "multiple_choice_question" : "short_answer_question";
@@ -1257,57 +1257,54 @@ function buildQTICompare(versions, course, useGroups=false, pointsPerQ=1) {
       <qtimetadata>
         <qtimetadatafield><fieldlabel>cc_profile</fieldlabel><fieldentry>cc.multiple_choice.v0p1</fieldentry></qtimetadatafield>
         <qtimetadatafield><fieldlabel>question_type</fieldlabel><fieldentry>${qType}</fieldentry></qtimetadatafield>
-        <qtimetadatafield><fieldlabel>points_possible</fieldlabel><fieldentry>${pointsPerQ}</fieldentry></qtimetadatafield>
+        <qtimetadatafield><fieldlabel>points_possible</fieldlabel><fieldentry>${pointsPer}</fieldentry></qtimetadatafield>
       </qtimetadata>
     </itemmetadata>`;
     if (isMC) {
       const cx = q.choices.map((c,ci) =>
-        `<response_label ident="c${ci}"><material><mattext texttype="text/html">${mathToHTML(c)}</mattext></material></response_label>`
+        `<response_label ident="${id}_${ci}"><material><mattext texttype="text/html"><![CDATA[<p>${mathToHTML(c)}</p>]]></mattext></material></response_label>`
       ).join("");
       const correct = q.choices.findIndex(c => c === q.answer);
-      return `<item ident="${id}" title="${escapeXML(title)}">
-  ${meta}
-  <presentation>
-    <material><mattext texttype="text/html">${qhtml}</mattext></material>
-    <response_lid ident="r${id}" rcardinality="Single">
-      <render_choice shuffle="false">${cx}</render_choice>
-    </response_lid>
-  </presentation>
-  <resprocessing>
-    <outcomes><decvar maxvalue="${pointsPerQ}" minvalue="0" varname="SCORE" vartype="Decimal"/></outcomes>
-    <respcondition continue="No">
-      <conditionvar><varequal respident="r${id}">c${correct}</varequal></conditionvar>
-      <setvar action="Set" varname="SCORE">${pointsPerQ}</setvar>
-    </respcondition>
-  </resprocessing>
-</item>`;
+      return `    <item ident="${id}">
+      ${meta}
+      <presentation>
+        <material><mattext texttype="text/html"><![CDATA[<p>${qhtml}</p>]]></mattext></material>
+        <response_lid ident="response1" rcardinality="Single">
+          <render_choice shuffle="No">${cx}</render_choice>
+        </response_lid>
+      </presentation>
+      <resprocessing>
+        <outcomes><decvar maxvalue="100" minvalue="0" varname="SCORE" vartype="Decimal"/></outcomes>
+        <respcondition continue="No"><conditionvar><varequal respident="response1">${id}_${correct}</varequal></conditionvar><setvar action="Set" varname="SCORE">100</setvar></respcondition>
+      </resprocessing>
+    </item>`;
     }
-    return `<item ident="${id}" title="${escapeXML(title)}">
-  ${meta}
-  <presentation>
-    <material><mattext texttype="text/html">${qhtml}</mattext></material>
-    <response_str ident="r${id}" rcardinality="Single"><render_fib rows="5" columns="80"/></response_str>
-  </presentation>
-  <resprocessing>
-    <outcomes><decvar maxvalue="${pointsPerQ}" minvalue="0" varname="SCORE" vartype="Decimal"/></outcomes>
-  </resprocessing>
-</item>`;
+    return `    <item ident="${id}">
+      ${meta}
+      <presentation>
+        <material><mattext texttype="text/html"><![CDATA[<p>${qhtml}</p>]]></mattext></material>
+        <response_str ident="response1" rcardinality="Single"><render_fib rows="5" columns="80"/></response_str>
+      </presentation>
+      <resprocessing>
+        <outcomes><decvar maxvalue="100" minvalue="0" varname="SCORE" vartype="Decimal"/></outcomes>
+      </resprocessing>
+    </item>`;
   }
 
+  function uid8() { return Math.random().toString(16).slice(2,10).padEnd(8,'0'); }
+
   if (!useGroups) {
-    // Flat: Q1-VA, Q1-VB, Q2-VA, Q2-VB... all in one section
     let items = "";
     for (let qi = 0; qi < numQ; qi++) {
       versions.forEach(v => {
         const q = v.questions[qi];
         if (!q || q.type === "Branched") return;
-        const id = `q${qi+1}_v${v.label}`;
-        items += makeCompareItem(q, id, `Q${qi+1} Version ${v.label}`, qi+1, v.label) + "\n";
+        items += makeItem(q, `i${uid8()}`, pointsPerQ) + "\n";
       });
     }
     return `<?xml version="1.0" encoding="UTF-8"?>
 <questestinterop xmlns="http://www.imsglobal.org/xsd/ims_qtiasiv1p2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.imsglobal.org/xsd/ims_qtiasiv1p2 http://www.imsglobal.org/xsd/ims_qtiasiv1p2p1.xsd">
-  <assessment title="${escapeXML(course)} — All Versions (${vLabels})" ident="assessment1">
+  <assessment title="${escapeXML(course)}" ident="assessment1">
     <qtimetadata><qtimetadatafield><fieldlabel>cc_maxattempts</fieldlabel><fieldentry>1</fieldentry></qtimetadatafield></qtimetadata>
     <section ident="root_section">
 ${items}    </section>
@@ -1315,19 +1312,16 @@ ${items}    </section>
 </questestinterop>`;
   }
 
-  // Grouped by question number: one section per question, each containing all versions
-  // This is the correct Canvas Classic Quizzes format — sections are top-level inside assessment
+  // Grouped: one section per question number, no labels on groups or items
   const groupSections = [];
   for (let qi = 0; qi < numQ; qi++) {
-    const sectionId = `g_q${qi+1}_${Math.random().toString(16).slice(2,8)}`;
-    const sectionTitle = `Q${qi+1}`;
-    const items = versions.map((v, vi) => {
+    const sectionId = `g${uid8()}`;
+    const items = versions.map(v => {
       const q = v.questions[qi];
       if (!q || q.type === "Branched") return "";
-      const id = `i_q${qi+1}_v${v.label}_${Math.random().toString(16).slice(2,8)}`;
-      return makeCompareItem(q, id, `Q${qi+1} Version ${v.label}`, qi+1, v.label);
+      return makeItem(q, `i${uid8()}`, pointsPerQ);
     }).filter(Boolean).join("\n");
-    groupSections.push(`  <section ident="${sectionId}" title="${sectionTitle}">
+    groupSections.push(`  <section ident="${sectionId}">
     <selection_ordering>
       <selection>
         <selection_number>1</selection_number>
@@ -1340,7 +1334,96 @@ ${items}
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <questestinterop xmlns="http://www.imsglobal.org/xsd/ims_qtiasiv1p2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.imsglobal.org/xsd/ims_qtiasiv1p2 http://www.imsglobal.org/xsd/ims_qtiasiv1p2p1.xsd">
-  <assessment title="${escapeXML(course)} — All Versions (${vLabels})" ident="assessment1">
+  <assessment title="${escapeXML(course)}" ident="assessment1">
+    <qtimetadata><qtimetadatafield><fieldlabel>cc_maxattempts</fieldlabel><fieldentry>1</fieldentry></qtimetadatafield></qtimetadata>
+${groupSections.join("\n")}
+  </assessment>
+</questestinterop>`;
+}
+
+// ─── Merged All-Sections QTI: Q1 pool = S1_A + S1_B + S2_A + S2_B + ... ──────
+function buildQTIAllSectionsMerged(classSectionVersions, course, pointsPerQ=1) {
+  function uid8() { return Math.random().toString(16).slice(2,10).padEnd(8,'0'); }
+
+  // Get all sections sorted
+  const sortedSecs = Object.keys(classSectionVersions).sort((a,b) => Number(a)-Number(b));
+  if (!sortedSecs.length) return null;
+
+  // numQ = questions per version (all sections should have same count)
+  const numQ = classSectionVersions[sortedSecs[0]]?.[0]?.questions?.length || 0;
+
+  function makeItem(q, id) {
+    const qhtml = mathToHTML(q.question || "");
+    const isMC = q.type === "Multiple Choice" && q.choices;
+    const qType = isMC ? "multiple_choice_question" : "short_answer_question";
+    const meta = `<itemmetadata>
+      <qtimetadata>
+        <qtimetadatafield><fieldlabel>cc_profile</fieldlabel><fieldentry>cc.multiple_choice.v0p1</fieldentry></qtimetadatafield>
+        <qtimetadatafield><fieldlabel>question_type</fieldlabel><fieldentry>${qType}</fieldentry></qtimetadatafield>
+        <qtimetadatafield><fieldlabel>points_possible</fieldlabel><fieldentry>${pointsPerQ}</fieldentry></qtimetadatafield>
+      </qtimetadata>
+    </itemmetadata>`;
+    if (isMC) {
+      const cx = q.choices.map((c,ci) =>
+        `<response_label ident="${id}_${ci}"><material><mattext texttype="text/html"><![CDATA[<p>${mathToHTML(c)}</p>]]></mattext></material></response_label>`
+      ).join("");
+      const correct = q.choices.findIndex(c => c === q.answer);
+      return `    <item ident="${id}">
+      ${meta}
+      <presentation>
+        <material><mattext texttype="text/html"><![CDATA[<p>${qhtml}</p>]]></mattext></material>
+        <response_lid ident="response1" rcardinality="Single">
+          <render_choice shuffle="No">${cx}</render_choice>
+        </response_lid>
+      </presentation>
+      <resprocessing>
+        <outcomes><decvar maxvalue="100" minvalue="0" varname="SCORE" vartype="Decimal"/></outcomes>
+        <respcondition continue="No"><conditionvar><varequal respident="response1">${id}_${correct}</varequal></conditionvar><setvar action="Set" varname="SCORE">100</setvar></respcondition>
+      </resprocessing>
+    </item>`;
+    }
+    return `    <item ident="${id}">
+      ${meta}
+      <presentation>
+        <material><mattext texttype="text/html"><![CDATA[<p>${qhtml}</p>]]></mattext></material>
+        <response_str ident="response1" rcardinality="Single"><render_fib rows="5" columns="80"/></response_str>
+      </presentation>
+      <resprocessing>
+        <outcomes><decvar maxvalue="100" minvalue="0" varname="SCORE" vartype="Decimal"/></outcomes>
+      </resprocessing>
+    </item>`;
+  }
+
+  // Build one group per question number, pooling ALL sections × ALL versions
+  const groupSections = [];
+  for (let qi = 0; qi < numQ; qi++) {
+    const sectionId = `g${uid8()}`;
+    let items = "";
+    // For each section, for each version, add Q[qi]
+    sortedSecs.forEach(sec => {
+      const secVersions = classSectionVersions[sec] || [];
+      secVersions.forEach(v => {
+        const q = v.questions[qi];
+        if (!q || q.type === "Branched") return;
+        items += makeItem(q, `i${uid8()}`) + "\n";
+      });
+    });
+    const totalItems = sortedSecs.reduce((sum, sec) =>
+      sum + (classSectionVersions[sec]||[]).filter(v => v.questions[qi] && v.questions[qi].type !== "Branched").length, 0);
+    groupSections.push(`  <section ident="${sectionId}">
+    <selection_ordering>
+      <selection>
+        <selection_number>1</selection_number>
+        <selection_extension><points_per_item>${pointsPerQ}</points_per_item></selection_extension>
+      </selection>
+    </selection_ordering>
+${items}
+  </section>`);
+  }
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<questestinterop xmlns="http://www.imsglobal.org/xsd/ims_qtiasiv1p2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.imsglobal.org/xsd/ims_qtiasiv1p2 http://www.imsglobal.org/xsd/ims_qtiasiv1p2p1.xsd">
+  <assessment title="${escapeXML(course)}" ident="assessment1">
     <qtimetadata><qtimetadatafield><fieldlabel>cc_maxattempts</fieldlabel><fieldentry>1</fieldentry></qtimetadatafield></qtimetadata>
 ${groupSections.join("\n")}
   </assessment>
@@ -1502,14 +1585,23 @@ TABLE-BASED QUESTIONS (required for Quantitative Methods):
 DISCRETE MATHEMATICS QUESTION GUIDELINES:
 - Base questions on Susanna Epp "Discrete Mathematics with Applications" textbook structure.
 - Questions must follow the exact style and structure of exercises from that book — you may change variable names, propositions, or specific values but keep the question structure identical.
-- For Ch.2 Logic sections: MUST include truth table questions. Present a compound proposition and ask for the truth value in a specific row, or ask to identify logical equivalence. Format truth tables as pipe tables using True/False (NOT 0/1):
-  | p | q | p AND q | p OR q |
-  |---|---|---------|--------|
-  | True | True | True | True |
-  | True | False | False | True |
-  | False | True | False | True |
-  | False | False | False | False |
-- For 2.1 (Logical Equivalence): Ask whether two propositions are logically equivalent; provide specific truth table rows.
+- For Ch.2 Logic sections: MUST include truth table questions. CRITICAL TRUTH TABLE FORMAT:
+  * Show the truth table with ALL input column values (p, q, r) filled in — NEVER hide inputs.
+  * For output columns: fill in MOST values but replace EXACTLY ONE cell with "?" — the one the student must find.
+  * Ask "What is the value of [expression] in the row where [specific input values]?" where the answer matches the "?" cell.
+  * Use True/False (NOT 0/1, NOT T/F).
+  * Example of correct format (one "?" hidden in output):
+    | p | q | p AND q | p OR (NOT q) |
+    |---|---|---------|--------------|
+    | True | True | True | True |
+    | True | False | False | True |
+    | False | True | False | ? |
+    | False | False | False | True |
+  Then ask: "In the row where p is False and q is True, what is the truth value of p OR (NOT q)?"
+  The answer would be "False".
+  * NEVER show a complete table with all values filled — that gives away the answer.
+  * For harder questions, you may hide 2-3 cells across different output columns.
+- For 2.1 (Logical Equivalence): Show partial truth tables for two expressions, hide one cell in each, ask if they are equivalent.
 - For 2.2 (Conditional Statements): "If p then q" structure; ask for converse, inverse, contrapositive, or truth value for given p and q.
 - For 2.3 (Valid Arguments): Give a specific argument with premises and conclusion; ask if it is valid.
 - For 3.x (Quantifiers): Use specific domains and predicates with concrete values.
@@ -3129,6 +3221,14 @@ export default function TestBankApp() {
                           const blob = await buildQTIZip(xml, "AllVersions");
                           dlBlob(blob, "AllVersions_Canvas_QTI.zip");
                         }}>⬇ Export to Canvas (QTI .zip)</button>
+                        {Object.keys(classSectionVersions).length > 1 && (
+                          <button style={S.btn("#f59e0b", false)} onClick={async () => {
+                            const course = versions[0]?.questions[0]?.course || "Exam";
+                            const xml = buildQTIAllSectionsMerged(classSectionVersions, course, qtiPointsPerQ);
+                            const blob = await buildQTIZip(xml, "AllSections_Merged");
+                            dlBlob(blob, "AllSections_Merged_QTI.zip");
+                          }}>⬇ All Sections Merged QTI</button>
+                        )}
                         <button style={S.btn("#10b981", false)} onClick={async () => {
                           const blob = await buildDocxCompare(versions, versions[0]?.questions[0]?.course || "Exam");
                           dlBlob(blob, "AllVersions_Grouped.docx");
