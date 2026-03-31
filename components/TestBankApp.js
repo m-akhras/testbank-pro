@@ -535,10 +535,48 @@ function escapeXML(s) { return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt
 function mathToHTML(s) {
   let r = String(s ?? "");
 
+  // ── Pipe table → HTML table (must do FIRST before any other replacements) ──
+  if (isPipeTable(r)) {
+    const normalized = normalizePipeTable(r);
+    const blocks = splitTableBlocks(normalized);
+    return blocks.map(block => {
+      if (block.type !== "table") return mathToHTMLInline(block.content);
+      // Convert pipe table to HTML table
+      const lines = block.content.split("\n").map(l => l.trim()).filter(Boolean);
+      const rows = lines.filter(l => !/^\|[-\s|:]+\|$/.test(l))
+        .map(l => l.replace(/^\||\|$/g,"").split("|").map(c => c.trim()));
+      if (!rows.length) return "";
+      const tableStyle = 'style="border-collapse:collapse;margin:8px 0;font-size:0.9em;"';
+      const thStyle = 'style="border:1px solid #999;padding:4px 10px;background:#dde;text-align:center;font-weight:bold;"';
+      const tdStyle = 'style="border:1px solid #ccc;padding:4px 10px;text-align:center;"';
+      const tdFirstStyle = 'style="border:1px solid #ccc;padding:4px 10px;font-weight:bold;background:#eef;"';
+      const htmlRows = rows.map((row, ri) =>
+        `<tr>${row.map((cell, ci) => {
+          const tag = ri === 0 ? "th" : "td";
+          const style = ri === 0 ? thStyle : ci === 0 ? tdFirstStyle : tdStyle;
+          return `<${tag} ${style}>${mathToHTMLInline(cell)}</${tag}>`;
+        }).join("")}</tr>`
+      ).join("");
+      return `<table ${tableStyle}><tbody>${htmlRows}</tbody></table>`;
+    }).join("");
+  }
+
+  return mathToHTMLInline(r);
+}
+
+function mathToHTMLInline(s) {
+  let r = String(s ?? "");
+
+  // Set notation
+  r = r.replace(/\bunion\b/gi, '&cup;');
+  r = r.replace(/\bintersect(?:ion)?\b/gi, '&cap;');
+  r = r.replace(/\bsubset\b/gi, '&sub;');
+  r = r.replace(/\bin\b(?=\s)/g, '&isin;');
+
   // Greek letters
   r = r.replace(/\btheta\b/gi, '&theta;');
   r = r.replace(/\bphi\b/gi, '&phi;');
-  r = r.replace(/\bpi\b/g, '&pi;');
+  r = r.replace(/(?<![a-zA-Z])pi(?![a-zA-Z])/g, '&pi;');
   r = r.replace(/\brho\b/gi, '&rho;');
   r = r.replace(/\balpha\b/gi, '&alpha;');
   r = r.replace(/\bbeta\b/gi, '&beta;');
@@ -546,17 +584,18 @@ function mathToHTML(s) {
   r = r.replace(/\bdelta\b/gi, '&delta;');
   r = r.replace(/\blambda\b/gi, '&lambda;');
   r = r.replace(/\bsigma\b/gi, '&sigma;');
+  r = r.replace(/\bmu\b/gi, '&mu;');
   r = r.replace(/\binfinity\b/gi, '&infin;');
   r = r.replace(/\binf\b/g, '&infin;');
 
-  // sqrt — innermost first
+  // sqrt
   let prev;
   do {
     prev = r;
     r = r.replace(/sqrt\(([^()]+)\)/g, (_, inner) => `&radic;(${inner})`);
   } while (r !== prev);
 
-  // integral from a to b of
+  // integral
   r = r.replace(/integral from ([^\s]+) to ([^\s]+) of/gi,
     (_, a, b) => `&int;<sub>${a}</sub><sup>${b}</sup>`);
   r = r.replace(/\bintegral of\b/gi, '&int;');
@@ -565,39 +604,28 @@ function mathToHTML(s) {
   r = r.replace(/lim as ([a-z])\s*->\s*([^\s,.(]+)/gi,
     (_, v, a) => `lim<sub>${v}&rarr;${a}</sub>`);
 
-  // (expr)^(n/m) fractional exponent
+  // exponents
   r = r.replace(/\(([^()]+)\)\^\(([0-9-]+)\/([0-9]+)\)/g,
     (_, b, n, d) => `(${b})<sup>${n}/${d}</sup>`);
-
-  // (expr)^n
   r = r.replace(/\(([^()]+)\)\^(-?[0-9a-zA-Z]+)/g,
     (_, b, e) => `(${b})<sup>${e}</sup>`);
-
-  // x^(n/m)
   r = r.replace(/([a-zA-Z0-9])\^\(([0-9-]+)\/([0-9]+)\)/g,
     (_, b, n, d) => `${b}<sup>${n}/${d}</sup>`);
-
-  // x^(expr)
   r = r.replace(/([a-zA-Z0-9])\^\(([^)]+)\)/g,
     (_, b, e) => `${b}<sup>${e}</sup>`);
-
-  // x^2
   r = r.replace(/([a-zA-Z0-9])\^(-?[0-9]+)/g,
     (_, b, e) => `${b}<sup>${e}</sup>`);
 
-  // (a)/(b) fraction → &frasl;
+  // fractions
   r = r.replace(/\(([^()]+)\)\/\(([^()]+)\)/g,
     (_, n, d) => `(${n})&frasl;(${d})`);
-
-  // number/number
   r = r.replace(/\b([0-9]+)\/([0-9]+)\b/g,
     (_, n, d) => `${n}&frasl;${d}`);
 
-  // * → &middot;
+  // operators
   r = r.replace(/\*/g, '&middot;');
-
-  // >= <=
   r = r.replace(/<=/g, '&le;').replace(/>=/g, '&ge;');
+  r = r.replace(/!=/g, '&ne;');
 
   return r;
 }
@@ -1030,31 +1058,40 @@ async function buildQTIZip(qtiXml, title) {
   }
 
   const safeTitle = title.replace(/[^a-zA-Z0-9]/g, '_');
-  const assessmentId = `assessment_${Date.now()}`;
-  const qtiFile = `${safeTitle}_questions.xml`;
+  const assessmentId = `assessment_${Math.random().toString(16).slice(2,10)}`;
+  const folder = safeTitle;
+  const qtiFile = `${folder}/assessment_qti.xml`;
+  const metaFile = `${folder}/assessment_meta.xml`;
 
-  // imsmanifest.xml — Canvas QTI 1.2 format
   const manifest = `<?xml version="1.0" encoding="UTF-8"?>
-<manifest identifier="${assessmentId}_manifest"
+<manifest identifier="man${assessmentId}"
   xmlns="http://www.imsglobal.org/xsd/imsccv1p1/imscp_v1p1"
-  xmlns:lom="http://ltsc.ieee.org/xsd/imsccv1p1/LOM/manifest"
-  xmlns:imsmd="http://www.imsglobal.org/xsd/imsmd_rootv1p2p1"
   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-  xsi:schemaLocation="http://www.imsglobal.org/xsd/imsccv1p1/imscp_v1p1 http://www.imsglobal.org/xsd/imscp_v1p1.xsd">
-  <metadata>
-    <schema>IMS Content</schema>
-    <schemaversion>1.1</schemaversion>
-  </metadata>
+  xsi:schemaLocation="http://www.imsglobal.org/xsd/imsccv1p1/imscp_v1p1 http://www.imsglobal.org/xsd/imsccv1p1/imscp_v1p1.xsd">
+  <metadata><schema>IMS Content</schema><schemaversion>1.1</schemaversion></metadata>
   <organizations/>
   <resources>
-    <resource identifier="${assessmentId}" type="imsqti_xmlv1p2">
+    <resource identifier="${assessmentId}" type="imsqti_xmlv1p2" href="${qtiFile}">
       <file href="${qtiFile}"/>
+      <file href="${metaFile}"/>
     </resource>
   </resources>
 </manifest>`;
+
+  const meta = `<?xml version="1.0" encoding="UTF-8"?>
+<quiz identifier="${assessmentId}" xmlns="http://canvas.instructure.com/xsd/cccv1p0">
+  <title>${escapeXML(title)}</title>
+  <shuffle_answers>false</shuffle_answers>
+  <scoring_policy>keep_highest</scoring_policy>
+  <quiz_type>assignment</quiz_type>
+  <allowed_attempts>1</allowed_attempts>
+  <show_correct_answers>false</show_correct_answers>
+</quiz>`;
+
   const zip = new window.JSZip();
   zip.file("imsmanifest.xml", manifest);
   zip.file(qtiFile, qtiXml);
+  zip.file(metaFile, meta);
 
   return await zip.generateAsync({type:"blob", mimeType:"application/zip"});
 }
@@ -1258,7 +1295,7 @@ function buildQTICompare(versions, course, useGroups=false, pointsPerQ=1) {
   }
 
   if (!useGroups) {
-    // Flat: Q1-VA, Q1-VB, Q2-VA, Q2-VB...
+    // Flat: Q1-VA, Q1-VB, Q2-VA, Q2-VB... all in one section
     let items = "";
     for (let qi = 0; qi < numQ; qi++) {
       versions.forEach(v => {
@@ -1269,49 +1306,43 @@ function buildQTICompare(versions, course, useGroups=false, pointsPerQ=1) {
       });
     }
     return `<?xml version="1.0" encoding="UTF-8"?>
-<questestinterop xmlns="http://www.imsglobal.org/xsd/ims_qtiasiv1p2">
+<questestinterop xmlns="http://www.imsglobal.org/xsd/ims_qtiasiv1p2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.imsglobal.org/xsd/ims_qtiasiv1p2 http://www.imsglobal.org/xsd/ims_qtiasiv1p2p1.xsd">
   <assessment title="${escapeXML(course)} — All Versions (${vLabels})" ident="assessment1">
+    <qtimetadata><qtimetadatafield><fieldlabel>cc_maxattempts</fieldlabel><fieldentry>1</fieldentry></qtimetadatafield></qtimetadata>
     <section ident="root_section">
 ${items}    </section>
   </assessment>
 </questestinterop>`;
   }
 
-  // Grouped: one Canvas group per section per version
-  // e.g. "5.4 — Version A", "5.4 — Version B", "5.5 — Version A"...
-  const sectionMap = {};
-  versions.forEach(v => {
-    v.questions.filter(q => q.type !== "Branched").forEach((q, qi) => {
-      const sec = q.section || "General";
-      const key = `${sec}|||${v.label}`;
-      if (!sectionMap[key]) sectionMap[key] = {sec, vLabel: v.label, questions: []};
-      sectionMap[key].questions.push({q, qi});
-    });
-  });
-
-  const groupSections = Object.entries(sectionMap).map(([key, {sec, vLabel, questions}], gi) => {
-    const items = questions.map(({q, qi}, li) =>
-      makeCompareItem(q, `g${gi}q${li}`, `Q${qi+1} V${vLabel}`, qi+1, vLabel)
-    ).join("\n");
-    return `    <section ident="group_${gi}" title="${escapeXML(sec)} — Version ${vLabel}">
-      <selection_ordering>
-        <selection>
-          <selection_number>${questions.length}</selection_number>
-          <selection_extension>
-            <points_per_item>${pointsPerQ}</points_per_item>
-          </selection_extension>
-        </selection>
-      </selection_ordering>
+  // Grouped by question number: one section per question, each containing all versions
+  // This is the correct Canvas Classic Quizzes format — sections are top-level inside assessment
+  const groupSections = [];
+  for (let qi = 0; qi < numQ; qi++) {
+    const sectionId = `g_q${qi+1}_${Math.random().toString(16).slice(2,8)}`;
+    const sectionTitle = `Q${qi+1}`;
+    const items = versions.map((v, vi) => {
+      const q = v.questions[qi];
+      if (!q || q.type === "Branched") return "";
+      const id = `i_q${qi+1}_v${v.label}_${Math.random().toString(16).slice(2,8)}`;
+      return makeCompareItem(q, id, `Q${qi+1} Version ${v.label}`, qi+1, v.label);
+    }).filter(Boolean).join("\n");
+    groupSections.push(`  <section ident="${sectionId}" title="${sectionTitle}">
+    <selection_ordering>
+      <selection>
+        <selection_number>1</selection_number>
+        <selection_extension><points_per_item>${pointsPerQ}</points_per_item></selection_extension>
+      </selection>
+    </selection_ordering>
 ${items}
-    </section>`;
-  }).join("\n");
+  </section>`);
+  }
 
   return `<?xml version="1.0" encoding="UTF-8"?>
-<questestinterop xmlns="http://www.imsglobal.org/xsd/ims_qtiasiv1p2">
+<questestinterop xmlns="http://www.imsglobal.org/xsd/ims_qtiasiv1p2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.imsglobal.org/xsd/ims_qtiasiv1p2 http://www.imsglobal.org/xsd/ims_qtiasiv1p2p1.xsd">
   <assessment title="${escapeXML(course)} — All Versions (${vLabels})" ident="assessment1">
-    <section ident="root_section">
-${groupSections}
-    </section>
+    <qtimetadata><qtimetadatafield><fieldlabel>cc_maxattempts</fieldlabel><fieldentry>1</fieldentry></qtimetadatafield></qtimetadata>
+${groupSections.join("\n")}
   </assessment>
 </questestinterop>`;
 }
@@ -2798,14 +2829,6 @@ export default function TestBankApp() {
                           dlBlob(blob,`Version_${v.label}${secStr}_Exam.docx`);
                           if (examSaved && saveExamName) await logExport(saveExamName, "Word", v.label);
                         }}>⬇ Word (.docx)</button>
-                        <button style={S.oBtn("#f59e0b")} onClick={async () => {
-                          for(const ver of versions){
-                            const cs = ver.questions[0]?.classSection || null;
-                            const blob=await buildDocx(ver.questions,ver.questions[0]?.course||"Calculus",ver.label,cs);
-                            const secStr = cs ? `_S${cs}` : "";
-                            dlBlob(blob,`Version_${ver.label}${secStr}_Exam.docx`);
-                          }
-                        }}>⬇ All Word</button>
                         {Object.keys(classSectionVersions).length > 1 && (
                           <button style={S.oBtn("#8b5cf6")} onClick={async () => {
                             for(const [sec, secVers] of Object.entries(classSectionVersions)){
@@ -2989,10 +3012,11 @@ export default function TestBankApp() {
                       {/* Export buttons for compare view — single grouped file */}
                       <div style={{display:"flex", gap:"0.75rem", marginBottom:"1.25rem", flexWrap:"wrap", alignItems:"center"}}>
                         <span style={{fontSize:"0.72rem", color:accent, fontWeight:"bold"}}>Canvas export — one file, all versions:</span>
-                        <button style={S.btn("#8b5cf6", false)} onClick={() => {
+                        <button style={S.btn("#8b5cf6", false)} onClick={async () => {
                           const xml = buildQTICompare(versions, versions[0]?.questions[0]?.course || "Exam", qtiUseGroups, qtiPointsPerQ);
-                          dlFile(xml, "AllVersions_Canvas_QTI.xml", "text/xml");
-                        }}>⬇ Export to Canvas (QTI)</button>
+                          const blob = await buildQTIZip(xml, "AllVersions");
+                          dlBlob(blob, "AllVersions_Canvas_QTI.zip");
+                        }}>⬇ Export to Canvas (QTI .zip)</button>
                         <button style={S.btn("#10b981", false)} onClick={async () => {
                           const blob = await buildDocxCompare(versions, versions[0]?.questions[0]?.course || "Exam");
                           dlBlob(blob, "AllVersions_Grouped.docx");
