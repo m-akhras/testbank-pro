@@ -1857,6 +1857,7 @@ export default function TestBankApp() {
   const [filterType, setFilterType] = useState("All");
   const [filterDiff, setFilterDiff] = useState("All");
   const [filterSection, setFilterSection] = useState("All");
+  const [filterDate, setFilterDate] = useState("All");
   const [saveExamName, setSaveExamName] = useState("");
   const [savingExam, setSavingExam] = useState(false);
   const [examSaved, setExamSaved] = useState(false);
@@ -2052,8 +2053,14 @@ export default function TestBankApp() {
     (filterCourse === "All" || q.course === filterCourse) &&
     (filterType === "All" || q.type === filterType) &&
     (filterDiff === "All" || q.difficulty === filterDiff) &&
-    (filterSection === "All" || q.section === filterSection)
+    (filterSection === "All" || q.section === filterSection) &&
+    (filterDate === "All" || new Date(q.createdAt).toLocaleDateString("en-US", {month:"short", day:"numeric", year:"numeric"}) === filterDate)
   );
+
+  // Available dates from bank — unique days sorted newest first
+  const availableDates = [...new Set(
+    bank.map(q => new Date(q.createdAt).toLocaleDateString("en-US", {month:"short", day:"numeric", year:"numeric"}))
+  )].sort((a,b) => new Date(b) - new Date(a));
   const courseColors = { "Calculus 1":"#10b981","Calculus 2":"#8b5cf6","Calculus 3":"#f59e0b","Quantitative Methods I":"#06b6d4","Quantitative Methods II":"#f43f5e","Precalculus":"#e879f9","Discrete Mathematics":"#a855f7" };
 
   // ── Design tokens ────────────────────────────────────────────────────────────
@@ -2602,6 +2609,10 @@ export default function TestBankApp() {
               </select>
               <select style={{...S.sel, width:"130px"}} value={filterDiff} onChange={e => setFilterDiff(e.target.value)}>
                 <option>All</option>{DIFFICULTIES.map(d => <option key={d}>{d}</option>)}
+              </select>
+              <select style={{...S.sel, width:"145px"}} value={filterDate} onChange={e => setFilterDate(e.target.value)}>
+                <option value="All">All Dates</option>
+                {availableDates.map(d => <option key={d} value={d}>{d}</option>)}
               </select>
               <span style={{fontSize:"0.78rem", color:text2, alignSelf:"center"}}>{filteredBank.length} matching</span>
             </div>
