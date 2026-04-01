@@ -1562,6 +1562,20 @@ ${body}
   return await zip.generateAsync({type:"blob", mimeType:"application/vnd.openxmlformats-officedocument.wordprocessingml.document"});
 }
 
+// ─── Duplicate detection ──────────────────────────────────────────────────────
+function questionSimilarity(a, b) {
+  const textA = String(a.question || a.stem || "").toLowerCase().trim();
+  const textB = String(b.question || b.stem || "").toLowerCase().trim();
+  if (!textA || !textB) return 0;
+  // Simple word overlap ratio
+  const wordsA = new Set(textA.split(/\W+/).filter(w => w.length > 3));
+  const wordsB = new Set(textB.split(/\W+/).filter(w => w.length > 3));
+  if (!wordsA.size || !wordsB.size) return 0;
+  let overlap = 0;
+  wordsA.forEach(w => { if (wordsB.has(w)) overlap++; });
+  return overlap / Math.min(wordsA.size, wordsB.size);
+}
+
 function buildGeneratePrompt(course, selectedSections, sectionCounts, qType, diff) {
   const totalQ = selectedSections.reduce((a,s)=>a+(sectionCounts[s]||3),0);
   // Include difficulty pattern per section
@@ -1674,13 +1688,21 @@ function buildVersionPrompt(selectedQuestions, mutationType, versionLabel) {
 function buildAllVersionsPrompt(selectedQuestions, mutationType, labels, classSection=1, numClassSections=1) {
   const lines = selectedQuestions.map((q,i) => {
     const orig = q.type==="Branched" ? q.stem : q.question;
-    return (i+1)+". ["+q.section+"] ["+q.type+"] Original: "+orig;
+    const mut = mutationType[q.id] || "numbers";
+    return (i+1)+". ["+q.section+"] ["+q.type+"] [mutation: "+mut+"] Original: "+orig;
   }).join("\n");
   const versionList = labels.join(", ");
 
   if (numClassSections <= 1) {
-    // Single section — numbers mutation, one JSON object
-    return `TESTBANK_ALL_VERSIONS_REQUEST\nVersions to create: ${versionList}\n\nFor each version, mutate ALL of the following questions:\n${lines}\n\nMUTATION RULES:\n- numbers mutation: keep exact same function type and concept, only change coefficients/constants. Same difficulty, same steps.\n- ALWAYS regenerate a correct answer key for each mutated version.\n- Keep same question type, section, and difficulty.\n- Each version must be DIFFERENT from all others.\n\nReturn a JSON object with one key per version label. Each value is a JSON array of mutated questions in the SAME order:\n{\n  "A": [{type, section, difficulty, question, choices, answer, explanation}, ...],\n  "B": [{type, section, difficulty, question, choices, answer, explanation}, ...]\n}\nReply with ONLY valid JSON object, no markdown, no explanation.`;
+    // Single section — respect per-question mutation type
+    const hasFunctionMut = selectedQuestions.some(q => mutationType[q.id] === "function");
+    const mutRules = selectedQuestions.map((q,i) => {
+      const mut = mutationType[q.id] || "numbers";
+      return `- Q${i+1}: ${mut === "function"
+        ? "function mutation — use a DIFFERENT function type (e.g. if original uses polynomial, use exponential or trigonometric). Same concept difficulty, same steps."
+        : "numbers mutation — keep exact same function type, change only coefficients/constants."}`;
+    }).join("\n");
+    return `TESTBANK_ALL_VERSIONS_REQUEST\nVersions to create: ${versionList}\n\nFor each version, mutate ALL of the following questions:\n${lines}\n\nPER-QUESTION MUTATION RULES:\n${mutRules}\n\nADDITIONAL RULES:\n- ALWAYS regenerate a correct answer key for each mutated version.\n- Keep same question type, section, and difficulty.\n- Each version must be DIFFERENT from all others.\n- Within numbers-mutation questions: versions differ only by coefficients/constants.\n- Within function-mutation questions: versions use different function types from each other.\n\nReturn a JSON object with one key per version label. Each value is a JSON array of mutated questions in the SAME order:\n{\n  "A": [{type, section, difficulty, question, choices, answer, explanation}, ...],\n  "B": [{type, section, difficulty, question, choices, answer, explanation}, ...]\n}\nReply with ONLY valid JSON object, no markdown, no explanation.`;
   }
 
   // Multi-section: single prompt, all sections + versions
@@ -1888,6 +1910,11 @@ export default function TestBankApp() {
   const [filterDiff, setFilterDiff] = useState("All");
   const [filterSection, setFilterSection] = useState("All");
   const [filterDate, setFilterDate] = useState("All");
+  const [bankSelectMode, setBankSelectMode] = useState(false);
+  const [bankSelected, setBankSelected] = useState(new Set());
+  const [qtiExamName, setQtiExamName] = useState("");
+  const [showPrintPreview, setShowPrintPreview] = useState(false);
+  const [dupWarnings, setDupWarnings] = useState([]);
   const [saveExamName, setSaveExamName] = useState("");
   const [savingExam, setSavingExam] = useState(false);
   const [examSaved, setExamSaved] = useState(false);
@@ -1980,6 +2007,14 @@ export default function TestBankApp() {
 
       if (pendingType === "generate") {
         const tagged = parsed.map(q => ({ ...q, id: uid(), course: pendingMeta.course, createdAt: Date.now() }));
+        // Check for duplicates within same section
+        const warnings = [];
+        tagged.forEach((newQ, i) => {
+          const sectionBank = bank.filter(bq => bq.section === newQ.section && bq.course === newQ.course);
+          const sim = sectionBank.find(bq => questionSimilarity(newQ, bq) > 0.75);
+          if (sim) warnings.push(`Q${i+1} (${newQ.section}) may be similar to an existing question.`);
+        });
+        setDupWarnings(warnings);
         setLastGenerated(tagged);
         for (const q of tagged) await saveQuestion(q);
         setBank(prev => [...tagged, ...prev]);
@@ -2098,12 +2133,12 @@ export default function TestBankApp() {
     (filterType === "All" || q.type === filterType) &&
     (filterDiff === "All" || q.difficulty === filterDiff) &&
     (filterSection === "All" || q.section === filterSection) &&
-    (filterDate === "All" || new Date(q.createdAt).toLocaleDateString("en-US", {month:"short", day:"numeric", year:"numeric"}) === filterDate)
+    (filterDate === "All" || new Date(q.createdAt).toLocaleString("en-US", {month:"short", day:"numeric", year:"numeric", hour:"2-digit", minute:"2-digit"}) === filterDate)
   );
 
   // Available dates from bank — unique days sorted newest first
   const availableDates = [...new Set(
-    bank.map(q => new Date(q.createdAt).toLocaleDateString("en-US", {month:"short", day:"numeric", year:"numeric"}))
+    bank.map(q => new Date(q.createdAt).toLocaleString("en-US", {month:"short", day:"numeric", year:"numeric", hour:"2-digit", minute:"2-digit"}))
   )].sort((a,b) => new Date(b) - new Date(a));
   const courseColors = { "Calculus 1":"#10b981","Calculus 2":"#8b5cf6","Calculus 3":"#f59e0b","Quantitative Methods I":"#06b6d4","Quantitative Methods II":"#f43f5e","Precalculus":"#e879f9","Discrete Mathematics":"#a855f7" };
 
@@ -2574,6 +2609,15 @@ export default function TestBankApp() {
               <h1 style={S.h1}>Review Generated Questions</h1>
               <p style={S.sub}>{lastGenerated.length} questions generated and saved to your bank.</p>
             </div>
+            {dupWarnings.length > 0 && (
+              <div style={{...S.card, borderColor:"#f59e0b44", background:"#f59e0b08", marginBottom:"1rem"}}>
+                <div style={{fontSize:"0.75rem", color:"#f59e0b", fontWeight:"600", marginBottom:"0.4rem"}}>⚠ Possible duplicates detected (same section)</div>
+                {dupWarnings.map((w,i) => (
+                  <div key={i} style={{fontSize:"0.72rem", color:text2, marginBottom:"0.2rem"}}>• {w}</div>
+                ))}
+                <div style={{fontSize:"0.68rem", color:text3, marginTop:"0.4rem"}}>These questions were still saved — review and delete if needed.</div>
+              </div>
+            )}
             {lastGenerated.length === 0 && (
               <div style={{...S.card, textAlign:"center", color:text3, padding:"3rem"}}>No questions generated yet. Go to Generate.</div>
             )}
@@ -2638,6 +2682,36 @@ export default function TestBankApp() {
 
             {/* ── BROWSE TAB ── */}
             {bankTabState === "browse" && (<>
+
+            {/* Bulk select toolbar */}
+            <div style={{display:"flex", gap:"0.5rem", alignItems:"center", marginBottom:"0.75rem", flexWrap:"wrap"}}>
+              <button style={S.ghostBtn(bankSelectMode ? "#f87171" : text2)}
+                onClick={() => { setBankSelectMode(!bankSelectMode); setBankSelected(new Set()); }}>
+                {bankSelectMode ? `✕ Cancel Select (${bankSelected.size} selected)` : "☑ Select to Delete"}
+              </button>
+              {bankSelectMode && bankSelected.size > 0 && (
+                <>
+                  <button style={S.ghostBtn("#f87171")} onClick={async () => {
+                    if (!window.confirm(`Delete ${bankSelected.size} questions? This cannot be undone.`)) return;
+                    for (const id of bankSelected) await deleteQuestion(id);
+                    setBank(prev => prev.filter(q => !bankSelected.has(q.id)));
+                    setBankSelected(new Set()); setBankSelectMode(false);
+                  }}>🗑 Delete {bankSelected.size} questions</button>
+                  <button style={S.ghostBtn(text2)} onClick={() => {
+                    const ids = new Set(filteredBank.map(q => q.id));
+                    setBankSelected(ids);
+                  }}>Select all {filteredBank.length} shown</button>
+                  {filterDate !== "All" && (
+                    <button style={S.ghostBtn(text2)} onClick={() => {
+                      const ids = new Set(bank.filter(q =>
+                        new Date(q.createdAt).toLocaleString("en-US",{month:"short",day:"numeric",year:"numeric",hour:"2-digit",minute:"2-digit"}) === filterDate
+                      ).map(q => q.id));
+                      setBankSelected(ids);
+                    }}>Select all from {filterDate}</button>
+                  )}
+                </>
+              )}
+            </div>
             <div style={{display:"flex", gap:"0.75rem", marginBottom:"1.25rem", flexWrap:"wrap"}}>
               <select style={{...S.sel, width:"155px"}} value={filterCourse} onChange={e => { setFilterCourse(e.target.value); setFilterSection("All"); }}>
                 <option>All</option>{Object.keys(COURSES).map(c => <option key={c}>{c}</option>)}
@@ -2654,7 +2728,7 @@ export default function TestBankApp() {
               <select style={{...S.sel, width:"130px"}} value={filterDiff} onChange={e => setFilterDiff(e.target.value)}>
                 <option>All</option>{DIFFICULTIES.map(d => <option key={d}>{d}</option>)}
               </select>
-              <select style={{...S.sel, width:"145px"}} value={filterDate} onChange={e => setFilterDate(e.target.value)}>
+              <select style={{...S.sel, width:"175px"}} value={filterDate} onChange={e => setFilterDate(e.target.value)}>
                 <option value="All">All Dates</option>
                 {availableDates.map(d => <option key={d} value={d}>{d}</option>)}
               </select>
@@ -2677,10 +2751,23 @@ export default function TestBankApp() {
                   <span style={S.tag()}>{q.type}</span>
                   <span style={S.tag()}>{q.section}</span>
                   <span style={S.tag()}>{q.difficulty}</span>
-                  <button style={{...S.smBtn, marginLeft:"auto", color:"#f87171", border:"1px solid #f8717144"}}
-                    onClick={async () => { await deleteQuestion(q.id); setBank(prev => prev.filter(bq => bq.id !== q.id)); }}>
-                    ✕
-                  </button>
+                  {bankSelectMode && (
+                    <input type="checkbox" checked={bankSelected.has(q.id)}
+                      onChange={e => { const s = new Set(bankSelected); e.target.checked ? s.add(q.id) : s.delete(q.id); setBankSelected(s); }}
+                      style={{accentColor:"#f87171", width:"15px", height:"15px", marginLeft:"auto", cursor:"pointer"}} />
+                  )}
+                  {!bankSelectMode && (
+                    <button style={{...S.smBtn, marginLeft:"auto", color:"#f87171", border:"1px solid #f8717144"}}
+                      onClick={async () => { await deleteQuestion(q.id); setBank(prev => prev.filter(bq => bq.id !== q.id)); }}>
+                      ✕
+                    </button>
+                  )}
+                  <button style={{...S.smBtn, color:"#f59e0b", border:"1px solid #f59e0b44"}}
+                    onClick={() => {
+                      const prompt = buildReplacePrompt(q, "numbers");
+                      setGeneratedPrompt(prompt);
+                      setPendingType("bank_replace"); setPendingMeta({qId: q.id}); setPasteInput(""); setPasteError("");
+                    }}>↻</button>
                   <button style={{...S.smBtn, color:inExam?accent:text2, border:"1px solid "+(inExam?accent+"44":border)}}
                     onClick={() => setSelectedForExam(p => p.includes(q.id) ? p.filter(id => id !== q.id) : [...p, q.id])}>
                     {inExam ? "✓ In exam" : "+ Exam"}
@@ -2705,6 +2792,43 @@ export default function TestBankApp() {
                     {q.answer && <div style={S.ans}>✓ <MathText>{q.answer}</MathText></div>}
                     {q.explanation && <div style={S.expl}>💡 <MathText>{q.explanation}</MathText></div>}
                   </>
+                )}
+
+                {/* Inline bank replace panel */}
+                {pendingType === "bank_replace" && pendingMeta?.qId === q.id && generatedPrompt && (
+                  <div style={{marginTop:"0.75rem", borderTop:"1px solid #f59e0b33", paddingTop:"0.75rem"}}>
+                    <div style={{fontSize:"0.72rem", color:"#f59e0b", fontWeight:"600", marginBottom:"0.4rem"}}>
+                      ↻ Replace this question — copy prompt to Claude, paste response back:
+                    </div>
+                    <div style={{display:"flex", gap:"0.5rem", marginBottom:"0.5rem", flexWrap:"wrap"}}>
+                      <button style={S.ghostBtn("#f59e0b")} onClick={() => { const p = buildReplacePrompt(q,"numbers"); setGeneratedPrompt(p); }}>Same type</button>
+                      <button style={S.ghostBtn("#e879f9")} onClick={() => { const p = buildReplacePrompt(q,"function"); setGeneratedPrompt(p); }}>Diff. function</button>
+                      <button style={{...S.ghostBtn(text3)}} onClick={() => { setPendingType(null); setPasteInput(""); setGeneratedPrompt(""); }}>Cancel</button>
+                    </div>
+                    <div style={S.promptBox}>{generatedPrompt}</div>
+                    <button style={{...S.oBtn("#f59e0b"), fontSize:"0.72rem", padding:"0.3rem 0.7rem", marginBottom:"0.5rem"}}
+                      onClick={() => navigator.clipboard.writeText(generatedPrompt)}>Copy Prompt</button>
+                    <PastePanel
+                      label="Paste the replacement question JSON here."
+                      S={S} text2={text2}
+                      pasteInput={pasteInput} setPasteInput={setPasteInput}
+                      pasteError={pasteError}
+                      handlePaste={async () => {
+                        setPasteError("");
+                        try {
+                          const raw = pasteInput.trim();
+                          const match = raw.match(/\[[\s\S]*\]/);
+                          if (!match) throw new Error("No JSON array found.");
+                          const parsed = JSON.parse(match[0]);
+                          const newQ = { ...parsed[0], id: q.id, course: q.course, section: q.section, createdAt: Date.now() };
+                          await saveQuestion(newQ);
+                          setBank(prev => prev.map(bq => bq.id === q.id ? newQ : bq));
+                          setPendingType(null); setPasteInput(""); setGeneratedPrompt("");
+                        } catch(e) { setPasteError("Error: " + e.message); }
+                      }}
+                      onCancel={() => { setPendingType(null); setPasteInput(""); setGeneratedPrompt(""); }}
+                    />
+                  </div>
                 )}
 
                 {/* Inline mutation selector — only shown when question is selected for exam */}
@@ -3089,6 +3213,9 @@ export default function TestBankApp() {
                           dlBlob(blob,`Version_${v.label}${secStr}_Exam.docx`);
                           if (examSaved && saveExamName) await logExport(saveExamName, "Word", v.label);
                         }}>⬇ Word (.docx)</button>
+                        <button style={S.oBtn("#06b6d4")} onClick={() => setShowPrintPreview(true)}>
+                          👁 Print Preview
+                        </button>
                         {Object.keys(classSectionVersions).length > 1 && (
                           <button style={S.oBtn("#8b5cf6")} onClick={async () => {
                             for(const [sec, secVers] of Object.entries(classSectionVersions)){
@@ -3105,6 +3232,15 @@ export default function TestBankApp() {
                       {Object.keys(classSectionVersions).length > 1 ? (
                         <div style={{...S.card, borderColor:"#8b5cf644", marginBottom:"1rem", padding:"1rem"}}>
                           <div style={{fontSize:"0.72rem", color:"#8b5cf6", fontWeight:"bold", marginBottom:"0.6rem", letterSpacing:"0.08em", textTransform:"uppercase"}}>Canvas QTI Export — Classroom Sections</div>
+                          <div style={{display:"flex", alignItems:"center", gap:"0.5rem", marginBottom:"0.75rem", flexWrap:"wrap"}}>
+                            <span style={{fontSize:"0.72rem", color:text2, flexShrink:0}}>Quiz name in Canvas:</span>
+                            <input
+                              placeholder={`e.g. Midterm MAT221`}
+                              value={qtiExamName}
+                              onChange={e => setQtiExamName(e.target.value)}
+                              style={{...S.input, flex:1, maxWidth:"280px", padding:"0.3rem 0.6rem", fontSize:"0.78rem"}}
+                            />
+                          </div>
                           <div style={{display:"flex", gap:"1rem", flexWrap:"wrap", alignItems:"center", marginBottom:"0.75rem"}}>
                             <label style={{display:"flex", alignItems:"center", gap:"0.4rem", fontSize:"0.78rem", color:text2, cursor:"pointer"}}>
                               <input type="checkbox" checked={qtiUseGroups} onChange={e => setQtiUseGroups(e.target.checked)}
@@ -3126,22 +3262,23 @@ export default function TestBankApp() {
                           <div style={{display:"flex", gap:"0.5rem", flexWrap:"wrap"}}>
                             {Object.keys(classSectionVersions).sort((a,b)=>Number(a)-Number(b)).map(sec => (
                               <button key={sec} style={S.btn("#8b5cf6", false)} onClick={async () => {
+                                const examTitle = qtiExamName.trim() || versions[0]?.questions[0]?.course || "Exam";
                                 const blobs = await buildClassroomSectionsQTI(
                                   {[sec]: classSectionVersions[sec]},
-                                  versions[0]?.questions[0]?.course || "Exam",
-                                  qtiUseGroups, qtiPointsPerQ
+                                  examTitle, qtiUseGroups, qtiPointsPerQ
                                 );
-                                dlBlob(blobs[sec], `Section_${sec}_Canvas_QTI.zip`);
+                                const safeName = (qtiExamName.trim() || "Section").replace(/[^a-zA-Z0-9]/g,"_");
+                                dlBlob(blobs[sec], `${safeName}_S${sec}_QTI.zip`);
                               }}>⬇ Section {sec} QTI (.zip)</button>
                             ))}
                             <button style={S.btn("#10b981", false)} onClick={async () => {
+                              const examTitle = qtiExamName.trim() || versions[0]?.questions[0]?.course || "Exam";
                               const blobs = await buildClassroomSectionsQTI(
-                                classSectionVersions,
-                                versions[0]?.questions[0]?.course || "Exam",
-                                qtiUseGroups, qtiPointsPerQ
+                                classSectionVersions, examTitle, qtiUseGroups, qtiPointsPerQ
                               );
+                              const safeName = (qtiExamName.trim() || "Section").replace(/[^a-zA-Z0-9]/g,"_");
                               for(const [sec, blob] of Object.entries(blobs)){
-                                dlBlob(blob, `Section_${sec}_Canvas_QTI.zip`);
+                                dlBlob(blob, `${safeName}_S${sec}_QTI.zip`);
                               }
                             }}>⬇ All Sections QTI (.zip)</button>
                           </div>
@@ -3352,6 +3489,76 @@ export default function TestBankApp() {
         )}
 
       </main>
+
+      {/* ── PRINT PREVIEW MODAL ── */}
+      {showPrintPreview && (() => {
+        const v = versions[activeVersion];
+        if (!v) { setShowPrintPreview(false); return null; }
+        const cs = v.questions[0]?.classSection;
+        const courseName = v.questions[0]?.course || "Exam";
+        const titleLabel = cs ? `Section ${cs} — Version ${v.label}` : `Version ${v.label}`;
+
+        const printHTML = `
+          <h2 style="font-size:16pt;margin-bottom:4pt;">${courseName} — ${titleLabel}</h2>
+          <div style="font-size:10pt;color:#555;margin-bottom:20pt;">Name: _________________________ &nbsp;&nbsp; Date: _____________</div>
+          ${v.questions.map((q, qi) => {
+            if (q.type === "Branched") return `
+              <div style="margin-bottom:20pt;page-break-inside:avoid;">
+                <div style="font-weight:bold;margin-bottom:4pt;">Question ${qi+1}.</div>
+                <div style="margin-bottom:8pt;">Given: ${q.stem}</div>
+                ${(q.parts||[]).map((p,pi) => `
+                  <div style="margin-left:20pt;margin-bottom:6pt;">
+                    (${String.fromCharCode(97+pi)}) ${p.question}
+                    ${p.choices ? p.choices.map((c,ci) => `<div style="margin-left:20pt;">${String.fromCharCode(65+ci)}. ${c}</div>`).join("") : ""}
+                  </div>`).join("")}
+              </div>`;
+            return `
+              <div style="margin-bottom:20pt;page-break-inside:avoid;">
+                <div style="font-weight:bold;margin-bottom:4pt;">Question ${qi+1}.</div>
+                <div style="margin-bottom:8pt;">${q.question}</div>
+                ${q.choices ? q.choices.map((c,ci) => `
+                  <div style="margin:3pt 0 3pt 24pt;">${String.fromCharCode(65+ci)}.&nbsp; ${c}</div>`).join("") : ""}
+                ${!q.choices ? `<div style="border-bottom:1px solid #ccc;margin-top:40pt;"></div>` : ""}
+              </div>
+              <hr style="border:none;border-top:1px solid #eee;margin:0 0 16pt 0;" />`;
+          }).join("")}`;
+
+        return (
+          <div style={{position:"fixed", inset:0, background:"rgba(0,0,0,0.88)", zIndex:9999, display:"flex", flexDirection:"column"}}>
+            {/* Top bar */}
+            <div style={{background:"#111827", borderBottom:"1px solid #1e2d45", padding:"0.65rem 1.5rem", display:"flex", alignItems:"center", gap:"1rem", flexShrink:0}}>
+              <span style={{fontSize:"0.85rem", fontWeight:"600", color:"#f0f4ff", flex:1}}>
+                👁 Print Preview — {courseName} {titleLabel}
+              </span>
+              <button style={{background:"#10b981", color:"#000", border:"none", borderRadius:"6px", padding:"0.4rem 1.1rem", fontSize:"0.82rem", fontWeight:"600", cursor:"pointer"}}
+                onClick={() => {
+                  const win = window.open("","_blank");
+                  win.document.write(`<!DOCTYPE html><html><head><title>${courseName} ${titleLabel}</title>
+                    <style>
+                      body{font-family:"Times New Roman",serif;color:#000;background:#fff;margin:2cm;font-size:12pt;line-height:1.6;}
+                      h2{font-size:16pt;margin-bottom:4pt;}
+                      hr{border:none;border-top:1px solid #eee;margin:0 0 16pt 0;}
+                      table{border-collapse:collapse;margin:8pt 0;}
+                      th,td{border:1px solid #999;padding:4pt 10pt;text-align:center;}
+                      th{background:#eee;font-weight:bold;}
+                      @media print{body{margin:1.5cm;}}
+                    </style></head><body>${printHTML}</body></html>`);
+                  win.document.close();
+                  setTimeout(() => win.print(), 400);
+                }}>🖨 Print</button>
+              <button style={{background:"transparent", color:"#7a92b8", border:"1px solid #1e2d45", borderRadius:"6px", padding:"0.4rem 0.9rem", fontSize:"0.82rem", cursor:"pointer"}}
+                onClick={() => setShowPrintPreview(false)}>✕ Close</button>
+            </div>
+
+            {/* Preview content */}
+            <div style={{flex:1, overflowY:"auto", display:"flex", justifyContent:"center", padding:"2rem 1rem"}}>
+              <div style={{background:"#fff", color:"#000", width:"21cm", minHeight:"29.7cm", padding:"2cm", boxShadow:"0 4px 32px rgba(0,0,0,0.5)", fontFamily:"'Times New Roman',serif", fontSize:"12pt", lineHeight:1.6}}
+                dangerouslySetInnerHTML={{__html: printHTML}}
+              />
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
