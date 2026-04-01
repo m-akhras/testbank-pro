@@ -567,6 +567,20 @@ function mathToHTML(s) {
 function mathToHTMLInline(s) {
   let r = String(s ?? "");
 
+  // ── Logical operators (text → symbol, for Discrete Math) ──
+  // Must do before other replacements to avoid partial matches
+  r = r.replace(/\bNOT\s+([a-z])\b/g, '~$1');
+  r = r.replace(/\b([a-z])\s+AND\s+([a-z])\b/g, '$1 &and; $2');
+  r = r.replace(/\b([a-z])\s+OR\s+([a-z])\b/g, '$1 &or; $2');
+  r = r.replace(/\(NOT\s+([^)]+)\)/g, '(~$1)');
+
+  // Symbols already in text — pass through as HTML entities
+  r = r.replace(/∧/g, '&and;');
+  r = r.replace(/∨/g, '&or;');
+  r = r.replace(/~/g, '~');
+  r = r.replace(/→/g, '&rarr;');
+  r = r.replace(/↔/g, '&harr;');
+
   // Set notation
   r = r.replace(/\bunion\b/gi, '&cup;');
   r = r.replace(/\bintersect(?:ion)?\b/gi, '&cap;');
@@ -748,6 +762,11 @@ function mathToOmml(raw) {
 
   // Step 1: replace Greek letters and symbols
   let w = s
+    // Logical operators — text to symbols (Discrete Math)
+    .replace(/\bNOT\s+([a-z])\b/g, '~$1')
+    .replace(/\(NOT\s+([^)]+)\)/g, '(~$1)')
+    .replace(/\b([a-z])\s+AND\s+([a-z])\b/g, '$1 ∧ $2')
+    .replace(/\b([a-z])\s+OR\s+([a-z])\b/g, '$1 ∨ $2')
     .replace(/\btheta\b/gi, 'θ')
     .replace(/\bphi\b/gi, 'φ')
     .replace(/\brho\b/gi, 'ρ')
@@ -1585,25 +1604,36 @@ TABLE-BASED QUESTIONS (required for Quantitative Methods):
 DISCRETE MATHEMATICS QUESTION GUIDELINES:
 - Base questions on Susanna Epp "Discrete Mathematics with Applications" textbook structure.
 - Questions must follow the exact style and structure of exercises from that book — you may change variable names, propositions, or specific values but keep the question structure identical.
+
+CRITICAL — LOGICAL NOTATION (always use these symbols, never spell out AND/OR/NOT):
+  * NOT p  →  ~p
+  * p AND q  →  p ∧ q
+  * p OR q   →  p ∨ q
+  * p → q    (conditional, "if p then q")
+  * p ↔ q    (biconditional, "p if and only if q")
+  * Use these symbols in question text, table column headers, and answer choices.
+  * Example: write "~p ∧ q" not "(NOT p) AND q"
+  * Column headers in truth tables: "~p", "p ∧ q", "p ∨ ~q", "p → q"
+
 - For Ch.2 Logic sections: MUST include truth table questions. CRITICAL TRUTH TABLE FORMAT:
   * Show the truth table with ALL input column values (p, q, r) filled in — NEVER hide inputs.
   * For output columns: fill in MOST values but replace EXACTLY ONE cell with "?" — the one the student must find.
   * Ask "What is the value of [expression] in the row where [specific input values]?" where the answer matches the "?" cell.
   * Use True/False (NOT 0/1, NOT T/F).
-  * Example of correct format (one "?" hidden in output):
-    | p | q | p AND q | p OR (NOT q) |
-    |---|---|---------|--------------|
+  * Example of correct format using proper notation:
+    | p | q | p ∧ q | p ∨ (~q) |
+    |---|---|-------|----------|
     | True | True | True | True |
     | True | False | False | True |
     | False | True | False | ? |
     | False | False | False | True |
-  Then ask: "In the row where p is False and q is True, what is the truth value of p OR (NOT q)?"
+  Then ask: "In the row where p is False and q is True, what is the truth value of p ∨ (~q)?"
   The answer would be "False".
   * NEVER show a complete table with all values filled — that gives away the answer.
   * For harder questions, you may hide 2-3 cells across different output columns.
-- For 2.1 (Logical Equivalence): Show partial truth tables for two expressions, hide one cell in each, ask if they are equivalent.
-- For 2.2 (Conditional Statements): "If p then q" structure; ask for converse, inverse, contrapositive, or truth value for given p and q.
-- For 2.3 (Valid Arguments): Give a specific argument with premises and conclusion; ask if it is valid.
+- For 2.1 (Logical Equivalence): Show partial truth tables for two expressions using proper notation, hide one cell in each, ask if they are equivalent.
+- For 2.2 (Conditional Statements): Use → notation; ask for converse, inverse, contrapositive, or truth value for given p and q.
+- For 2.3 (Valid Arguments): Give a specific argument with premises and conclusion using ∧ ∨ ~ → notation; ask if it is valid.
 - For 3.x (Quantifiers): Use specific domains and predicates with concrete values.
 - For 4.x (Proofs): Give specific integer/rational claims; ask to identify proof type or verify a specific step.
 - For 5.x (Induction): Give specific n values; ask to verify base case or inductive step.
@@ -2004,8 +2034,22 @@ export default function TestBankApp() {
     setPendingType("generate"); setPendingMeta({ course }); setPasteInput(""); setPasteError("");
   }
 
+  function sectionSortKey(section) {
+    // Extract numeric parts from section like "3.1", "5.4", "A.1", "11.2"
+    const m = String(section||"").match(/([A-Za-z]?)(\d+)\.(\d+)/);
+    if (!m) return [999, 999];
+    const prefix = m[1] ? m[1].charCodeAt(0) - 64 : 0; // A=1, B=2...
+    return [prefix * 1000 + parseInt(m[2]), parseInt(m[3])];
+  }
+
   function triggerVersions() {
-    const selected = bank.filter(q => selectedForExam.includes(q.id));
+    const selected = bank
+      .filter(q => selectedForExam.includes(q.id))
+      .sort((a, b) => {
+        const [aMaj, aMin] = sectionSortKey(a.section);
+        const [bMaj, bMin] = sectionSortKey(b.section);
+        return aMaj !== bMaj ? aMaj - bMaj : aMin - bMin;
+      });
     const labels = VERSIONS.slice(0, versionCount);
     if (numClassSections > 1) {
       const prompt = buildAllSectionsPrompt(selected, labels, numClassSections);
@@ -2878,7 +2922,13 @@ export default function TestBankApp() {
 
             {/* ── READY TO BUILD panel — questions selected but not yet built ── */}
             {versions.length === 0 && selectedForExam.length > 0 && (() => {
-              const selected = bank.filter(q => selectedForExam.includes(q.id));
+              const selected = bank
+                .filter(q => selectedForExam.includes(q.id))
+                .sort((a,b) => {
+                  const [aMaj, aMin] = sectionSortKey(a.section);
+                  const [bMaj, bMin] = sectionSortKey(b.section);
+                  return aMaj !== bMaj ? aMaj - bMaj : aMin - bMin;
+                });
               return (
                 <div>
                   {/* Selected questions summary */}
