@@ -644,6 +644,320 @@ function mathToHTMLInline(s) {
   return r;
 }
 
+// ─── Graph Engine ─────────────────────────────────────────────────────────────
+// Requires D3 — add to app/layout.js <head>:
+// <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+//
+// graphConfig shape:
+// {
+//   type: "single" | "piecewise" | "area" | "domain" | "multi"
+//
+//   // single:
+//   fn: "x^2 - 3"
+//   holes:  [[x,y], ...]   // open circles
+//   points: [[x,y], ...]   // filled dots
+//
+//   // piecewise:
+//   pieces: [{ fn:"x+1", domain:[-3, 0.999] }, ...]
+//   holes:  [[x,y], ...]
+//   points: [[x,y], ...]
+//
+//   // area (between two curves, Calc 2):
+//   fnTop: "x+2", fnBottom: "x^2", shadeFrom: -1, shadeTo: 2
+//
+//   // domain (single shaded region, Calc 3):
+//   boundary: "x^2", shadeAbove: true, boundaryDashed: true, boundaryLabel: "y = x²"
+//
+//   // multi (4 graphs as MC options, Calc 3):
+//   boundary: "x^2"
+//   options: [{ shadeAbove:true, dashed:true, halfX:false, correct:true }, ...]
+//
+//   // shared:
+//   showAxisNumbers: true
+//   showGrid: true
+//   xDomain: [-5, 5]
+//   yDomain: [-5, 5]
+// }
+
+function evalFn(exprRaw, xVal) {
+  try {
+    const expr = String(exprRaw ?? "")
+      .replace(/\^/g,      "**")
+      .replace(/\bsqrt\b/g,"Math.sqrt")
+      .replace(/\babs\b/g, "Math.abs")
+      .replace(/\bsin\b/g, "Math.sin")
+      .replace(/\bcos\b/g, "Math.cos")
+      .replace(/\btan\b/g, "Math.tan")
+      .replace(/\bln\b/g,  "Math.log")
+      .replace(/\blog\b/g, "Math.log10")
+      .replace(/\bpi\b/g,  "Math.PI")
+      .replace(/\be\b/g,   "Math.E");
+    // eslint-disable-next-line no-new-func
+    return Function("x", `"use strict"; return (${expr});`)(xVal);
+  } catch { return NaN; }
+}
+
+function renderGraphToSVG(graphConfig, width = 480, height = 300) {
+  if (typeof window === "undefined" || !window.d3) return null;
+  const d3  = window.d3;
+  const cfg = graphConfig || {};
+
+  const showNumbers = cfg.showAxisNumbers !== false;
+  const showGrid    = cfg.showGrid !== false;
+  const xDom = cfg.xDomain || [-5, 5];
+  const yDom = cfg.yDomain || [-5, 5];
+
+  const svgNode = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svgNode.setAttribute("xmlns",   "http://www.w3.org/2000/svg");
+  svgNode.setAttribute("width",   String(width));
+  svgNode.setAttribute("height",  String(height));
+  svgNode.setAttribute("viewBox", `0 0 ${width} ${height}`);
+
+  const margin = { top: 22, right: 36, bottom: 34, left: 42 };
+  const iW = width  - margin.left - margin.right;
+  const iH = height - margin.top  - margin.bottom;
+
+  const xScale = d3.scaleLinear().domain(xDom).range([0, iW]);
+  const yScale = d3.scaleLinear().domain(yDom).range([iH, 0]);
+
+  const svg = d3.select(svgNode);
+  const g   = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+
+  // hardcoded colours — CSS vars won't resolve in detached/offscreen SVG
+  const COL = {
+    text:  "#1a1a1a", muted: "#888888", grid:  "#e0e0e0",
+    blue:  "#185FA5", red:   "#E24B4A", green: "#1D9E75", shade: "#378ADD",
+  };
+
+  function drawGrid() {
+    if (!showGrid) return;
+    d3.range(Math.ceil(xDom[0]), Math.floor(xDom[1]) + 1).forEach(t => {
+      g.append("line").attr("x1", xScale(t)).attr("x2", xScale(t))
+        .attr("y1", 0).attr("y2", iH).attr("stroke", COL.grid).attr("stroke-width", 0.5);
+    });
+    d3.range(Math.ceil(yDom[0]), Math.floor(yDom[1]) + 1).forEach(t => {
+      g.append("line").attr("y1", yScale(t)).attr("y2", yScale(t))
+        .attr("x1", 0).attr("x2", iW).attr("stroke", COL.grid).attr("stroke-width", 0.5);
+    });
+  }
+
+  function drawAxes() {
+    g.append("line").attr("x1", xScale(0)).attr("x2", xScale(0))
+      .attr("y1", 0).attr("y2", iH).attr("stroke", COL.text).attr("stroke-width", 1.5);
+    g.append("line").attr("x1", 0).attr("x2", iW)
+      .attr("y1", yScale(0)).attr("y2", yScale(0)).attr("stroke", COL.text).attr("stroke-width", 1.5);
+    g.append("text").attr("x", iW + 5).attr("y", yScale(0) + 4)
+      .attr("fill", COL.text).attr("font-size", 13).attr("font-family", "sans-serif").text("x");
+    g.append("text").attr("x", xScale(0) + 4).attr("y", -6)
+      .attr("fill", COL.text).attr("font-size", 13).attr("font-family", "sans-serif").text("y");
+  }
+
+  function drawAxisNumbers() {
+    if (!showNumbers) return;
+    d3.range(Math.ceil(xDom[0]), Math.floor(xDom[1]) + 1).filter(t => t !== 0).forEach(t => {
+      g.append("text").attr("x", xScale(t)).attr("y", yScale(0) + 15)
+        .attr("text-anchor", "middle").attr("fill", COL.muted)
+        .attr("font-size", 10).attr("font-family", "sans-serif").text(t);
+    });
+    d3.range(Math.ceil(yDom[0]), Math.floor(yDom[1]) + 1).filter(t => t !== 0).forEach(t => {
+      g.append("text").attr("x", xScale(0) - 6).attr("y", yScale(t) + 4)
+        .attr("text-anchor", "end").attr("fill", COL.muted)
+        .attr("font-size", 10).attr("font-family", "sans-serif").text(t);
+    });
+  }
+
+  function drawCurve(fnExpr, domainOverride, color, dashed) {
+    const [x0, x1] = domainOverride || xDom;
+    const pts = d3.range(x0, x1 + 0.01, (x1 - x0) / 300)
+      .map(x => [x, evalFn(fnExpr, x)])
+      .filter(([, y]) => isFinite(y) && y >= yDom[0] - 0.5 && y <= yDom[1] + 0.5);
+    if (!pts.length) return;
+    const line = d3.line().x(d => xScale(d[0])).y(d => yScale(d[1])).defined(d => isFinite(d[1]));
+    g.append("path").datum(pts).attr("d", line)
+      .attr("fill", "none").attr("stroke", color || COL.blue).attr("stroke-width", 2.5)
+      .attr("stroke-dasharray", dashed ? "6,4" : "none");
+  }
+
+  function drawOpenCircle(x, y, color) {
+    g.append("circle").attr("cx", xScale(x)).attr("cy", yScale(y)).attr("r", 6)
+      .attr("fill", "white").attr("stroke", color || COL.blue).attr("stroke-width", 2.5);
+  }
+
+  function drawFilledDot(x, y, color) {
+    g.append("circle").attr("cx", xScale(x)).attr("cy", yScale(y)).attr("r", 6)
+      .attr("fill", color || COL.blue).attr("stroke", "none");
+  }
+
+  function drawShadePolygon(topFnExpr, bottomFnExpr, x0, x1, fillColor) {
+    const xs      = d3.range(x0, x1 + 0.01, (x1 - x0) / 300);
+    const topPts  = xs.map(x => ({ x: xScale(x), y: yScale(evalFn(topFnExpr,    x)) }));
+    const botPts  = xs.map(x => ({ x: xScale(x), y: yScale(evalFn(bottomFnExpr, x)) }));
+    const poly    = [...topPts, ...[...botPts].reverse()];
+    g.append("polygon").attr("points", poly.map(p => `${p.x},${p.y}`).join(" "))
+      .attr("fill", fillColor || COL.shade).attr("fill-opacity", 0.25).attr("stroke", "none");
+  }
+
+  function drawDomainShade(boundaryFnExpr, shadeAbove, halfX) {
+    const xEdge  = Math.sqrt(Math.max(0, yDom[1]));
+    const xStart = halfX ? 0 : -xEdge;
+    const xs     = d3.range(xStart, xEdge + 0.01, xEdge / 150);
+    const parPts = xs.map(x => ({ x: xScale(x), y: yScale(evalFn(boundaryFnExpr, x)) }));
+    let poly;
+    if (shadeAbove) {
+      poly = [{ x: xScale(xStart), y: 0 }, { x: xScale(xEdge), y: 0 }, ...parPts.slice().reverse()];
+    } else {
+      const allXs  = d3.range(-xEdge, xEdge + 0.01, xEdge / 150);
+      const allPts = allXs.map(x => ({ x: xScale(x), y: yScale(evalFn(boundaryFnExpr, x)) }));
+      poly = [...allPts, { x: xScale(xEdge), y: yScale(0) }, { x: xScale(-xEdge), y: yScale(0) }];
+    }
+    g.append("polygon").attr("points", poly.map(p => `${p.x},${p.y}`).join(" "))
+      .attr("fill", COL.green).attr("fill-opacity", 0.22).attr("stroke", "none");
+  }
+
+  // ── multi: 2×2 grid ──────────────────────────────────────────────────────
+  if (cfg.type === "multi") {
+    const options = cfg.options || [];
+    const cellW = Math.floor(width  / 2);
+    const cellH = Math.floor(height / 2);
+    const labels = ["A", "B", "C", "D"];
+    options.forEach((opt, idx) => {
+      const ox   = (idx % 2) * cellW;
+      const oy   = Math.floor(idx / 2) * cellH;
+      const cell = svg.append("g").attr("transform", `translate(${ox},${oy})`);
+      const mm   = { top: 18, right: 12, bottom: 22, left: 28 };
+      const mW   = cellW - mm.left - mm.right;
+      const mH   = cellH - mm.top  - mm.bottom;
+      const mx   = d3.scaleLinear().domain(xDom).range([0, mW]);
+      const my   = d3.scaleLinear().domain(yDom).range([mH, 0]);
+      const inn  = cell.append("g").attr("transform", `translate(${mm.left},${mm.top})`);
+
+      cell.append("text").attr("x", mm.left).attr("y", 13)
+        .attr("fill", COL.text).attr("font-size", 12).attr("font-weight", "bold")
+        .attr("font-family", "sans-serif").text(labels[idx]);
+
+      if (showGrid) {
+        d3.range(Math.ceil(xDom[0]), Math.floor(xDom[1]) + 1).forEach(t => {
+          inn.append("line").attr("x1", mx(t)).attr("x2", mx(t))
+            .attr("y1", 0).attr("y2", mH).attr("stroke", COL.grid).attr("stroke-width", 0.5);
+        });
+        d3.range(Math.ceil(yDom[0]), Math.floor(yDom[1]) + 1).forEach(t => {
+          inn.append("line").attr("y1", my(t)).attr("y2", my(t))
+            .attr("x1", 0).attr("x2", mW).attr("stroke", COL.grid).attr("stroke-width", 0.5);
+        });
+      }
+      inn.append("line").attr("x1", mx(0)).attr("x2", mx(0)).attr("y1", 0).attr("y2", mH).attr("stroke", COL.text).attr("stroke-width", 1.2);
+      inn.append("line").attr("x1", 0).attr("x2", mW).attr("y1", my(0)).attr("y2", my(0)).attr("stroke", COL.text).attr("stroke-width", 1.2);
+
+      if (showNumbers) {
+        [-2,-1,1,2].filter(t => t >= xDom[0] && t <= xDom[1]).forEach(t => {
+          inn.append("text").attr("x", mx(t)).attr("y", my(0) + 12)
+            .attr("text-anchor", "middle").attr("fill", COL.muted)
+            .attr("font-size", 8).attr("font-family", "sans-serif").text(t);
+        });
+        [1,2,3,4].filter(t => t >= yDom[0] && t <= yDom[1]).forEach(t => {
+          inn.append("text").attr("x", mx(0) - 4).attr("y", my(t) + 3)
+            .attr("text-anchor", "end").attr("fill", COL.muted)
+            .attr("font-size", 8).attr("font-family", "sans-serif").text(t);
+        });
+      }
+
+      const xEdge  = Math.sqrt(Math.max(0, yDom[1]));
+      const xStart = opt.halfX ? 0 : -xEdge;
+      const xs     = d3.range(xStart, xEdge + 0.01, xEdge / 120);
+      const parPts = xs.map(x => ({ x: mx(x), y: my(evalFn(cfg.boundary, x)) }));
+      let poly;
+      if (opt.shadeAbove) {
+        poly = [{ x: mx(xStart), y: 0 }, { x: mx(xEdge), y: 0 }, ...parPts.slice().reverse()];
+      } else {
+        const allXs  = d3.range(-xEdge, xEdge + 0.01, xEdge / 120);
+        const allPts = allXs.map(x => ({ x: mx(x), y: my(evalFn(cfg.boundary, x)) }));
+        poly = [...allPts, { x: mx(xEdge), y: my(0) }, { x: mx(-xEdge), y: my(0) }];
+      }
+      inn.append("polygon").attr("points", poly.map(p => `${p.x},${p.y}`).join(" "))
+        .attr("fill", COL.green).attr("fill-opacity", 0.22).attr("stroke", "none");
+
+      const bPts = d3.range(-xEdge - 0.1, xEdge + 0.11, xEdge / 120)
+        .filter(x => !opt.halfX || x >= 0)
+        .map(x => [x, evalFn(cfg.boundary, x)]);
+      const lineGen = d3.line().x(d => mx(d[0])).y(d => my(d[1])).defined(d => isFinite(d[1]));
+      inn.append("path").datum(bPts).attr("d", lineGen)
+        .attr("fill", "none").attr("stroke", COL.red).attr("stroke-width", 1.8)
+        .attr("stroke-dasharray", opt.dashed ? "5,3" : "none");
+    });
+    return svgNode;
+  }
+
+  // ── single / piecewise / area / domain ───────────────────────────────────
+  drawGrid();
+  drawAxes();
+  drawAxisNumbers();
+
+  if (cfg.type === "single") {
+    drawCurve(cfg.fn, null, COL.blue, false);
+    (cfg.holes  || []).forEach(([x, y]) => drawOpenCircle(x, y, COL.blue));
+    (cfg.points || []).forEach(([x, y]) => drawFilledDot(x, y, COL.blue));
+
+  } else if (cfg.type === "piecewise") {
+    (cfg.pieces || []).forEach(p => drawCurve(p.fn, p.domain, COL.blue, false));
+    (cfg.holes  || []).forEach(([x, y]) => drawOpenCircle(x, y, COL.blue));
+    (cfg.points || []).forEach(([x, y]) => drawFilledDot(x, y, COL.blue));
+
+  } else if (cfg.type === "area") {
+    const x0 = cfg.shadeFrom ?? xDom[0];
+    const x1 = cfg.shadeTo   ?? xDom[1];
+    drawShadePolygon(cfg.fnTop, cfg.fnBottom, x0, x1, COL.shade);
+    drawCurve(cfg.fnTop,    null, COL.blue, false);
+    drawCurve(cfg.fnBottom, null, COL.red,  false);
+    [[x0, evalFn(cfg.fnTop, x0)], [x1, evalFn(cfg.fnTop, x1)]].forEach(([x, y]) => drawFilledDot(x, y, COL.text));
+    const midX = xDom[0] + (xDom[1] - xDom[0]) * 0.7;
+    g.append("text").attr("x", xScale(midX)).attr("y", yScale(evalFn(cfg.fnTop,    midX)) - 10)
+      .attr("fill", COL.blue).attr("font-size", 13).attr("font-style", "italic").attr("font-family", "sans-serif").text("f(x)");
+    g.append("text").attr("x", xScale(midX)).attr("y", yScale(evalFn(cfg.fnBottom, midX)) + 18)
+      .attr("fill", COL.red).attr("font-size", 13).attr("font-style", "italic").attr("font-family", "sans-serif").text("g(x)");
+
+  } else if (cfg.type === "domain") {
+    drawDomainShade(cfg.boundary, cfg.shadeAbove !== false, false);
+    drawCurve(cfg.boundary, null, COL.red, cfg.boundaryDashed !== false);
+    const labelX = xDom[0] + (xDom[1] - xDom[0]) * 0.65;
+    g.append("text").attr("x", xScale(labelX)).attr("y", yScale(evalFn(cfg.boundary, labelX)) + 18)
+      .attr("fill", COL.red).attr("font-size", 13).attr("font-style", "italic").attr("font-family", "sans-serif")
+      .text(cfg.boundaryLabel || "boundary");
+  }
+
+  return svgNode;
+}
+
+// ── Convert graphConfig → base64 PNG (used by QTI and Word export) ───────────
+async function graphToBase64PNG(graphConfig, width = 480, height = 300) {
+  return new Promise((resolve, reject) => {
+    try {
+      const svgNode = renderGraphToSVG(graphConfig, width, height);
+      if (!svgNode) { resolve(null); return; }
+      const svgStr  = new XMLSerializer().serializeToString(svgNode);
+      const url     = URL.createObjectURL(new Blob([svgStr], { type: "image/svg+xml;charset=utf-8" }));
+      const img     = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = width; canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, width, height);
+        ctx.drawImage(img, 0, 0);
+        URL.revokeObjectURL(url);
+        resolve(canvas.toDataURL("image/png"));
+      };
+      img.onerror = e => { URL.revokeObjectURL(url); reject(e); };
+      img.src = url;
+    } catch (e) { reject(e); }
+  });
+}
+// expose to window for console testing + export pipeline
+if (typeof window !== "undefined") {
+  window.renderGraphToSVG = renderGraphToSVG;
+  window.graphToBase64PNG = graphToBase64PNG;
+}
+// ─── End Graph Engine ──────────────────────────────────────────────────────────
+
 // Difficulty pattern: cycle Easy→Medium→Hard for any count
 function difficultyPattern(count) {
   const cycle = ["Easy", "Medium", "Hard"];
