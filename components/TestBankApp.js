@@ -1012,8 +1012,19 @@ function difficultyPattern(count) {
 function buildQTI(questions, course, vLabel, useGroups=false, pointsPerQ=1) {
   const canvasQ = questions.filter(q => q.type !== "Branched");
 
+  // register graph configs so buildQTIZip can resolve placeholders
+  window._qtiGraphConfigs = window._qtiGraphConfigs || {};
+  canvasQ.forEach((q, i) => {
+    if (q.hasGraph && q.graphConfig) {
+      window._qtiGraphConfigs[`q${i+1}`] = q.graphConfig;
+    }
+  });
+
   function makeItem(q, id, num) {
-    const qhtml = `Q${num}. ` + mathToHTML(q.question || "");
+    const graphImg = (q.hasGraph && q.graphConfig)
+      ? `<img src="GRAPH_PLACEHOLDER_${id}" alt="graph" style="max-width:480px;display:block;margin-bottom:8px;"/>`
+      : "";
+    const qhtml = graphImg + `Q${num}. ` + mathToHTML(q.question || "");
     const isMC = q.type === "Multiple Choice" && q.choices;
     const qType = isMC ? "multiple_choice_question" : "short_answer_question";
     const meta = `<itemmetadata>
@@ -1238,6 +1249,35 @@ function mathToOmml(raw) {
 }
 
 // ─── Build proper .docx file ──────────────────────────────────────────────────
+// ── Word image XML helper (used by both buildDocx and buildDocxCompare) ──────
+function makeDocxImageXml(base64png, widthEmu=4800000, heightEmu=2800000) {
+  const b64 = base64png.replace(/^data:image\/png;base64,/, "");
+  const rid  = "rImg1";
+  return `<w:p><w:pPr><w:spacing w:after="120"/></w:pPr><w:r><w:drawing>
+  <wp:inline xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing">
+    <wp:extent cx="${widthEmu}" cy="${heightEmu}"/>
+    <wp:effectExtent l="0" t="0" r="0" b="0"/>
+    <wp:docPr id="1" name="Graph"/>
+    <a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+      <a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">
+        <pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">
+          <pic:nvPicPr><pic:cNvPr id="1" name="Graph"/><pic:cNvPicPr/></pic:nvPicPr>
+          <pic:blipFill>
+            <a:blip r:embed="${rid}"/>
+            <a:stretch><a:fillRect/></a:stretch>
+          </pic:blipFill>
+          <pic:spPr>
+            <a:xfrm><a:off x="0" y="0"/><a:ext cx="${widthEmu}" cy="${heightEmu}"/></a:xfrm>
+            <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+          </pic:spPr>
+        </pic:pic>
+      </a:graphicData>
+    </a:graphic>
+  </wp:inline>
+</w:drawing></w:r></w:p>
+<GRAPH_REL_PLACEHOLDER rid="${rid}" b64="${b64}"/>`;
+}
+
 async function buildDocx(questions, course, vLabel, classSection=null) {
   // We build the docx XML manually for full math support
   const ns = `xmlns:wpc="http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:wp14="http://schemas.microsoft.com/office/word/2010/wordprocessingDrawing" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:w10="urn:schemas-microsoft-com:office:word" xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml" xmlns:wpg="http://schemas.microsoft.com/office/word/2010/wordprocessingGroup" xmlns:wpi="http://schemas.microsoft.com/office/word/2010/wordprocessingInk" xmlns:wne="http://schemas.microsoft.com/office/word/2006/wordml" xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape"`;
@@ -1340,8 +1380,16 @@ async function buildDocx(questions, course, vLabel, classSection=null) {
   body += para(`${course} — ${titleLabel}`, {bold:true, size:32, spacing:120});
   body += para("Stewart: Early Transcendentals, 9th Edition", {size:22, color:"555555", spacing:200});
 
-  questions.forEach((q, i) => {
+  for (let i = 0; i < questions.length; i++) {
+    const q = questions[i];
     const num = i + 1;
+    // ── graph image (buildDocx) ──
+    if (q.hasGraph && q.graphConfig) {
+      try {
+        const b64 = await graphToBase64PNG(q.graphConfig, 480, 280);
+        if (b64) body += makeDocxImageXml(b64);
+      } catch(e) { console.warn("graph png failed", e); }
+    }
     if (q.type === "Branched") {
       body += para(`${num}. [${q.section}] — ${q.difficulty}`, {bold:true, size:24, spacing:80});
       body += mathPara(`Given: ${q.stem}`);
@@ -1366,9 +1414,9 @@ async function buildDocx(questions, course, vLabel, classSection=null) {
       if (q.explanation) body += mathPara(`Note: ${q.explanation}`, {indent:0, size:20, color:"666666", spacing:120});
     }
     body += `<w:p><w:pPr><w:spacing w:after="40"/><w:pBdr><w:bottom w:val="single" w:sz="4" w:space="1" w:color="DDDDDD"/></w:pBdr></w:pPr></w:p>`;
-  });
+  }
 
-  const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+  let documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document ${ns} mc:Ignorable="w14 wp14">
 <w:body>
 ${body}
@@ -1402,11 +1450,28 @@ ${body}
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
 </Relationships>`);
 
-  zip.file("word/document.xml", documentXml);
+  // extract image data from GRAPH_REL_PLACEHOLDER tags and wire into zip
+  const imgRe = /<GRAPH_REL_PLACEHOLDER rid="([^"]+)" b64="([^"]+)"\/>/g;
+  const imgMatches = [...documentXml.matchAll(imgRe)];
+  let relsXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">`;
+  let imgIdx = 1;
+  for (const m of imgMatches) {
+    const rid = `rImg${imgIdx}`;
+    const b64 = m[2];
+    const imgBytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+    zip.file(`word/media/graph${imgIdx}.png`, imgBytes);
+    relsXml += `
+  <Relationship Id="${rid}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/graph${imgIdx}.png"/>`;
+    imgIdx++;
+  }
+  relsXml += "
+</Relationships>";
+  // strip placeholder tags from documentXml
+  documentXml = documentXml.replace(imgRe, "");
 
-  zip.file("word/_rels/document.xml.rels", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-</Relationships>`);
+  zip.file("word/document.xml", documentXml);
+  zip.file("word/_rels/document.xml.rels", relsXml);
 
   const blob = await zip.generateAsync({type:"blob", mimeType:"application/vnd.openxmlformats-officedocument.wordprocessingml.document"});
   return blob;
@@ -1433,6 +1498,25 @@ async function buildQTIZip(qtiXml, title) {
       s.onload = res; s.onerror = rej;
       document.head.appendChild(s);
     });
+  }
+
+  // ── resolve graph placeholders → real base64 PNGs ──
+  const placeholderRe = /GRAPH_PLACEHOLDER_([^"]+)/g;
+  const matches = [...qtiXml.matchAll(placeholderRe)];
+  // collect unique IDs + their graphConfig from the questions bank
+  // We store graphConfigs globally on window when building QTI
+  for (const m of matches) {
+    const pid = m[1];
+    const cfg = window._qtiGraphConfigs?.[pid];
+    if (cfg) {
+      try {
+        const b64 = await graphToBase64PNG(cfg, 480, 280);
+        qtiXml = qtiXml.replaceAll(`GRAPH_PLACEHOLDER_${pid}`, b64);
+      } catch(e) { console.warn("graph export failed", pid, e); }
+    } else {
+      // no config found — remove placeholder
+      qtiXml = qtiXml.replaceAll(`GRAPH_PLACEHOLDER_${pid}`, "");
+    }
   }
 
   const safeTitle = title.replace(/[^a-zA-Z0-9]/g, '_');
@@ -1628,7 +1712,10 @@ function buildQTICompare(versions, course, useGroups=false, pointsPerQ=1) {
   const vLabels = versions.map(v => v.label).join(", ");
 
   function makeItem(q, id, pointsPer) {
-    const qhtml = mathToHTML(q.question || "");
+    const graphImg = (q.hasGraph && q.graphConfig)
+      ? `<img src="GRAPH_PLACEHOLDER_${id}" alt="graph" style="max-width:480px;display:block;margin-bottom:8px;"/>`
+      : "";
+    const qhtml = graphImg + mathToHTML(q.question || "");
     const isMC = q.type === "Multiple Choice" && q.choices;
     const qType = isMC ? "multiple_choice_question" : "short_answer_question";
     const meta = `<itemmetadata>
@@ -1731,7 +1818,10 @@ function buildQTIAllSectionsMerged(classSectionVersions, course, pointsPerQ=1) {
   const numQ = classSectionVersions[sortedSecs[0]]?.[0]?.questions?.length || 0;
 
   function makeItem(q, id) {
-    const qhtml = mathToHTML(q.question || "");
+    const graphImg = (q.hasGraph && q.graphConfig)
+      ? `<img src="GRAPH_PLACEHOLDER_${id}" alt="graph" style="max-width:480px;display:block;margin-bottom:8px;"/>`
+      : "";
+    const qhtml = graphImg + mathToHTML(q.question || "");
     const isMC = q.type === "Multiple Choice" && q.choices;
     const qType = isMC ? "multiple_choice_question" : "short_answer_question";
     const meta = `<itemmetadata>
@@ -1884,6 +1974,13 @@ async function buildDocxCompare(versions, course) {
       if (!q) return;
       const vc = vColors[vi % vColors.length];
       body += para(`Version ${v.label}`, {bold:true, size:22, color:vc, spacing:60});
+      // ── graph image (buildDocxCompare) ──
+      if (q.hasGraph && q.graphConfig) {
+        try {
+          const b64 = await graphToBase64PNG(q.graphConfig, 480, 280);
+          if (b64) body += makeDocxImageXml(b64);
+        } catch(e) { console.warn("graph png failed", e); }
+      }
       body += mathPara(q.question);
       if (q.choices) q.choices.forEach((c,ci) => {
         body += mathPara(`${String.fromCharCode(65+ci)}. ${c}`, {indent:360});
@@ -1892,7 +1989,7 @@ async function buildDocxCompare(versions, course) {
     });
   }
 
-  const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+  let documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document ${ns} mc:Ignorable="w14">
 <w:body>
 ${body}
@@ -1915,8 +2012,24 @@ ${body}
   const zip = new window.JSZip();
   zip.file("[Content_Types].xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>`);
   zip.file("_rels/.rels", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>`);
+  // extract image data from GRAPH_REL_PLACEHOLDER tags (buildDocxCompare)
+  const imgReC = /<GRAPH_REL_PLACEHOLDER rid="([^"]+)" b64="([^"]+)"\/>/g;
+  const imgMatchesC = [...documentXml.matchAll(imgReC)];
+  let relsXmlC = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">`;
+  let imgIdxC = 1;
+  for (const m of imgMatchesC) {
+    const rid = `rImg${imgIdxC}`;
+    const b64 = m[2];
+    const imgBytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+    zip.file(`word/media/graph${imgIdxC}.png`, imgBytes);
+    relsXmlC += `<Relationship Id="${rid}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/graph${imgIdxC}.png"/>`;
+    imgIdxC++;
+  }
+  relsXmlC += `</Relationships>`;
+  documentXml = documentXml.replace(imgReC, "");
+
   zip.file("word/document.xml", documentXml);
-  zip.file("word/_rels/document.xml.rels", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>`);
+  zip.file("word/_rels/document.xml.rels", relsXmlC);
 
   return await zip.generateAsync({type:"blob", mimeType:"application/vnd.openxmlformats-officedocument.wordprocessingml.document"});
 }
