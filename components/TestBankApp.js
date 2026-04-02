@@ -376,6 +376,51 @@ function MathTextInline({ children }) {
   return <span ref={ref}>{src}</span>;
 }
 
+
+// ─── GraphDisplay component ───────────────────────────────────────────────────
+// Renders a graph from q.graphConfig inline above the question text.
+// Author-only toggles (showAxisNumbers, showGrid) are saved into graphConfig.
+function GraphDisplay({ graphConfig, authorMode = false }) {
+  const ref = useRef(null);
+  const [showNumbers, setShowNumbers] = React.useState(
+    graphConfig?.showAxisNumbers !== false
+  );
+  const [showGrid, setShowGrid] = React.useState(
+    graphConfig?.showGrid !== false
+  );
+
+  useEffect(() => {
+    if (!ref.current || !graphConfig || typeof window === "undefined" || !window.d3) return;
+    ref.current.innerHTML = "";
+    const cfg = { ...graphConfig, showAxisNumbers: showNumbers, showGrid };
+    const svgNode = window.renderGraphToSVG(cfg, ref.current.offsetWidth || 480, 260);
+    if (svgNode) {
+      svgNode.style.width = "100%";
+      svgNode.style.height = "260px";
+      ref.current.appendChild(svgNode);
+    }
+  }, [graphConfig, showNumbers, showGrid]);
+
+  return (
+    <div style={{ marginBottom: "0.75rem" }}>
+      {authorMode && (
+        <div style={{ display: "flex", gap: "16px", marginBottom: "6px", alignItems: "center" }}>
+          <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11px", color: "#888", cursor: "pointer" }}>
+            <input type="checkbox" checked={showNumbers} onChange={e => setShowNumbers(e.target.checked)} />
+            Axis numbers
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11px", color: "#888", cursor: "pointer" }}>
+            <input type="checkbox" checked={showGrid} onChange={e => setShowGrid(e.target.checked)} />
+            Grid
+          </label>
+        </div>
+      )}
+      <div ref={ref} style={{ width: "100%", background: "#fff", borderRadius: "6px", overflow: "hidden" }} />
+    </div>
+  );
+}
+// ─── End GraphDisplay ─────────────────────────────────────────────────────────
+
 // ─── Course data ──────────────────────────────────────────────────────────────
 const COURSES = {
   "Calculus 1": {
@@ -2944,6 +2989,9 @@ export default function TestBankApp() {
                   <span style={S.tag()}>{q.section}</span>
                   <span style={S.tag()}>{q.difficulty}</span>
                 </div>
+                {q.hasGraph && q.graphConfig && (
+                  <GraphDisplay graphConfig={q.graphConfig} authorMode={true} />
+                )}
                 {q.type === "Branched" ? (
                   <>
                     <div style={{...S.qText, color:accent+"cc"}}>Given: <MathText>{q.stem}</MathText></div>
@@ -3088,6 +3136,9 @@ export default function TestBankApp() {
                   </button>
                 </div>
 
+                {q.hasGraph && q.graphConfig && (
+                  <GraphDisplay graphConfig={q.graphConfig} authorMode={true} />
+                )}
                 {q.type === "Branched" ? (
                   <>
                     <div style={{...S.qText, color:accent+"cc"}}>Given: <MathText>{q.stem}</MathText></div>
