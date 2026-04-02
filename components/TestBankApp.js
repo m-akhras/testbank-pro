@@ -1465,8 +1465,7 @@ ${body}
   <Relationship Id="${rid}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/graph${imgIdx}.png"/>`;
     imgIdx++;
   }
-  relsXml += "
-</Relationships>";
+  relsXml += "\n</Relationships>";
   // strip placeholder tags from documentXml
   documentXml = documentXml.replace(imgRe, "");
 
