@@ -2431,7 +2431,8 @@ export default function TestBankApp() {
           const versioned = qs.map((q,i) => ({
             ...q, id: uid(), originalId: selected[i]?.id,
             course: selected[i]?.course || course,
-            versionLabel: label, classSection, createdAt: Date.now()
+            versionLabel: label, classSection, createdAt: Date.now(),
+            ...(selected[i]?.hasGraph ? { hasGraph: true, graphConfig: selected[i].graphConfig } : {}),
           }));
           return { label, questions: versioned, classSection };
         });
@@ -2458,7 +2459,8 @@ export default function TestBankApp() {
             const versioned = qs.map((q,i) => ({
               ...q, id: uid(), originalId: selected[i]?.id,
               course: selected[i]?.course || course,
-              versionLabel: label, classSection: s, createdAt: Date.now()
+              versionLabel: label, classSection: s, createdAt: Date.now(),
+              ...(selected[i]?.hasGraph ? { hasGraph: true, graphConfig: selected[i].graphConfig } : {}),
             }));
             return { label, questions: versioned, classSection: s };
           });
@@ -2494,7 +2496,16 @@ export default function TestBankApp() {
         setScreen("review");
       } else if (pendingType === "version") {
         const { selected, label, allVersions, remaining, mutationType: mt } = pendingMeta;
-        const versioned = parsed.map((q,i) => ({ ...q, id: uid(), originalId: selected[i]?.id, course: selected[i]?.course || course, versionLabel: label, createdAt: Date.now() }));
+        const versioned = parsed.map((q,i) => ({
+          ...q,
+          id: uid(),
+          originalId: selected[i]?.id,
+          course: selected[i]?.course || course,
+          versionLabel: label,
+          createdAt: Date.now(),
+          // carry graph config from original question
+          ...(selected[i]?.hasGraph ? { hasGraph: true, graphConfig: selected[i].graphConfig } : {}),
+        }));
         const updated = [...allVersions, { label, questions: versioned }];
         if (remaining.length > 0) {
           const nextLabel = remaining[0]; const nextRemaining = remaining.slice(1);
