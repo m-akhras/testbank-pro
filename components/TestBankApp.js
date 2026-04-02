@@ -1012,18 +1012,17 @@ function difficultyPattern(count) {
 function buildQTI(questions, course, vLabel, useGroups=false, pointsPerQ=1) {
   const canvasQ = questions.filter(q => q.type !== "Branched");
 
-  // store graph configs keyed by question id for buildQTIZip to resolve
-  window._qtiGraphConfigs = {};
-  canvasQ.forEach(q => {
+  // register graph configs so buildQTIZip can resolve placeholders
+  window._qtiGraphConfigs = window._qtiGraphConfigs || {};
+  canvasQ.forEach((q, i) => {
     if (q.hasGraph && q.graphConfig) {
-      window._qtiGraphConfigs[q.id || q.question] = q.graphConfig;
+      window._qtiGraphConfigs[`q${i+1}`] = q.graphConfig;
     }
   });
 
   function makeItem(q, id, num) {
-    const graphKey = q.id || q.question;
     const graphImg = (q.hasGraph && q.graphConfig)
-      ? `<img src="GRAPH_PLACEHOLDER_${graphKey}" alt="graph" style="max-width:480px;display:block;margin-bottom:8px;"/>`
+      ? `<img src="GRAPH_PLACEHOLDER_${id}" alt="graph" style="max-width:480px;display:block;margin-bottom:8px;"/>`
       : "";
     const qhtml = graphImg + `Q${num}. ` + mathToHTML(q.question || "");
     const isMC = q.type === "Multiple Choice" && q.choices;
@@ -1482,36 +1481,50 @@ async function buildQTIZip(qtiXml, title) {
     });
   }
 
-  // ── resolve graph placeholders → real base64 PNGs ──
-  const placeholderRe = /GRAPH_PLACEHOLDER_([^"]+)/g;
-  const matches = [...qtiXml.matchAll(placeholderRe)];
-  const seen = new Set();
-  for (const m of matches) {
-    const pid = m[1];
-    if (seen.has(pid)) continue;
-    seen.add(pid);
-    // try exact key first, then try all keys as fallback
-    let cfg = window._qtiGraphConfigs?.[pid];
-    if (!cfg && window._qtiGraphConfigs) {
-      // fallback: use first available config if only one graph question
-      const keys = Object.keys(window._qtiGraphConfigs);
-      if (keys.length === 1) cfg = window._qtiGraphConfigs[keys[0]];
-    }
-    if (cfg) {
-      try {
-        const b64 = await graphToBase64PNG(cfg, 480, 280);
-        qtiXml = qtiXml.split(`GRAPH_PLACEHOLDER_${pid}`).join(b64);
-      } catch(e) { console.warn("graph export failed", pid, e); }
-    } else {
-      qtiXml = qtiXml.split(`GRAPH_PLACEHOLDER_${pid}`).join("");
-    }
-  }
-
   const safeTitle = title.replace(/[^a-zA-Z0-9]/g, '_');
   const assessmentId = `assessment_${Math.random().toString(16).slice(2,10)}`;
   const folder = safeTitle;
   const qtiFile = `${folder}/assessment_qti.xml`;
   const metaFile = `${folder}/assessment_meta.xml`;
+
+  const zip = new window.JSZip();
+
+  // ── resolve graph placeholders → PNG files inside zip ──
+  // Canvas does NOT support base64 img src — images must be files in the zip
+  const placeholderRe = /GRAPH_PLACEHOLDER_([^"]+)/g;
+  const matches = [...qtiXml.matchAll(placeholderRe)];
+  const seen = new Set();
+  let imgCounter = 0;
+  for (const m of matches) {
+    const pid = m[1];
+    if (seen.has(pid)) continue;
+    seen.add(pid);
+    let cfg = window._qtiGraphConfigs?.[pid];
+    if (!cfg && window._qtiGraphConfigs) {
+      const keys = Object.keys(window._qtiGraphConfigs);
+      if (keys.length >= 1) cfg = window._qtiGraphConfigs[keys[imgCounter] || keys[0]];
+    }
+    imgCounter++;
+    if (cfg) {
+      try {
+        const b64 = await graphToBase64PNG(cfg, 480, 280);
+        if (b64) {
+          const imgName = `graph_${imgCounter}.png`;
+          const imgPath = `${folder}/${imgName}`;
+          // store PNG in zip
+          const imgBytes = Uint8Array.from(atob(b64.replace(/^data:image\/png;base64,/, "")), c => c.charCodeAt(0));
+          zip.file(imgPath, imgBytes);
+          // replace placeholder with relative img src
+          qtiXml = qtiXml.split(`GRAPH_PLACEHOLDER_${pid}`).join(`../${imgPath}`);
+        }
+      } catch(e) {
+        console.warn("graph export failed", pid, e);
+        qtiXml = qtiXml.split(`GRAPH_PLACEHOLDER_${pid}`).join("");
+      }
+    } else {
+      qtiXml = qtiXml.split(`GRAPH_PLACEHOLDER_${pid}`).join("");
+    }
+  }
 
   const manifest = `<?xml version="1.0" encoding="UTF-8"?>
 <manifest identifier="man${assessmentId}"
@@ -1538,7 +1551,6 @@ async function buildQTIZip(qtiXml, title) {
   <show_correct_answers>false</show_correct_answers>
 </quiz>`;
 
-  const zip = new window.JSZip();
   zip.file("imsmanifest.xml", manifest);
   zip.file(qtiFile, qtiXml);
   zip.file(metaFile, meta);
@@ -1699,16 +1711,15 @@ function buildQTICompare(versions, course, useGroups=false, pointsPerQ=1) {
   const numQ = versions[0]?.questions?.length || 0;
   const vLabels = versions.map(v => v.label).join(", ");
 
-  // store graph configs keyed by question id
-  window._qtiGraphConfigs = {};
-  versions.forEach(v => v.questions.forEach(q => {
-    if (q.hasGraph && q.graphConfig) window._qtiGraphConfigs[q.id || q.question] = q.graphConfig;
+  // register graph configs
+  window._qtiGraphConfigs = window._qtiGraphConfigs || {};
+  versions.forEach(v => v.questions.forEach((q, i) => {
+    if (q.hasGraph && q.graphConfig) window._qtiGraphConfigs[`i${i}_${v.label}`] = q.graphConfig;
   }));
 
   function makeItem(q, id, pointsPer) {
-    const graphKey = q.id || q.question;
     const graphImg = (q.hasGraph && q.graphConfig)
-      ? `<img src="GRAPH_PLACEHOLDER_${graphKey}" alt="graph" style="max-width:480px;display:block;margin-bottom:8px;"/>`
+      ? `<img src="GRAPH_PLACEHOLDER_${id}" alt="graph" style="max-width:480px;display:block;margin-bottom:8px;"/>`
       : "";
     const qhtml = graphImg + mathToHTML(q.question || "");
     const isMC = q.type === "Multiple Choice" && q.choices;
@@ -1804,10 +1815,10 @@ ${groupSections.join("\n")}
 // ─── Merged All-Sections QTI: Q1 pool = S1_A + S1_B + S2_A + S2_B + ... ──────
 function buildQTIAllSectionsMerged(classSectionVersions, course, pointsPerQ=1) {
   function uid8() { return Math.random().toString(16).slice(2,10).padEnd(8,'0'); }
-  // store graph configs keyed by question id
-  window._qtiGraphConfigs = {};
-  Object.values(classSectionVersions).forEach(vers => vers.forEach(v => (v.questions||[]).forEach(q => {
-    if (q.hasGraph && q.graphConfig) window._qtiGraphConfigs[q.id || q.question] = q.graphConfig;
+  // register graph configs
+  window._qtiGraphConfigs = window._qtiGraphConfigs || {};
+  Object.values(classSectionVersions).forEach(vers => vers.forEach(v => (v.questions||[]).forEach((q,i) => {
+    if (q.hasGraph && q.graphConfig) window._qtiGraphConfigs[`m${i}`] = q.graphConfig;
   })));
 
   // Get all sections sorted
@@ -1818,9 +1829,8 @@ function buildQTIAllSectionsMerged(classSectionVersions, course, pointsPerQ=1) {
   const numQ = classSectionVersions[sortedSecs[0]]?.[0]?.questions?.length || 0;
 
   function makeItem(q, id) {
-    const graphKey = q.id || q.question;
     const graphImg = (q.hasGraph && q.graphConfig)
-      ? `<img src="GRAPH_PLACEHOLDER_${graphKey}" alt="graph" style="max-width:480px;display:block;margin-bottom:8px;"/>`
+      ? `<img src="GRAPH_PLACEHOLDER_${id}" alt="graph" style="max-width:480px;display:block;margin-bottom:8px;"/>`
       : "";
     const qhtml = graphImg + mathToHTML(q.question || "");
     const isMC = q.type === "Multiple Choice" && q.choices;
