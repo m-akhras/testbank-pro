@@ -1968,9 +1968,10 @@ async function buildDocxCompare(versions, course) {
     body += `<w:p><w:pPr><w:spacing w:after="60"/><w:pBdr><w:top w:val="single" w:sz="6" w:space="1" w:color="334155"/></w:pBdr></w:pPr></w:p>`;
     body += para(`Question ${qi+1} — ${versions[0]?.questions[qi]?.section || ""} — ${versions[0]?.questions[qi]?.difficulty || ""}`, {bold:true, size:26, color:"334155", spacing:80});
 
-    versions.forEach((v, vi) => {
+    for (let vi = 0; vi < versions.length; vi++) {
+      const v = versions[vi];
       const q = v.questions[qi];
-      if (!q) return;
+      if (!q) continue;
       const vc = vColors[vi % vColors.length];
       body += para(`Version ${v.label}`, {bold:true, size:22, color:vc, spacing:60});
       // ── graph image (buildDocxCompare) ──
@@ -1985,7 +1986,7 @@ async function buildDocxCompare(versions, course) {
         body += mathPara(`${String.fromCharCode(65+ci)}. ${c}`, {indent:360});
       });
       body += mathPara(`Answer: ${q.answer}`);
-    });
+    }
   }
 
   let documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
