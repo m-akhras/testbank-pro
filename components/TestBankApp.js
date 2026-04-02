@@ -382,10 +382,10 @@ function MathTextInline({ children }) {
 // Author-only toggles (showAxisNumbers, showGrid) are saved into graphConfig.
 function GraphDisplay({ graphConfig, authorMode = false }) {
   const ref = useRef(null);
-  const [showNumbers, setShowNumbers] = React.useState(
+  const [showNumbers, setShowNumbers] = useState(
     graphConfig?.showAxisNumbers !== false
   );
-  const [showGrid, setShowGrid] = React.useState(
+  const [showGrid, setShowGrid] = useState(
     graphConfig?.showGrid !== false
   );
 
