@@ -421,6 +421,198 @@ function GraphDisplay({ graphConfig, authorMode = false }) {
 }
 // ─── End GraphDisplay ─────────────────────────────────────────────────────────
 
+
+// ─── GraphEditor component ────────────────────────────────────────────────────
+// Author-only panel for building and attaching a graph to a question.
+// Props:
+//   initialConfig  — existing graphConfig or null
+//   onSave(config) — called with the new graphConfig
+//   onRemove()     — called to remove the graph entirely
+//   onClose()      — called to close without saving
+function GraphEditor({ initialConfig, onSave, onRemove, onClose }) {
+  const [type,        setType]        = useState(initialConfig?.type        || "single");
+  const [fn,          setFn]          = useState(initialConfig?.fn          || "x^2 - 3");
+  const [fnTop,       setFnTop]       = useState(initialConfig?.fnTop       || "x + 2");
+  const [fnBottom,    setFnBottom]    = useState(initialConfig?.fnBottom    || "x^2");
+  const [shadeFrom,   setShadeFrom]   = useState(initialConfig?.shadeFrom   ?? -1);
+  const [shadeTo,     setShadeTo]     = useState(initialConfig?.shadeTo     ?? 2);
+  const [boundary,    setBoundary]    = useState(initialConfig?.boundary    || "x^2");
+  const [shadeAbove,  setShadeAbove]  = useState(initialConfig?.shadeAbove  !== false);
+  const [boundDashed, setBoundDashed] = useState(initialConfig?.boundaryDashed !== false);
+  const [boundLabel,  setBoundLabel]  = useState(initialConfig?.boundaryLabel || "y = x²");
+  const [holes,       setHoles]       = useState(initialConfig?.holes       || []);
+  const [points,      setPoints]      = useState(initialConfig?.points      || []);
+  const [xMin,        setXMin]        = useState(initialConfig?.xDomain?.[0] ?? -5);
+  const [xMax,        setXMax]        = useState(initialConfig?.xDomain?.[1] ?? 5);
+  const [yMin,        setYMin]        = useState(initialConfig?.yDomain?.[0] ?? -5);
+  const [yMax,        setYMax]        = useState(initialConfig?.yDomain?.[1] ?? 5);
+  const [showNumbers, setShowNumbers] = useState(initialConfig?.showAxisNumbers !== false);
+  const [showGrid,    setShowGrid]    = useState(initialConfig?.showGrid !== false);
+  const [holeInput,   setHoleInput]   = useState("");
+  const [pointInput,  setPointInput]  = useState("");
+  const previewRef = useRef(null);
+
+  const buildConfig = () => {
+    const base = {
+      type, showAxisNumbers: showNumbers, showGrid,
+      xDomain: [Number(xMin), Number(xMax)],
+      yDomain: [Number(yMin), Number(yMax)],
+    };
+    if (type === "single")   return { ...base, fn, holes, points };
+    if (type === "piecewise") return { ...base, fn, holes, points }; // simplified — same as single for now
+    if (type === "area")     return { ...base, fnTop, fnBottom, shadeFrom: Number(shadeFrom), shadeTo: Number(shadeTo) };
+    if (type === "domain")   return { ...base, boundary, shadeAbove, boundaryDashed: boundDashed, boundaryLabel: boundLabel };
+    return base;
+  };
+
+  useEffect(() => {
+    if (!previewRef.current || typeof window === "undefined" || !window.d3 || !window.renderGraphToSVG) return;
+    previewRef.current.innerHTML = "";
+    try {
+      const svg = window.renderGraphToSVG(buildConfig(), previewRef.current.offsetWidth || 400, 220);
+      if (svg) { svg.style.width = "100%"; svg.style.height = "220px"; previewRef.current.appendChild(svg); }
+    } catch(e) { console.warn("preview error", e); }
+  });
+
+  const addPoint = (list, setList, input, setInput) => {
+    const parts = input.split(",").map(s => parseFloat(s.trim()));
+    if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+      setList([...list, parts]);
+      setInput("");
+    }
+  };
+
+  const inp = (val, set, placeholder, width="80px") => (
+    <input value={val} onChange={e => set(e.target.value)} placeholder={placeholder}
+      style={{width, padding:"0.2rem 0.4rem", background:"#1a1a2e", border:"1px solid #334155",
+        color:"#e8e8e0", borderRadius:"4px", fontSize:"0.78rem"}} />
+  );
+
+  const lbl = (text) => <span style={{fontSize:"0.72rem", color:"#94a3b8", marginRight:"6px"}}>{text}</span>;
+
+  const row = (children) => (
+    <div style={{display:"flex", alignItems:"center", gap:"8px", marginBottom:"0.5rem", flexWrap:"wrap"}}>
+      {children}
+    </div>
+  );
+
+  return (
+    <div style={{marginTop:"0.75rem", padding:"1rem", background:"#0f1629", border:"1px solid #1e3a5f",
+      borderRadius:"8px"}}>
+      <div style={{fontSize:"0.78rem", color:"#60a5fa", fontWeight:"600", marginBottom:"0.75rem"}}>📈 Graph Editor</div>
+
+      {/* Type selector */}
+      {row(<>
+        {lbl("Type:")}
+        {["single","area","domain"].map(t => (
+          <button key={t} onClick={() => setType(t)}
+            style={{padding:"0.2rem 0.6rem", fontSize:"0.72rem", borderRadius:"4px", cursor:"pointer",
+              background: type===t ? "#185FA5" : "transparent",
+              color: type===t ? "#fff" : "#94a3b8",
+              border: `1px solid ${type===t ? "#185FA5" : "#334155"}`}}>
+            {t === "single" ? "Single curve" : t === "area" ? "Area between curves" : "Domain sketch"}
+          </button>
+        ))}
+      </>)}
+
+      {/* Single curve inputs */}
+      {type === "single" && <>
+        {row(<>{lbl("f(x) =")} {inp(fn, setFn, "e.g. x^2 - 3", "180px")}</>)}
+        {row(<>
+          {lbl("Holes (x,y):")}
+          {inp(holeInput, setHoleInput, "e.g. 2,3", "100px")}
+          <button onClick={() => addPoint(holes, setHoles, holeInput, setHoleInput)}
+            style={{fontSize:"0.72rem", padding:"0.2rem 0.5rem", borderRadius:"4px", cursor:"pointer",
+              background:"transparent", border:"1px solid #334155", color:"#94a3b8"}}>+ Add</button>
+          {holes.map((h,i) => <span key={i} style={{fontSize:"0.7rem", color:"#60a5fa", cursor:"pointer"}}
+            onClick={() => setHoles(holes.filter((_,j)=>j!==i))}>({h[0]},{h[1]}) ✕</span>)}
+        </>)}
+        {row(<>
+          {lbl("Points (x,y):")}
+          {inp(pointInput, setPointInput, "e.g. 2,5", "100px")}
+          <button onClick={() => addPoint(points, setPoints, pointInput, setPointInput)}
+            style={{fontSize:"0.72rem", padding:"0.2rem 0.5rem", borderRadius:"4px", cursor:"pointer",
+              background:"transparent", border:"1px solid #334155", color:"#94a3b8"}}>+ Add</button>
+          {points.map((p,i) => <span key={i} style={{fontSize:"0.7rem", color:"#10b981", cursor:"pointer"}}
+            onClick={() => setPoints(points.filter((_,j)=>j!==i))}>({p[0]},{p[1]}) ✕</span>)}
+        </>)}
+      </>}
+
+      {/* Area between curves */}
+      {type === "area" && <>
+        {row(<>{lbl("f(x) top =")}    {inp(fnTop,     setFnTop,     "top curve",    "180px")}</>)}
+        {row(<>{lbl("g(x) bottom =")} {inp(fnBottom,  setFnBottom,  "bottom curve", "180px")}</>)}
+        {row(<>{lbl("Shade from x =")} {inp(shadeFrom, setShadeFrom, "-1", "60px")} {lbl("to x =")} {inp(shadeTo, setShadeTo, "2", "60px")}</>)}
+      </>}
+
+      {/* Domain sketch */}
+      {type === "domain" && <>
+        {row(<>{lbl("Boundary =")} {inp(boundary, setBoundary, "e.g. x^2", "180px")}</>)}
+        {row(<>
+          {lbl("Shade:")}
+          <button onClick={() => setShadeAbove(true)}
+            style={{fontSize:"0.72rem", padding:"0.2rem 0.5rem", borderRadius:"4px", cursor:"pointer",
+              background: shadeAbove ? "#185FA5" : "transparent", color: shadeAbove ? "#fff" : "#94a3b8",
+              border:`1px solid ${shadeAbove?"#185FA5":"#334155"}`}}>Above</button>
+          <button onClick={() => setShadeAbove(false)}
+            style={{fontSize:"0.72rem", padding:"0.2rem 0.5rem", borderRadius:"4px", cursor:"pointer",
+              background: !shadeAbove ? "#185FA5" : "transparent", color: !shadeAbove ? "#fff" : "#94a3b8",
+              border:`1px solid ${!shadeAbove?"#185FA5":"#334155"}`}}>Below</button>
+        </>)}
+        {row(<>
+          <label style={{display:"flex",alignItems:"center",gap:"6px",fontSize:"0.72rem",color:"#94a3b8",cursor:"pointer"}}>
+            <input type="checkbox" checked={boundDashed} onChange={e=>setBoundDashed(e.target.checked)} />
+            Dashed boundary (strict inequality)
+          </label>
+        </>)}
+        {row(<>{lbl("Boundary label:")} {inp(boundLabel, setBoundLabel, "y = x²", "140px")}</>)}
+      </>}
+
+      {/* Shared: domain + display */}
+      <div style={{display:"flex", gap:"12px", flexWrap:"wrap", marginBottom:"0.5rem", marginTop:"0.25rem"}}>
+        <div style={{display:"flex", alignItems:"center", gap:"6px"}}>
+          {lbl("x:")} {inp(xMin, setXMin, "-5", "44px")} <span style={{color:"#94a3b8",fontSize:"0.72rem"}}>to</span> {inp(xMax, setXMax, "5", "44px")}
+        </div>
+        <div style={{display:"flex", alignItems:"center", gap:"6px"}}>
+          {lbl("y:")} {inp(yMin, setYMin, "-5", "44px")} <span style={{color:"#94a3b8",fontSize:"0.72rem"}}>to</span> {inp(yMax, setYMax, "5", "44px")}
+        </div>
+        <label style={{display:"flex",alignItems:"center",gap:"5px",fontSize:"0.72rem",color:"#94a3b8",cursor:"pointer"}}>
+          <input type="checkbox" checked={showNumbers} onChange={e=>setShowNumbers(e.target.checked)} /> Axis numbers
+        </label>
+        <label style={{display:"flex",alignItems:"center",gap:"5px",fontSize:"0.72rem",color:"#94a3b8",cursor:"pointer"}}>
+          <input type="checkbox" checked={showGrid} onChange={e=>setShowGrid(e.target.checked)} /> Grid
+        </label>
+      </div>
+
+      {/* Live preview */}
+      <div ref={previewRef} style={{width:"100%", background:"#fff", borderRadius:"6px",
+        overflow:"hidden", marginBottom:"0.75rem", minHeight:"220px"}} />
+
+      {/* Actions */}
+      <div style={{display:"flex", gap:"8px", flexWrap:"wrap"}}>
+        <button onClick={() => onSave({ ...buildConfig(), hasGraph: true })}
+          style={{padding:"0.3rem 0.8rem", fontSize:"0.78rem", borderRadius:"4px", cursor:"pointer",
+            background:"#185FA5", color:"#fff", border:"none", fontWeight:"500"}}>
+          ✓ Save graph
+        </button>
+        {initialConfig && (
+          <button onClick={onRemove}
+            style={{padding:"0.3rem 0.8rem", fontSize:"0.78rem", borderRadius:"4px", cursor:"pointer",
+              background:"transparent", color:"#f87171", border:"1px solid #f8717144"}}>
+            ✕ Remove graph
+          </button>
+        )}
+        <button onClick={onClose}
+          style={{padding:"0.3rem 0.8rem", fontSize:"0.78rem", borderRadius:"4px", cursor:"pointer",
+            background:"transparent", color:"#94a3b8", border:"1px solid #334155"}}>
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+// ─── End GraphEditor ──────────────────────────────────────────────────────────
+
 // ─── Course data ──────────────────────────────────────────────────────────────
 const COURSES = {
   "Calculus 1": {
@@ -2406,6 +2598,7 @@ export default function TestBankApp() {
   const [filterDate, setFilterDate] = useState("All");
   const [bankSelectMode, setBankSelectMode] = useState(false);
   const [bankSelected, setBankSelected] = useState(new Set());
+  const [graphEditorQId, setGraphEditorQId] = useState(null); // which question has graph editor open
   const [qtiExamName, setQtiExamName] = useState("");
   const [showPrintPreview, setShowPrintPreview] = useState(false);
   const [dupWarnings, setDupWarnings] = useState([]);
@@ -3276,14 +3469,36 @@ export default function TestBankApp() {
                       setGeneratedPrompt(prompt);
                       setPendingType("bank_replace"); setPendingMeta({qId: q.id}); setPasteInput(""); setPasteError("");
                     }}>↻</button>
+                  <button style={{...S.smBtn, color:"#60a5fa", border:"1px solid #60a5fa44"}}
+                    onClick={() => setGraphEditorQId(graphEditorQId === q.id ? null : q.id)}>
+                    📈{q.hasGraph ? " Edit" : " Graph"}
+                  </button>
                   <button style={{...S.smBtn, color:inExam?accent:text2, border:"1px solid "+(inExam?accent+"44":border)}}
                     onClick={() => setSelectedForExam(p => p.includes(q.id) ? p.filter(id => id !== q.id) : [...p, q.id])}>
                     {inExam ? "✓ In exam" : "+ Exam"}
                   </button>
                 </div>
 
-                {q.hasGraph && q.graphConfig && (
-                  <GraphDisplay graphConfig={q.graphConfig} authorMode={true} />
+                {q.hasGraph && q.graphConfig && graphEditorQId !== q.id && (
+                  <GraphDisplay graphConfig={q.graphConfig} authorMode={false} />
+                )}
+                {graphEditorQId === q.id && (
+                  <GraphEditor
+                    initialConfig={q.graphConfig || null}
+                    onSave={async (cfg) => {
+                      const updated = { ...q, hasGraph: true, graphConfig: cfg };
+                      await saveQuestion(updated);
+                      setBank(prev => prev.map(bq => bq.id === q.id ? updated : bq));
+                      setGraphEditorQId(null);
+                    }}
+                    onRemove={async () => {
+                      const updated = { ...q, hasGraph: false, graphConfig: null };
+                      await saveQuestion(updated);
+                      setBank(prev => prev.map(bq => bq.id === q.id ? updated : bq));
+                      setGraphEditorQId(null);
+                    }}
+                    onClose={() => setGraphEditorQId(null)}
+                  />
                 )}
                 {q.type === "Branched" ? (
                   <>
