@@ -1487,45 +1487,6 @@ async function buildQTIZip(qtiXml, title) {
   const qtiFile = `${folder}/assessment_qti.xml`;
   const metaFile = `${folder}/assessment_meta.xml`;
 
-  const zip = new window.JSZip();
-
-  // ── resolve graph placeholders → PNG files inside zip ──
-  // Canvas does NOT support base64 img src — images must be files in the zip
-  const placeholderRe = /GRAPH_PLACEHOLDER_([^"]+)/g;
-  const matches = [...qtiXml.matchAll(placeholderRe)];
-  const seen = new Set();
-  let imgCounter = 0;
-  for (const m of matches) {
-    const pid = m[1];
-    if (seen.has(pid)) continue;
-    seen.add(pid);
-    let cfg = window._qtiGraphConfigs?.[pid];
-    if (!cfg && window._qtiGraphConfigs) {
-      const keys = Object.keys(window._qtiGraphConfigs);
-      if (keys.length >= 1) cfg = window._qtiGraphConfigs[keys[imgCounter] || keys[0]];
-    }
-    imgCounter++;
-    if (cfg) {
-      try {
-        const b64 = await graphToBase64PNG(cfg, 480, 280);
-        if (b64) {
-          const imgName = `graph_${imgCounter}.png`;
-          const imgPath = `${folder}/${imgName}`;
-          // store PNG in zip
-          const imgBytes = Uint8Array.from(atob(b64.replace(/^data:image\/png;base64,/, "")), c => c.charCodeAt(0));
-          zip.file(imgPath, imgBytes);
-          // replace placeholder with relative img src
-          qtiXml = qtiXml.split(`GRAPH_PLACEHOLDER_${pid}`).join(`../${imgPath}`);
-        }
-      } catch(e) {
-        console.warn("graph export failed", pid, e);
-        qtiXml = qtiXml.split(`GRAPH_PLACEHOLDER_${pid}`).join("");
-      }
-    } else {
-      qtiXml = qtiXml.split(`GRAPH_PLACEHOLDER_${pid}`).join("");
-    }
-  }
-
   const manifest = `<?xml version="1.0" encoding="UTF-8"?>
 <manifest identifier="man${assessmentId}"
   xmlns="http://www.imsglobal.org/xsd/imsccv1p1/imscp_v1p1"
@@ -1551,7 +1512,57 @@ async function buildQTIZip(qtiXml, title) {
   <show_correct_answers>false</show_correct_answers>
 </quiz>`;
 
-  zip.file("imsmanifest.xml", manifest);
+  const zip = new window.JSZip();
+
+  // ── resolve graph placeholders ──
+  // Canvas requires images as web_resources inside the zip
+  const placeholderRe = /GRAPH_PLACEHOLDER_([^"]+)/g;
+  const phMatches = [...qtiXml.matchAll(placeholderRe)];
+  const seen = new Set();
+  let imgIdx = 0;
+  const imgResourceEntries = [];
+  for (const m of phMatches) {
+    const pid = m[1];
+    if (seen.has(pid)) continue;
+    seen.add(pid);
+    let cfg = window._qtiGraphConfigs?.[pid];
+    if (!cfg && window._qtiGraphConfigs) {
+      const keys = Object.keys(window._qtiGraphConfigs);
+      if (keys.length > 0) cfg = window._qtiGraphConfigs[keys[Math.min(imgIdx, keys.length-1)]];
+    }
+    imgIdx++;
+    if (cfg) {
+      try {
+        const b64 = await graphToBase64PNG(cfg, 480, 280);
+        if (b64) {
+          const imgName = `graph_${imgIdx}.png`;
+          const imgWebPath = `web_resources/${imgName}`;
+          const imgBytes = Uint8Array.from(atob(b64.replace(/^data:image\/png;base64,/, "")), ch => ch.charCodeAt(0));
+          zip.file(imgWebPath, imgBytes);
+          imgResourceEntries.push(imgWebPath);
+          // Canvas resolves $IMS-CC-FILEBASE$ relative to the package root
+          qtiXml = qtiXml.split(`GRAPH_PLACEHOLDER_${pid}`).join(`$IMS-CC-FILEBASE$${imgWebPath}`);
+        }
+      } catch(e) {
+        console.warn("graph png failed", e);
+        qtiXml = qtiXml.split(`GRAPH_PLACEHOLDER_${pid}`).join("");
+      }
+    } else {
+      qtiXml = qtiXml.split(`GRAPH_PLACEHOLDER_${pid}`).join("");
+    }
+  }
+
+  // add image files to manifest resources
+  const imgResources = imgResourceEntries.map((p, i) =>
+    `    <resource identifier="graph_res_${i+1}" type="webcontent" href="${p}"><file href="${p}"/></resource>`
+  ).join("
+");
+
+  // patch manifest to include image resources
+  const patchedManifest = manifest.replace("</resources>", `${imgResources}
+  </resources>`);
+
+  zip.file("imsmanifest.xml", patchedManifest);
   zip.file(qtiFile, qtiXml);
   zip.file(metaFile, meta);
 
