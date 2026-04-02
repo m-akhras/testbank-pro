@@ -2262,14 +2262,50 @@ function questionSimilarity(a, b) {
   return overlap / Math.min(wordsA.size, wordsB.size);
 }
 
-function buildGeneratePrompt(course, selectedSections, sectionCounts, qType, diff) {
-  const totalQ = selectedSections.reduce((a,s)=>a+(sectionCounts[s]||3),0);
-  // Include difficulty pattern per section
-  const breakdown = selectedSections.map(s => {
-    const count = sectionCounts[s]||3;
-    const pattern = difficultyPattern(count).join(", ");
-    return `${s}: ${count} question(s) [difficulties: ${pattern}]`;
-  }).join("\n");
+function buildGeneratePrompt(course, selectedSections, sectionCounts, qType, diff, sectionConfig) {
+  // sectionConfig: { [sec]: { Easy:{count,graphType}, Medium:{count,graphType}, Hard:{count,graphType} } }
+  // fall back to legacy sectionCounts if sectionConfig not provided
+  const useCfg = sectionConfig && Object.keys(sectionConfig).length > 0;
+
+  const totalQ = useCfg
+    ? selectedSections.reduce((a,s) => {
+        const c = sectionConfig[s] || { Easy:{count:1}, Medium:{count:1}, Hard:{count:1} };
+        return a + (c.Easy.count||0) + (c.Medium.count||0) + (c.Hard.count||0);
+      }, 0)
+    : selectedSections.reduce((a,s)=>a+(sectionCounts[s]||3),0);
+
+  const breakdown = useCfg
+    ? selectedSections.map(s => {
+        const c = sectionConfig[s] || { Easy:{count:1,graphType:"normal"}, Medium:{count:1,graphType:"normal"}, Hard:{count:1,graphType:"normal"} };
+        const lines = ["Easy","Medium","Hard"]
+          .filter(d => (c[d].count||0) > 0)
+          .map(d => `  ${d}: ${c[d].count} question(s) [graphType: ${c[d].graphType}]`);
+        return `${s}:\n${lines.join("\n")}`;
+      }).join("\n")
+    : selectedSections.map(s => {
+        const count = sectionCounts[s]||3;
+        const pattern = difficultyPattern(count).join(", ");
+        return `${s}: ${count} question(s) [difficulties: ${pattern}]`;
+      }).join("\n");
+
+  const hasGraphQuestions = useCfg && selectedSections.some(s => {
+    const c = sectionConfig[s];
+    return c && ["Easy","Medium","Hard"].some(d => c[d].graphType === "graph" || c[d].graphType === "mix");
+  });
+
+  const graphInstructions = hasGraphQuestions ? `
+GRAPH QUESTIONS:
+- When graphType is "graph": the question MUST include a graphConfig field.
+- When graphType is "mix": include graphConfig only when it genuinely helps (e.g. area between curves, limits, domain questions).
+- When graphType is "normal": do NOT include graphConfig.
+- graphConfig shape depends on graph type:
+  Single curve:  {"type":"single","fn":"x^2-3","holes":[[2,3]],"points":[[2,5]],"xDomain":[-4,4],"yDomain":[-4,6],"showAxisNumbers":true,"showGrid":true}
+  Area between:  {"type":"area","fnTop":"x+2","fnBottom":"x^2","shadeFrom":-1,"shadeTo":2,"xDomain":[-3,4],"yDomain":[-1,6],"showAxisNumbers":true,"showGrid":true}
+  Domain sketch: {"type":"domain","boundary":"x^2","shadeAbove":true,"boundaryDashed":true,"boundaryLabel":"y = x²","xDomain":[-3,3],"yDomain":[-1,6],"showAxisNumbers":true,"showGrid":true}
+- Also add "hasGraph": true at the top level of the question JSON when graphConfig is present.
+- The question text should say "Based on the graph above, ..." or "Find the area of the shaded region shown."
+- Do NOT describe the graph in the question text — the graph image IS the question context.
+` : "";
   const typeInstructions = {
     "Multiple Choice": "4 choices as plain strings. answer = exact text of correct choice.",
     "True/False": 'choices = ["True","False"]. answer = "True" or "False".',
@@ -2357,7 +2393,7 @@ CRITICAL — LOGICAL NOTATION (always use these symbols, never spell out AND/OR/
     ? "You are a college professor writing a test bank for Discrete Mathematics based on Susanna Epp's Discrete Mathematics with Applications. Follow the exact question style and structure from the book — change values but not structure."
     : "You are a college math professor writing a test bank from Stewart Calculus Early Transcendentals 9th Edition.";
 
-  return `TESTBANK_GENERATE_REQUEST\nCourse: ${course}\nType: ${qType}\nTotal questions: ${totalQ}\n\nSections, counts, and required difficulties:\n${breakdown}\n\nIMPORTANT: For each section, generate questions in the EXACT difficulty order listed (Easy=E, Medium=M, Hard=H). Follow the pattern strictly.\n\nType instructions: ${typeInstructions[qType]}\n${tableInstructions}\n${courseText}\nUse plain-text math: x^2, sqrt(x), fractions, summations.\nBe rigorous, numerically specific, university-level.\nEach question must have a 'section' field with the exact section name.\nEach question must have a 'difficulty' field matching the required pattern above.\n\nReply with ONLY a valid JSON array, no markdown fences, no explanation:\n[${shape}, ...]`;
+  return `TESTBANK_GENERATE_REQUEST\nCourse: ${course}\nType: ${qType}\nTotal questions: ${totalQ}\n\nSections, counts, and difficulty/graph config:\n${breakdown}\n\nIMPORTANT: For each section, generate questions in the EXACT count and difficulty order listed. Follow the pattern strictly.\n\nType instructions: ${typeInstructions[qType]}\n${tableInstructions}${graphInstructions}\n${courseText}\nUse plain-text math: x^2, sqrt(x), fractions, summations.\nBe rigorous, numerically specific, university-level.\nEach question must have a 'section' field with the exact section name.\nEach question must have a 'difficulty' field matching the required pattern above.\n\nReply with ONLY a valid JSON array, no markdown fences, no explanation:\n[${shape}, ...]`;
 }
 
 function buildVersionPrompt(selectedQuestions, mutationType, versionLabel) {
@@ -2578,9 +2614,21 @@ export default function TestBankApp() {
   const [bankLoaded, setBankLoaded] = useState(false);
   const [course, setCourse] = useState(null);
   const [selectedSections, setSelectedSections] = useState([]);
-  const [sectionCounts, setSectionCounts] = useState({});
+  const [sectionCounts, setSectionCounts] = useState({}); // legacy — kept for compat
+  const [sectionConfig, setSectionConfig] = useState({}); // { [sec]: { Easy:{count,graphType}, Medium:{count,graphType}, Hard:{count,graphType} } }
   const [qType, setQType] = useState("Multiple Choice");
   const [diff, setDiff] = useState("Mixed");
+
+  // helper: get or init a section's config
+  function getSectionConfig(sec) {
+    return sectionConfig[sec] || { Easy:{count:1,graphType:"normal"}, Medium:{count:1,graphType:"normal"}, Hard:{count:1,graphType:"normal"} };
+  }
+  function setSectionDiff(sec, difficulty, field, value) {
+    setSectionConfig(prev => ({
+      ...prev,
+      [sec]: { ...getSectionConfig(sec), [difficulty]: { ...getSectionConfig(sec)[difficulty], [field]: value } }
+    }));
+  }
   const [pendingType, setPendingType] = useState(null);
   const [pendingMeta, setPendingMeta] = useState(null);
   const [pasteInput, setPasteInput] = useState("");
@@ -2762,7 +2810,7 @@ export default function TestBankApp() {
   }
 
   function triggerGenerate() {
-    const prompt = buildGeneratePrompt(course, selectedSections, sectionCounts, qType, diff);
+    const prompt = buildGeneratePrompt(course, selectedSections, sectionCounts, qType, diff, sectionConfig);
     setGeneratedPrompt(prompt);
     setPendingType("generate"); setPendingMeta({ course }); setPasteInput(""); setPasteError("");
   }
@@ -2807,6 +2855,7 @@ export default function TestBankApp() {
   function toggleSection(sec) {
     setSelectedSections(p => p.includes(sec) ? p.filter(s => s !== sec) : [...p, sec]);
     setSectionCounts(p => ({ ...p, [sec]: p[sec] || 3 }));
+      setSectionConfig(p => p[sec] ? p : ({ ...p, [sec]: { Easy:{count:1,graphType:"normal"}, Medium:{count:1,graphType:"normal"}, Hard:{count:1,graphType:"normal"} } }));
   }
 
   function toggleChapter(chap) {
@@ -2815,11 +2864,15 @@ export default function TestBankApp() {
     else {
       setSelectedSections(p => { const n = [...p]; chap.sections.forEach(s => { if (!n.includes(s)) n.push(s); }); return n; });
       setSectionCounts(p => { const n = { ...p }; chap.sections.forEach(s => { if (!n[s]) n[s] = 3; }); return n; });
+      setSectionConfig(p => { const n = { ...p }; chap.sections.forEach(s => { if (!n[s]) n[s] = { Easy:{count:1,graphType:"normal"}, Medium:{count:1,graphType:"normal"}, Hard:{count:1,graphType:"normal"} }; }); return n; });
     }
   }
 
   const chapters = course ? COURSES[course].chapters : [];
-  const totalQ = selectedSections.reduce((a,s) => a + (sectionCounts[s] || 3), 0);
+  const totalQ = selectedSections.reduce((a,s) => {
+    const cfg = sectionConfig[s] || { Easy:{count:1}, Medium:{count:1}, Hard:{count:1} };
+    return a + (cfg.Easy.count||0) + (cfg.Medium.count||0) + (cfg.Hard.count||0);
+  }, 0);
 
   // Get available sections — only show when a course is selected, pulled from actual bank questions
   const availableSections = filterCourse === "All"
@@ -3150,7 +3203,7 @@ export default function TestBankApp() {
                       border:"1px solid "+border, cursor:"pointer",
                       borderTop:"3px solid "+color, transition:"border-color 0.15s"
                     }}
-                    onClick={() => { setCourse(name); setSelectedSections([]); setSectionCounts({}); setScreen("generate"); }}>
+                    onClick={() => { setCourse(name); setSelectedSections([]); setSectionCounts({}); setSectionConfig({}); setScreen("generate"); }}>
                     <div style={{fontSize:"0.82rem", fontWeight:"600", color:text1, marginBottom:"0.35rem"}}>{name}</div>
                     <div style={{fontSize:"0.7rem", color:text2}}>{chapters.length} chapters</div>
                     {qCount > 0 && <div style={{fontSize:"0.68rem", color:color, marginTop:"0.3rem", fontWeight:"500"}}>{qCount} questions in bank</div>}
@@ -3205,7 +3258,7 @@ export default function TestBankApp() {
                 {Object.entries(COURSES).map(([name, { color }]) => (
                   <button key={name}
                     style={S.courseChip(color, course===name)}
-                    onClick={() => { setCourse(name); setSelectedSections([]); setSectionCounts({}); }}>
+                    onClick={() => { setCourse(name); setSelectedSections([]); setSectionCounts({}); setSectionConfig({}); }}>
                     <span style={S.courseDot(color)}/>
                     {name}
                   </button>
@@ -3229,23 +3282,37 @@ export default function TestBankApp() {
                         {chap.sections.map(sec => {
                           const sel = selectedSections.includes(sec);
                           return (
-                            <div key={sec} style={{display:"flex", alignItems:"center", gap:"0.4rem"}}>
+                            <div key={sec} style={{marginBottom:"0.5rem"}}>
                               <button style={S.sBtn(sel)} onClick={() => toggleSection(sec)}>
                                 <span style={S.chk(sel)}>{sel?"✓":""}</span>
                                 {sec}
                               </button>
-                              {sel && (
-                                <div style={{display:"flex", alignItems:"center", gap:"0.4rem", flexWrap:"wrap"}}>
-                                  <input type="number" min={1} max={20} value={sectionCounts[sec]||3}
-                                    style={{width:"48px", ...S.input, padding:"0.3rem 0.4rem", fontSize:"0.78rem"}}
-                                    onChange={e => setSectionCounts(p => ({...p,[sec]:Number(e.target.value)||1}))} />
-                                  <span style={{fontSize:"0.65rem", color:text3}}>
-                                    {difficultyPattern(sectionCounts[sec]||3).map((d,i) => (
-                                      <span key={i} style={{marginRight:"2px", color: d==="Easy"?"#10b981":d==="Medium"?"#f59e0b":"#f43f5e"}}>{d[0]}</span>
+                              {sel && (() => {
+                                const cfg = getSectionConfig(sec);
+                                const diffColors = { Easy:"#10b981", Medium:"#f59e0b", Hard:"#f43f5e" };
+                                return (
+                                  <div style={{marginTop:"0.4rem", paddingLeft:"0.75rem", borderLeft:"2px solid #334155"}}>
+                                    {["Easy","Medium","Hard"].map(diff => (
+                                      <div key={diff} style={{display:"flex", alignItems:"center", gap:"0.5rem", marginBottom:"0.3rem", flexWrap:"wrap"}}>
+                                        <span style={{fontSize:"0.68rem", color:diffColors[diff], fontWeight:"600", minWidth:"44px"}}>{diff}</span>
+                                        <input type="number" min={0} max={10} value={cfg[diff].count}
+                                          style={{width:"42px", ...S.input, padding:"0.2rem 0.3rem", fontSize:"0.75rem"}}
+                                          onChange={e => setSectionDiff(sec, diff, "count", Number(e.target.value)||0)} />
+                                        <span style={{fontSize:"0.65rem", color:text3}}>q</span>
+                                        {["normal","graph","mix"].map(gt => (
+                                          <button key={gt} onClick={() => setSectionDiff(sec, diff, "graphType", gt)}
+                                            style={{padding:"0.15rem 0.4rem", fontSize:"0.65rem", borderRadius:"3px", cursor:"pointer",
+                                              background: cfg[diff].graphType===gt ? (gt==="graph"?"#1D9E75":gt==="mix"?"#8b5cf6":"#334155") : "transparent",
+                                              color: cfg[diff].graphType===gt ? "#fff" : text3,
+                                              border:`1px solid ${cfg[diff].graphType===gt?(gt==="graph"?"#1D9E75":gt==="mix"?"#8b5cf6":"#475569"):"#334155"}`}}>
+                                            {gt==="normal"?"Text":gt==="graph"?"Graph":"Mix"}
+                                          </button>
+                                        ))}
+                                      </div>
                                     ))}
-                                  </span>
-                                </div>
-                              )}
+                                  </div>
+                                );
+                              })()}
                             </div>
                           );
                         })}
@@ -3256,18 +3323,12 @@ export default function TestBankApp() {
               </div>
             )}
 
-            {/* Type & Difficulty */}
+            {/* Question Type */}
             <div style={S.row}>
               <div style={S.field}>
                 <label style={S.lbl}>Question Type</label>
                 <select style={S.sel} value={qType} onChange={e => setQType(e.target.value)}>
                   {QTYPES.map(t => <option key={t}>{t}</option>)}
-                </select>
-              </div>
-              <div style={S.field}>
-                <label style={S.lbl}>Difficulty</label>
-                <select style={S.sel} value={diff} onChange={e => setDiff(e.target.value)}>
-                  {DIFFICULTIES.map(d => <option key={d}>{d}</option>)}
                 </select>
               </div>
             </div>
