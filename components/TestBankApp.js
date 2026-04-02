@@ -1555,12 +1555,10 @@ async function buildQTIZip(qtiXml, title) {
   // add image files to manifest resources
   const imgResources = imgResourceEntries.map((p, i) =>
     `    <resource identifier="graph_res_${i+1}" type="webcontent" href="${p}"><file href="${p}"/></resource>`
-  ).join("
-");
+  ).join("\n");
 
   // patch manifest to include image resources
-  const patchedManifest = manifest.replace("</resources>", `${imgResources}
-  </resources>`);
+  const patchedManifest = manifest.replace("</resources>", imgResources + "\n  </resources>");
 
   zip.file("imsmanifest.xml", patchedManifest);
   zip.file(qtiFile, qtiXml);
