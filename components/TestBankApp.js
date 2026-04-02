@@ -1250,35 +1250,18 @@ function mathToOmml(raw) {
 
 // ─── Build proper .docx file ──────────────────────────────────────────────────
 // ── Word image XML helper (used by both buildDocx and buildDocxCompare) ──────
+let _docxImgCounter = 0;
 function makeDocxImageXml(base64png, widthEmu=4800000, heightEmu=2800000) {
+  _docxImgCounter++;
   const b64 = base64png.replace(/^data:image\/png;base64,/, "");
-  const rid  = "rImg1";
-  return `<w:p><w:pPr><w:spacing w:after="120"/></w:pPr><w:r><w:drawing>
-  <wp:inline xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing">
-    <wp:extent cx="${widthEmu}" cy="${heightEmu}"/>
-    <wp:effectExtent l="0" t="0" r="0" b="0"/>
-    <wp:docPr id="1" name="Graph"/>
-    <a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
-      <a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">
-        <pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">
-          <pic:nvPicPr><pic:cNvPr id="1" name="Graph"/><pic:cNvPicPr/></pic:nvPicPr>
-          <pic:blipFill>
-            <a:blip r:embed="${rid}"/>
-            <a:stretch><a:fillRect/></a:stretch>
-          </pic:blipFill>
-          <pic:spPr>
-            <a:xfrm><a:off x="0" y="0"/><a:ext cx="${widthEmu}" cy="${heightEmu}"/></a:xfrm>
-            <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
-          </pic:spPr>
-        </pic:pic>
-      </a:graphicData>
-    </a:graphic>
-  </wp:inline>
-</w:drawing></w:r></w:p>
+  const rid  = `rImg${_docxImgCounter}`;
+  const docId = _docxImgCounter;
+  return `<w:p><w:pPr><w:spacing w:after="120"/></w:pPr><w:r><w:drawing><wp:inline xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${widthEmu}" cy="${heightEmu}"/><wp:effectExtent l="0" t="0" r="0" b="0"/><wp:docPr id="${docId}" name="Graph${docId}"/><wp:cNvGraphicFramePr><a:graphicFrameLocks xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" noChangeAspect="1"/></wp:cNvGraphicFramePr><a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:nvPicPr><pic:cNvPr id="${docId}" name="Graph${docId}"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="${rid}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${widthEmu}" cy="${heightEmu}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>
 <GRAPH_REL_PLACEHOLDER rid="${rid}" b64="${b64}"/>`;
 }
 
 async function buildDocx(questions, course, vLabel, classSection=null) {
+  _docxImgCounter = 0; // reset per export
   // We build the docx XML manually for full math support
   const ns = `xmlns:wpc="http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:wp14="http://schemas.microsoft.com/office/word/2010/wordprocessingDrawing" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:w10="urn:schemas-microsoft-com:office:word" xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml" xmlns:wpg="http://schemas.microsoft.com/office/word/2010/wordprocessingGroup" xmlns:wpi="http://schemas.microsoft.com/office/word/2010/wordprocessingInk" xmlns:wne="http://schemas.microsoft.com/office/word/2006/wordml" xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape"`;
 
@@ -1378,7 +1361,6 @@ async function buildDocx(questions, course, vLabel, classSection=null) {
   // Title
   const titleLabel = classSection ? `Section ${classSection} — Version ${vLabel}` : `Exam Version ${vLabel}`;
   body += para(`${course} — ${titleLabel}`, {bold:true, size:32, spacing:120});
-  body += para("Stewart: Early Transcendentals, 9th Edition", {size:22, color:"555555", spacing:200});
 
   for (let i = 0; i < questions.length; i++) {
     const q = questions[i];
@@ -1710,6 +1692,12 @@ function buildQTICompare(versions, course, useGroups=false, pointsPerQ=1) {
   const numQ = versions[0]?.questions?.length || 0;
   const vLabels = versions.map(v => v.label).join(", ");
 
+  // register graph configs
+  window._qtiGraphConfigs = window._qtiGraphConfigs || {};
+  versions.forEach(v => v.questions.forEach((q, i) => {
+    if (q.hasGraph && q.graphConfig) window._qtiGraphConfigs[`i${i}_${v.label}`] = q.graphConfig;
+  }));
+
   function makeItem(q, id, pointsPer) {
     const graphImg = (q.hasGraph && q.graphConfig)
       ? `<img src="GRAPH_PLACEHOLDER_${id}" alt="graph" style="max-width:480px;display:block;margin-bottom:8px;"/>`
@@ -1808,6 +1796,11 @@ ${groupSections.join("\n")}
 // ─── Merged All-Sections QTI: Q1 pool = S1_A + S1_B + S2_A + S2_B + ... ──────
 function buildQTIAllSectionsMerged(classSectionVersions, course, pointsPerQ=1) {
   function uid8() { return Math.random().toString(16).slice(2,10).padEnd(8,'0'); }
+  // register graph configs
+  window._qtiGraphConfigs = window._qtiGraphConfigs || {};
+  Object.values(classSectionVersions).forEach(vers => vers.forEach(v => (v.questions||[]).forEach((q,i) => {
+    if (q.hasGraph && q.graphConfig) window._qtiGraphConfigs[`m${i}`] = q.graphConfig;
+  })));
 
   // Get all sections sorted
   const sortedSecs = Object.keys(classSectionVersions).sort((a,b) => Number(a)-Number(b));
@@ -1898,6 +1891,7 @@ ${groupSections.join("\n")}
 }
 
 async function buildDocxCompare(versions, course) {
+  _docxImgCounter = 0; // reset per export
   const ns = `xmlns:wpc="http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math" xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml"`;
 
   function para(text, opts={}) {
