@@ -4627,7 +4627,7 @@ export default function TestBankApp() {
           }).join("")}`;
 
         return (
-          <div style={{position:"fixed", inset:0, background:"rgba(0,0,0,0.88)", zIndex:9999, display:"flex", flexDirection:"column"}}>
+          <div style={{position:"fixed", top:0, left:0, right:0, bottom:0, width:"100vw", height:"100vh", background:"rgba(0,0,0,0.95)", zIndex:99999, display:"flex", flexDirection:"column", overflow:"hidden"}}>
             {/* Top bar */}
             <div style={{background:"#111827", borderBottom:"1px solid #1e2d45", padding:"0.65rem 1.5rem", display:"flex", alignItems:"center", gap:"1rem", flexShrink:0}}>
               <span style={{fontSize:"0.85rem", fontWeight:"600", color:"#f0f4ff", flex:1}}>
