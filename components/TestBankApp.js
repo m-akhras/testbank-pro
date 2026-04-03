@@ -1076,7 +1076,13 @@ function renderGraphToSVG(graphConfig, width = 480, height = 300) {
   const yScale = d3.scaleLinear().domain(yDom).range([iH, 0]);
 
   const svg = d3.select(svgNode);
-  const g   = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+  // Define clip path so curves are clipped cleanly at plot edges
+  const clipId = `clip_${Math.random().toString(36).slice(2,8)}`;
+  svg.append("defs").append("clipPath").attr("id", clipId)
+    .append("rect").attr("x", 0).attr("y", 0).attr("width", iW).attr("height", iH);
+  const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+  // curves group with clip applied
+  const gClip = g.append("g").attr("clip-path", `url(#${clipId})`);
 
   // hardcoded colours — CSS vars won't resolve in detached/offscreen SVG
   const COL = {
@@ -1140,13 +1146,11 @@ function renderGraphToSVG(graphConfig, width = 480, height = 300) {
       .map(x => [x, evalFn(fnExpr, x)])
       .filter(([, y]) => isFinite(y));
     if (!pts.length) return;
-    // clamp y to viewport — never filter out points, just clamp position
-    // this ensures linear functions always draw end-to-end
     const line = d3.line()
       .x(d => xScale(d[0]))
-      .y(d => yScale(Math.max(yDom[0] - (yDom[1]-yDom[0])*0.1, Math.min(yDom[1] + (yDom[1]-yDom[0])*0.1, d[1]))))
+      .y(d => yScale(d[1]))
       .defined(d => isFinite(d[1]));
-    g.append("path").datum(pts).attr("d", line)
+    gClip.append("path").datum(pts).attr("d", line)
       .attr("fill", "none").attr("stroke", color || COL.blue).attr("stroke-width", 2.5)
       .attr("stroke-dasharray", dashed ? "6,4" : "none");
   }
@@ -1174,7 +1178,7 @@ function renderGraphToSVG(graphConfig, width = 480, height = 300) {
     }).filter(Boolean);
     if (!topPts.length || !botPts.length) return;
     const poly = [...topPts, ...[...botPts].reverse()];
-    g.append("polygon").attr("points", poly.map(p => `${p.x},${p.y}`).join(" "))
+    gClip.append("polygon").attr("points", poly.map(p => `${p.x},${p.y}`).join(" "))
       .attr("fill", fillColor || COL.shade).attr("fill-opacity", 0.25).attr("stroke", "none");
   }
 
@@ -1191,7 +1195,7 @@ function renderGraphToSVG(graphConfig, width = 480, height = 300) {
       const allPts = allXs.map(x => ({ x: xScale(x), y: yScale(evalFn(boundaryFnExpr, x)) }));
       poly = [...allPts, { x: xScale(xEdge), y: yScale(0) }, { x: xScale(-xEdge), y: yScale(0) }];
     }
-    g.append("polygon").attr("points", poly.map(p => `${p.x},${p.y}`).join(" "))
+    gClip.append("polygon").attr("points", poly.map(p => `${p.x},${p.y}`).join(" "))
       .attr("fill", COL.green).attr("fill-opacity", 0.22).attr("stroke", "none");
   }
 
@@ -1260,10 +1264,14 @@ function renderGraphToSVG(graphConfig, width = 480, height = 300) {
       const bPts = d3.range(-xEdge - 0.1, xEdge + 0.11, xEdge / 120)
         .filter(x => !opt.halfX || x >= 0)
         .map(x => [x, evalFn(cfg.boundary, x)]);
+      const miniClipId = `miniclip_${Math.random().toString(36).slice(2,8)}`;
+      cell.append("defs").append("clipPath").attr("id", miniClipId)
+        .append("rect").attr("x", mm.left).attr("y", mm.top).attr("width", mW).attr("height", mH);
       const lineGen = d3.line().x(d => mx(d[0])).y(d => my(d[1])).defined(d => isFinite(d[1]));
       inn.append("path").datum(bPts).attr("d", lineGen)
         .attr("fill", "none").attr("stroke", COL.red).attr("stroke-width", 1.8)
-        .attr("stroke-dasharray", opt.dashed ? "5,3" : "none");
+        .attr("stroke-dasharray", opt.dashed ? "5,3" : "none")
+        .attr("clip-path", `url(#${miniClipId})`);
     });
     return svgNode;
   }
@@ -1335,8 +1343,12 @@ function renderGraphToSVG(graphConfig, width = 480, height = 300) {
     drawShadePolygon(actualTop, actualBot, x0, x1, COL.shade);
     drawCurve(actualTop, null, COL.blue, false);
     drawCurve(actualBot, null, COL.red,  false);
+    // Only draw intersection dot if the two curves are actually equal at that x
     [[x0, evalFn(actualTop, x0)], [x1, evalFn(actualTop, x1)]].forEach(([x, y]) => {
-      if (isFinite(y)) drawFilledDot(x, y, COL.text);
+      const yTop = evalFn(actualTop, x);
+      const yBot = evalFn(actualBot, x);
+      const isRealIntersection = isFinite(yTop) && isFinite(yBot) && Math.abs(yTop - yBot) < (yDom[1]-yDom[0]) * 0.06;
+      if (isRealIntersection) drawFilledDot(x, y, COL.text);
     });
     if (showLabel) {
       // label top curve — try right of shaded region first, fallback to left
