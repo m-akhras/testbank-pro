@@ -1091,11 +1091,12 @@ function renderGraphToSVG(graphConfig, width = 480, height = 300) {
       .map(x => [x, evalFn(fnExpr, x)])
       .filter(([, y]) => isFinite(y));
     if (!pts.length) return;
-    // split into segments when y goes far out of range (discontinuities)
+    // clamp y to viewport — never filter out points, just clamp position
+    // this ensures linear functions always draw end-to-end
     const line = d3.line()
       .x(d => xScale(d[0]))
-      .y(d => yScale(Math.max(yDom[0] - 1, Math.min(yDom[1] + 1, d[1]))))
-      .defined(d => isFinite(d[1]) && d[1] >= yDom[0] - 2 && d[1] <= yDom[1] + 2);
+      .y(d => yScale(Math.max(yDom[0] - (yDom[1]-yDom[0])*0.1, Math.min(yDom[1] + (yDom[1]-yDom[0])*0.1, d[1]))))
+      .defined(d => isFinite(d[1]));
     g.append("path").datum(pts).attr("d", line)
       .attr("fill", "none").attr("stroke", color || COL.blue).attr("stroke-width", 2.5)
       .attr("stroke-dasharray", dashed ? "6,4" : "none");
