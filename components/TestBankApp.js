@@ -1152,12 +1152,12 @@ function renderGraphToSVG(graphConfig, width = 480, height = 300) {
   }
 
   function drawOpenCircle(x, y, color) {
-    g.append("circle").attr("cx", xScale(x)).attr("cy", yScale(y)).attr("r", 6)
-      .attr("fill", "white").attr("stroke", color || COL.blue).attr("stroke-width", 2.5);
+    g.append("circle").attr("cx", xScale(x)).attr("cy", yScale(y)).attr("r", 4)
+      .attr("fill", "white").attr("stroke", color || COL.blue).attr("stroke-width", 2);
   }
 
   function drawFilledDot(x, y, color) {
-    g.append("circle").attr("cx", xScale(x)).attr("cy", yScale(y)).attr("r", 6)
+    g.append("circle").attr("cx", xScale(x)).attr("cy", yScale(y)).attr("r", 4)
       .attr("fill", color || COL.blue).attr("stroke", "none");
   }
 
@@ -1353,18 +1353,26 @@ function renderGraphToSVG(graphConfig, width = 480, height = 300) {
         }
       };
       // Smart label placement — follow each curve in both x and y
-      // Find a good x where both curves are well inside the plot
-      const labelCandidates = [0.75, 0.65, 0.55, 0.85, 0.45];
+      // Avoid intersection points (shadeFrom, shadeTo) and find where curves have good gap
+      const intersections = [x0, x1]; // don't label near these
+      const avoidRadius = (x1 - x0) * 0.12; // stay this far from intersections
+
+      const labelCandidates = [0.75, 0.60, 0.50, 0.85, 0.40, 0.30, 0.90];
       let lxLabel = xDom[0] + (xDom[1] - xDom[0]) * 0.75;
       for (const frac of labelCandidates) {
         const xTry = xDom[0] + (xDom[1] - xDom[0]) * frac;
+        // skip if too close to an intersection
+        const nearIntersection = intersections.some(ix => Math.abs(xTry - ix) < avoidRadius);
+        if (nearIntersection) continue;
         const yT = evalFn(actualTop, xTry);
         const yB = evalFn(actualBot, xTry);
+        const gap = Math.abs(yT - yB);
         if (isFinite(yT) && isFinite(yB) &&
-            yT >= yDom[0] + (yDom[1]-yDom[0])*0.1 &&
-            yT <= yDom[1] - (yDom[1]-yDom[0])*0.1 &&
-            yB >= yDom[0] + (yDom[1]-yDom[0])*0.05 &&
-            yB <= yDom[1] - (yDom[1]-yDom[0])*0.05) {
+            gap > (yDom[1]-yDom[0]) * 0.06 && // need visible gap between curves
+            yT >= yDom[0] + (yDom[1]-yDom[0])*0.05 &&
+            yT <= yDom[1] - (yDom[1]-yDom[0])*0.05 &&
+            yB >= yDom[0] + (yDom[1]-yDom[0])*0.02 &&
+            yB <= yDom[1] - (yDom[1]-yDom[0])*0.02) {
           lxLabel = xTry;
           break;
         }
