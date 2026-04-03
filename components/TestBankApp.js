@@ -448,6 +448,10 @@ function GraphEditor({ initialConfig, onSave, onRemove, onClose }) {
   const [yMax,        setYMax]        = useState(initialConfig?.yDomain?.[1] ?? 5);
   const [showNumbers, setShowNumbers] = useState(initialConfig?.showAxisNumbers !== false);
   const [showGrid,    setShowGrid]    = useState(initialConfig?.showGrid !== false);
+  const [fnLabel,     setFnLabel]     = useState(initialConfig?.fnLabel     || "");
+  const [fnTopLabel,  setFnTopLabel]  = useState(initialConfig?.fnTopLabel  || "");
+  const [fnBottomLabel,setFnBottomLabel] = useState(initialConfig?.fnBottomLabel || "");
+  const [showFnLabel, setShowFnLabel] = useState(initialConfig?.showFnLabel !== false);
   const [holeInput,   setHoleInput]   = useState("");
   const [pointInput,  setPointInput]  = useState("");
   const previewRef = useRef(null);
@@ -458,10 +462,10 @@ function GraphEditor({ initialConfig, onSave, onRemove, onClose }) {
       xDomain: [Number(xMin), Number(xMax)],
       yDomain: [Number(yMin), Number(yMax)],
     };
-    if (type === "single")   return { ...base, fn, holes, points };
-    if (type === "piecewise") return { ...base, fn, holes, points }; // simplified — same as single for now
-    if (type === "area")     return { ...base, fnTop, fnBottom, shadeFrom: Number(shadeFrom), shadeTo: Number(shadeTo) };
-    if (type === "domain")   return { ...base, boundary, shadeAbove, boundaryDashed: boundDashed, boundaryLabel: boundLabel };
+    if (type === "single")   return { ...base, fn, fnLabel: fnLabel||undefined, showFnLabel, holes, points };
+    if (type === "piecewise") return { ...base, fn, fnLabel: fnLabel||undefined, showFnLabel, holes, points };
+    if (type === "area")     return { ...base, fnTop, fnBottom, fnTopLabel: fnTopLabel||undefined, fnBottomLabel: fnBottomLabel||undefined, showFnLabel, shadeFrom: Number(shadeFrom), shadeTo: Number(shadeTo) };
+    if (type === "domain")   return { ...base, boundary, shadeAbove, boundaryDashed: boundDashed, boundaryLabel: boundLabel, showFnLabel };
     return base;
   };
 
@@ -519,6 +523,12 @@ function GraphEditor({ initialConfig, onSave, onRemove, onClose }) {
       {type === "single" && <>
         {row(<>{lbl("f(x) =")} {inp(fn, setFn, "e.g. x^2 - 3", "180px")}</>)}
         {row(<>
+          {lbl("Label:")} {inp(fnLabel, setFnLabel, "e.g. f(x) = x²-3", "160px")}
+          <label style={{display:"flex",alignItems:"center",gap:"5px",fontSize:"0.72rem",color:"#94a3b8",cursor:"pointer"}}>
+            <input type="checkbox" checked={showFnLabel} onChange={e=>setShowFnLabel(e.target.checked)} /> Show label
+          </label>
+        </>)}
+        {row(<>
           {lbl("Holes (x,y):")}
           {inp(holeInput, setHoleInput, "e.g. 2,3", "100px")}
           <button onClick={() => addPoint(holes, setHoles, holeInput, setHoleInput)}
@@ -540,9 +550,13 @@ function GraphEditor({ initialConfig, onSave, onRemove, onClose }) {
 
       {/* Area between curves */}
       {type === "area" && <>
-        {row(<>{lbl("f(x) top =")}    {inp(fnTop,     setFnTop,     "top curve",    "180px")}</>)}
-        {row(<>{lbl("g(x) bottom =")} {inp(fnBottom,  setFnBottom,  "bottom curve", "180px")}</>)}
-        {row(<>{lbl("Shade from x =")} {inp(shadeFrom, setShadeFrom, "-1", "60px")} {lbl("to x =")} {inp(shadeTo, setShadeTo, "2", "60px")}</>)}
+        {row(<>{lbl("f(x) top =")}    {inp(fnTop,     setFnTop,     "top curve",    "160px")} {lbl("label:")} {inp(fnTopLabel,    setFnTopLabel,    "f(x)", "80px")}</>)}
+        {row(<>{lbl("g(x) bottom =")} {inp(fnBottom,  setFnBottom,  "bottom curve", "160px")} {lbl("label:")} {inp(fnBottomLabel, setFnBottomLabel, "g(x)", "80px")}</>)}
+        {row(<>{lbl("Shade from x =")} {inp(shadeFrom, setShadeFrom, "-1", "60px")} {lbl("to x =")} {inp(shadeTo, setShadeTo, "2", "60px")}
+          <label style={{display:"flex",alignItems:"center",gap:"5px",fontSize:"0.72rem",color:"#94a3b8",cursor:"pointer"}}>
+            <input type="checkbox" checked={showFnLabel} onChange={e=>setShowFnLabel(e.target.checked)} /> Show labels
+          </label>
+        </>)}
       </>}
 
       {/* Domain sketch */}
@@ -1129,15 +1143,38 @@ function renderGraphToSVG(graphConfig, width = 480, height = 300) {
   drawAxes();
   drawAxisNumbers();
 
+  const showLabel = cfg.showFnLabel !== false; // default true
+
   if (cfg.type === "single") {
     drawCurve(cfg.fn, null, COL.blue, false);
     (cfg.holes  || []).forEach(([x, y]) => drawOpenCircle(x, y, COL.blue));
     (cfg.points || []).forEach(([x, y]) => drawFilledDot(x, y, COL.blue));
+    if (showLabel && cfg.fn) {
+      const lx = xDom[0] + (xDom[1] - xDom[0]) * 0.78;
+      const ly = evalFn(cfg.fn, lx);
+      if (isFinite(ly) && ly >= yDom[0] && ly <= yDom[1]) {
+        g.append("text").attr("x", xScale(lx)).attr("y", yScale(ly) - 10)
+          .attr("fill", COL.blue).attr("font-size", 12).attr("font-style", "italic").attr("font-family", "sans-serif")
+          .text(cfg.fnLabel || "f(x)");
+      }
+    }
 
   } else if (cfg.type === "piecewise") {
     (cfg.pieces || []).forEach(p => drawCurve(p.fn, p.domain, COL.blue, false));
     (cfg.holes  || []).forEach(([x, y]) => drawOpenCircle(x, y, COL.blue));
     (cfg.points || []).forEach(([x, y]) => drawFilledDot(x, y, COL.blue));
+    if (showLabel) {
+      const lastPiece = (cfg.pieces || []).slice(-1)[0];
+      if (lastPiece) {
+        const lx = (lastPiece.domain?.[1] || xDom[1]) * 0.85;
+        const ly = evalFn(lastPiece.fn, lx);
+        if (isFinite(ly) && ly >= yDom[0] && ly <= yDom[1]) {
+          g.append("text").attr("x", xScale(lx)).attr("y", yScale(ly) - 10)
+            .attr("fill", COL.blue).attr("font-size", 12).attr("font-style", "italic").attr("font-family", "sans-serif")
+            .text(cfg.fnLabel || "f(x)");
+        }
+      }
+    }
 
   } else if (cfg.type === "area") {
     const x0 = cfg.shadeFrom ?? xDom[0];
@@ -1146,19 +1183,25 @@ function renderGraphToSVG(graphConfig, width = 480, height = 300) {
     drawCurve(cfg.fnTop,    null, COL.blue, false);
     drawCurve(cfg.fnBottom, null, COL.red,  false);
     [[x0, evalFn(cfg.fnTop, x0)], [x1, evalFn(cfg.fnTop, x1)]].forEach(([x, y]) => drawFilledDot(x, y, COL.text));
-    const midX = xDom[0] + (xDom[1] - xDom[0]) * 0.7;
-    g.append("text").attr("x", xScale(midX)).attr("y", yScale(evalFn(cfg.fnTop,    midX)) - 10)
-      .attr("fill", COL.blue).attr("font-size", 13).attr("font-style", "italic").attr("font-family", "sans-serif").text("f(x)");
-    g.append("text").attr("x", xScale(midX)).attr("y", yScale(evalFn(cfg.fnBottom, midX)) + 18)
-      .attr("fill", COL.red).attr("font-size", 13).attr("font-style", "italic").attr("font-family", "sans-serif").text("g(x)");
+    if (showLabel) {
+      const midX = xDom[0] + (xDom[1] - xDom[0]) * 0.7;
+      g.append("text").attr("x", xScale(midX)).attr("y", yScale(evalFn(cfg.fnTop,    midX)) - 10)
+        .attr("fill", COL.blue).attr("font-size", 12).attr("font-style", "italic").attr("font-family", "sans-serif")
+        .text(cfg.fnTopLabel || "f(x)");
+      g.append("text").attr("x", xScale(midX)).attr("y", yScale(evalFn(cfg.fnBottom, midX)) + 18)
+        .attr("fill", COL.red).attr("font-size", 12).attr("font-style", "italic").attr("font-family", "sans-serif")
+        .text(cfg.fnBottomLabel || "g(x)");
+    }
 
   } else if (cfg.type === "domain") {
     drawDomainShade(cfg.boundary, cfg.shadeAbove !== false, false);
     drawCurve(cfg.boundary, null, COL.red, cfg.boundaryDashed !== false);
-    const labelX = xDom[0] + (xDom[1] - xDom[0]) * 0.65;
-    g.append("text").attr("x", xScale(labelX)).attr("y", yScale(evalFn(cfg.boundary, labelX)) + 18)
-      .attr("fill", COL.red).attr("font-size", 13).attr("font-style", "italic").attr("font-family", "sans-serif")
-      .text(cfg.boundaryLabel || "boundary");
+    if (showLabel) {
+      const labelX = xDom[0] + (xDom[1] - xDom[0]) * 0.65;
+      g.append("text").attr("x", xScale(labelX)).attr("y", yScale(evalFn(cfg.boundary, labelX)) + 18)
+        .attr("fill", COL.red).attr("font-size", 12).attr("font-style", "italic").attr("font-family", "sans-serif")
+        .text(cfg.boundaryLabel || "boundary");
+    }
   }
 
   return svgNode;
@@ -1448,7 +1491,7 @@ function makeDocxImageXml(base64png, widthEmu=4800000, heightEmu=2800000) {
   const b64 = base64png.replace(/^data:image\/png;base64,/, "");
   const rid  = `rImg${_docxImgCounter}`;
   const docId = _docxImgCounter;
-  return `<w:p><w:pPr><w:spacing w:after="120"/></w:pPr><w:r><w:drawing><wp:inline xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${widthEmu}" cy="${heightEmu}"/><wp:effectExtent l="0" t="0" r="0" b="0"/><wp:docPr id="${docId}" name="Graph${docId}"/><wp:cNvGraphicFramePr><a:graphicFrameLocks xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" noChangeAspect="1"/></wp:cNvGraphicFramePr><a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:nvPicPr><pic:cNvPr id="${docId}" name="Graph${docId}"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="${rid}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${widthEmu}" cy="${heightEmu}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>
+  return `<w:p><w:pPr><w:spacing w:after="120"/></w:pPr><w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${widthEmu}" cy="${heightEmu}"/><wp:effectExtent l="0" t="0" r="0" b="0"/><wp:docPr id="${docId}" name="Graph${docId}"/><wp:cNvGraphicFramePr><a:graphicFrameLocks noChangeAspect="1"/></wp:cNvGraphicFramePr><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic><pic:nvPicPr><pic:cNvPr id="${docId}" name="Graph${docId}"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="${rid}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${widthEmu}" cy="${heightEmu}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>
 <GRAPH_REL_PLACEHOLDER rid="${rid}" b64="${b64}"/>`;
 }
 
@@ -2632,8 +2675,28 @@ export default function TestBankApp() {
   const [bankSelectMode, setBankSelectMode] = useState(false);
   const [bankSelected, setBankSelected] = useState(new Set());
   const [graphEditorQId, setGraphEditorQId] = useState(null); // which question has graph editor open
+
+  // Pre-render graphs for print preview
+  useEffect(() => {
+    if (!showPrintPreview) return;
+    const v = versions[activeVersion];
+    if (!v) return;
+    const graphQs = v.questions.filter(q => q.hasGraph && q.graphConfig);
+    if (!graphQs.length) return;
+    (async () => {
+      const cache = {};
+      for (const q of graphQs) {
+        try {
+          const b64 = await graphToBase64PNG(q.graphConfig, 480, 280);
+          if (b64) cache[q.id || v.questions.indexOf(q)] = b64;
+        } catch(e) { console.warn("print graph failed", e); }
+      }
+      setPrintGraphCache(cache);
+    })();
+  }, [showPrintPreview, activeVersion]);
   const [qtiExamName, setQtiExamName] = useState("");
   const [showPrintPreview, setShowPrintPreview] = useState(false);
+  const [printGraphCache, setPrintGraphCache] = useState({});
   const [dupWarnings, setDupWarnings] = useState([]);
   const [saveExamName, setSaveExamName] = useState("");
   const [savingExam, setSavingExam] = useState(false);
@@ -4110,6 +4173,9 @@ export default function TestBankApp() {
                                 onClick={() => triggerReplace(activeVersion,qi,"function")}>↻ Diff. Function</button>
                             </div>
                           </div>
+                          {q.hasGraph && q.graphConfig && (
+                            <GraphDisplay graphConfig={q.graphConfig} authorMode={false} />
+                          )}
                           {q.type==="Branched" ? (
                             <>
                               <div style={{...S.qText,color:"#f43f5e99"}}>Given: <MathText>{q.stem}</MathText></div>
@@ -4278,13 +4344,20 @@ export default function TestBankApp() {
         const courseName = v.questions[0]?.course || "Exam";
         const titleLabel = cs ? `Section ${cs} — Version ${v.label}` : `Version ${v.label}`;
 
+        // Use stored graph b64 if available (set async below), else placeholder
+        const graphB64Cache = printGraphCache;
+
         const printHTML = `
           <h2 style="font-size:16pt;margin-bottom:4pt;">${courseName} — ${titleLabel}</h2>
           <div style="font-size:10pt;color:#555;margin-bottom:20pt;">Name: _________________________ &nbsp;&nbsp; Date: _____________</div>
           ${v.questions.map((q, qi) => {
+            const graphImg = (q.hasGraph && q.graphConfig && graphB64Cache[q.id||qi])
+              ? `<img src="${graphB64Cache[q.id||qi]}" style="max-width:100%;display:block;margin-bottom:8pt;" />`
+              : (q.hasGraph ? `<div style="width:100%;height:200pt;border:1px solid #ccc;margin-bottom:8pt;display:flex;align-items:center;justify-content:center;color:#999;font-size:10pt;">[Graph]</div>` : "");
             if (q.type === "Branched") return `
               <div style="margin-bottom:20pt;page-break-inside:avoid;">
                 <div style="font-weight:bold;margin-bottom:4pt;">Question ${qi+1}.</div>
+                ${graphImg}
                 <div style="margin-bottom:8pt;">Given: ${q.stem}</div>
                 ${(q.parts||[]).map((p,pi) => `
                   <div style="margin-left:20pt;margin-bottom:6pt;">
@@ -4295,6 +4368,7 @@ export default function TestBankApp() {
             return `
               <div style="margin-bottom:20pt;page-break-inside:avoid;">
                 <div style="font-weight:bold;margin-bottom:4pt;">Question ${qi+1}.</div>
+                ${graphImg}
                 <div style="margin-bottom:8pt;">${q.question}</div>
                 ${q.choices ? q.choices.map((c,ci) => `
                   <div style="margin:3pt 0 3pt 24pt;">${String.fromCharCode(65+ci)}.&nbsp; ${c}</div>`).join("") : ""}
