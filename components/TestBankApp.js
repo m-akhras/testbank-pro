@@ -1352,17 +1352,52 @@ function renderGraphToSVG(graphConfig, width = 480, height = 300) {
           }
         }
       };
-      const lyTopR = evalFn(actualTop, lxRight);
-      if (isFinite(lyTopR) && lyTopR >= yDom[0] && lyTopR <= yDom[1]) {
-        g.append("text").attr("x", xScale(lxRight)).attr("y", yScale(lyTopR) - 8)
-          .attr("fill", COL.blue).attr("font-size", 12).attr("font-style", "italic").attr("font-family", "sans-serif")
-          .text(topLabel);
+      // Smart label placement — follow each curve in both x and y
+      // Find a good x where both curves are well inside the plot
+      const labelCandidates = [0.75, 0.65, 0.55, 0.85, 0.45];
+      let lxLabel = xDom[0] + (xDom[1] - xDom[0]) * 0.75;
+      for (const frac of labelCandidates) {
+        const xTry = xDom[0] + (xDom[1] - xDom[0]) * frac;
+        const yT = evalFn(actualTop, xTry);
+        const yB = evalFn(actualBot, xTry);
+        if (isFinite(yT) && isFinite(yB) &&
+            yT >= yDom[0] + (yDom[1]-yDom[0])*0.1 &&
+            yT <= yDom[1] - (yDom[1]-yDom[0])*0.1 &&
+            yB >= yDom[0] + (yDom[1]-yDom[0])*0.05 &&
+            yB <= yDom[1] - (yDom[1]-yDom[0])*0.05) {
+          lxLabel = xTry;
+          break;
+        }
       }
-      const lyBotR = evalFn(actualBot, lxRight);
-      if (isFinite(lyBotR) && lyBotR >= yDom[0] && lyBotR <= yDom[1]) {
-        g.append("text").attr("x", xScale(lxRight)).attr("y", yScale(lyBotR) + 16)
-          .attr("fill", COL.red).attr("font-size", 12).attr("font-style", "italic").attr("font-family", "sans-serif")
-          .text(botLabel);
+
+      const lyTopAt = evalFn(actualTop, lxLabel);
+      const lyBotAt = evalFn(actualBot, lxLabel);
+      const clamp = (y) => Math.min(yDom[1], Math.max(yDom[0], y));
+
+      // pixel y positions on each curve
+      const pxTop = isFinite(lyTopAt) ? yScale(clamp(lyTopAt)) : null;
+      const pxBot = isFinite(lyBotAt) ? yScale(clamp(lyBotAt)) : null;
+
+      // top label: above the top curve at (lxLabel, lyTopAt)
+      if (pxTop !== null) {
+        g.append("text")
+          .attr("x", xScale(lxLabel))
+          .attr("y", pxTop - 9)
+          .attr("fill", COL.blue).attr("font-size", 12).attr("font-style", "italic")
+          .attr("font-family", "sans-serif").text(topLabel);
+      }
+
+      // bottom label: below the bottom curve at (lxLabel, lyBotAt)
+      // enforce minimum pixel gap from top label
+      if (pxBot !== null) {
+        const topLabelBottom = pxTop !== null ? pxTop - 9 + 14 : -9999; // approx bottom of top label text
+        const naturalY = pxBot + 16;
+        const finalY = naturalY < topLabelBottom + 4 ? topLabelBottom + 18 : naturalY;
+        g.append("text")
+          .attr("x", xScale(lxLabel))
+          .attr("y", finalY)
+          .attr("fill", COL.red).attr("font-size", 12).attr("font-style", "italic")
+          .attr("font-family", "sans-serif").text(botLabel);
       }
     }
 
