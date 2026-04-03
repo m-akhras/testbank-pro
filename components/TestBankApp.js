@@ -448,6 +448,10 @@ function GraphEditor({ initialConfig, onSave, onRemove, onClose }) {
   const [yMax,        setYMax]        = useState(initialConfig?.yDomain?.[1] ?? 5);
   const [showNumbers, setShowNumbers] = useState(initialConfig?.showAxisNumbers !== false);
   const [showGrid,    setShowGrid]    = useState(initialConfig?.showGrid !== false);
+  const [fnLabel,      setFnLabel]      = useState(initialConfig?.fnLabel      || "");
+  const [fnTopLabel,   setFnTopLabel]   = useState(initialConfig?.fnTopLabel   || "");
+  const [fnBottomLabel,setFnBottomLabel]= useState(initialConfig?.fnBottomLabel|| "");
+  const [showFnLabel,  setShowFnLabel]  = useState(initialConfig?.showFnLabel  !== false);
   const [holeInput,   setHoleInput]   = useState("");
   const [pointInput,  setPointInput]  = useState("");
   const previewRef = useRef(null);
@@ -458,10 +462,10 @@ function GraphEditor({ initialConfig, onSave, onRemove, onClose }) {
       xDomain: [Number(xMin), Number(xMax)],
       yDomain: [Number(yMin), Number(yMax)],
     };
-    if (type === "single")   return { ...base, fn, holes, points };
-    if (type === "piecewise") return { ...base, fn, holes, points }; // simplified — same as single for now
-    if (type === "area")     return { ...base, fnTop, fnBottom, shadeFrom: Number(shadeFrom), shadeTo: Number(shadeTo) };
-    if (type === "domain")   return { ...base, boundary, shadeAbove, boundaryDashed: boundDashed, boundaryLabel: boundLabel };
+    if (type === "single")   return { ...base, fn, fnLabel: fnLabel||undefined, showFnLabel, holes, points };
+    if (type === "piecewise") return { ...base, fn, fnLabel: fnLabel||undefined, showFnLabel, holes, points };
+    if (type === "area")     return { ...base, fnTop, fnBottom, fnTopLabel: fnTopLabel||undefined, fnBottomLabel: fnBottomLabel||undefined, showFnLabel, shadeFrom: Number(shadeFrom), shadeTo: Number(shadeTo) };
+    if (type === "domain")   return { ...base, boundary, shadeAbove, boundaryDashed: boundDashed, boundaryLabel: boundLabel, showFnLabel };
     return base;
   };
 
@@ -519,6 +523,12 @@ function GraphEditor({ initialConfig, onSave, onRemove, onClose }) {
       {type === "single" && <>
         {row(<>{lbl("f(x) =")} {inp(fn, setFn, "e.g. x^2 - 3", "180px")}</>)}
         {row(<>
+          {lbl("Label:")} {inp(fnLabel, setFnLabel, "e.g. f(x) = x²-3", "150px")}
+          <label style={{display:"flex",alignItems:"center",gap:"5px",fontSize:"0.72rem",color:"#94a3b8",cursor:"pointer"}}>
+            <input type="checkbox" checked={showFnLabel} onChange={e=>setShowFnLabel(e.target.checked)} /> Show
+          </label>
+        </>)}
+        {row(<>
           {lbl("Holes (x,y):")}
           {inp(holeInput, setHoleInput, "e.g. 2,3", "100px")}
           <button onClick={() => addPoint(holes, setHoles, holeInput, setHoleInput)}
@@ -540,9 +550,14 @@ function GraphEditor({ initialConfig, onSave, onRemove, onClose }) {
 
       {/* Area between curves */}
       {type === "area" && <>
-        {row(<>{lbl("f(x) top =")}    {inp(fnTop,     setFnTop,     "top curve",    "180px")}</>)}
-        {row(<>{lbl("g(x) bottom =")} {inp(fnBottom,  setFnBottom,  "bottom curve", "180px")}</>)}
-        {row(<>{lbl("Shade from x =")} {inp(shadeFrom, setShadeFrom, "-1", "60px")} {lbl("to x =")} {inp(shadeTo, setShadeTo, "2", "60px")}</>)}
+        {row(<>{lbl("f(x) top =")}    {inp(fnTop,    setFnTop,    "top curve",    "140px")} {lbl("label:")} {inp(fnTopLabel,    setFnTopLabel,    "f(x)", "70px")}</>)}
+        {row(<>{lbl("g(x) bottom =")} {inp(fnBottom, setFnBottom, "bottom curve", "140px")} {lbl("label:")} {inp(fnBottomLabel, setFnBottomLabel, "g(x)", "70px")}</>)}
+        {row(<>
+          {lbl("Shade from x =")} {inp(shadeFrom, setShadeFrom, "-1", "55px")} {lbl("to x =")} {inp(shadeTo, setShadeTo, "2", "55px")}
+          <label style={{display:"flex",alignItems:"center",gap:"5px",fontSize:"0.72rem",color:"#94a3b8",cursor:"pointer"}}>
+            <input type="checkbox" checked={showFnLabel} onChange={e=>setShowFnLabel(e.target.checked)} /> Show labels
+          </label>
+        </>)}
       </>}
 
       {/* Domain sketch */}
@@ -1129,15 +1144,53 @@ function renderGraphToSVG(graphConfig, width = 480, height = 300) {
   drawAxes();
   drawAxisNumbers();
 
+  const showLabel = cfg.showFnLabel !== false;
+
+  // helper: find a good x position for a label that stays within the plot
+  function labelX(fn, preferRight) {
+    const xTry = preferRight
+      ? xDom[0] + (xDom[1] - xDom[0]) * 0.75
+      : xDom[0] + (xDom[1] - xDom[0]) * 0.25;
+    const y = evalFn(fn, xTry);
+    if (isFinite(y) && y >= yDom[0] + 0.5 && y <= yDom[1] - 0.5) return xTry;
+    // fallback: scan for a good x
+    for (let t = 0.5; t <= 0.9; t += 0.1) {
+      const x2 = xDom[0] + (xDom[1] - xDom[0]) * t;
+      const y2 = evalFn(fn, x2);
+      if (isFinite(y2) && y2 >= yDom[0] + 0.5 && y2 <= yDom[1] - 0.8) return x2;
+    }
+    return xTry;
+  }
+
   if (cfg.type === "single") {
     drawCurve(cfg.fn, null, COL.blue, false);
     (cfg.holes  || []).forEach(([x, y]) => drawOpenCircle(x, y, COL.blue));
     (cfg.points || []).forEach(([x, y]) => drawFilledDot(x, y, COL.blue));
+    if (showLabel && cfg.fn) {
+      const lx = labelX(cfg.fn, true);
+      const ly = evalFn(cfg.fn, lx);
+      if (isFinite(ly) && ly >= yDom[0] && ly <= yDom[1]) {
+        const above = ly < yDom[1] - 0.8;
+        g.append("text").attr("x", xScale(lx)).attr("y", yScale(ly) + (above ? -8 : 14))
+          .attr("fill", COL.blue).attr("font-size", 12).attr("font-style", "italic").attr("font-family", "sans-serif")
+          .text(cfg.fnLabel || "f(x)");
+      }
+    }
 
   } else if (cfg.type === "piecewise") {
     (cfg.pieces || []).forEach(p => drawCurve(p.fn, p.domain, COL.blue, false));
     (cfg.holes  || []).forEach(([x, y]) => drawOpenCircle(x, y, COL.blue));
     (cfg.points || []).forEach(([x, y]) => drawFilledDot(x, y, COL.blue));
+    if (showLabel && cfg.pieces?.length) {
+      const last = cfg.pieces[cfg.pieces.length - 1];
+      const lx = last.domain?.[1] ? last.domain[1] * 0.85 : labelX(last.fn, true);
+      const ly = evalFn(last.fn, lx);
+      if (isFinite(ly) && ly >= yDom[0] && ly <= yDom[1]) {
+        g.append("text").attr("x", xScale(lx)).attr("y", yScale(ly) - 8)
+          .attr("fill", COL.blue).attr("font-size", 12).attr("font-style", "italic").attr("font-family", "sans-serif")
+          .text(cfg.fnLabel || "f(x)");
+      }
+    }
 
   } else if (cfg.type === "area") {
     const x0 = cfg.shadeFrom ?? xDom[0];
@@ -1146,19 +1199,37 @@ function renderGraphToSVG(graphConfig, width = 480, height = 300) {
     drawCurve(cfg.fnTop,    null, COL.blue, false);
     drawCurve(cfg.fnBottom, null, COL.red,  false);
     [[x0, evalFn(cfg.fnTop, x0)], [x1, evalFn(cfg.fnTop, x1)]].forEach(([x, y]) => drawFilledDot(x, y, COL.text));
-    const midX = xDom[0] + (xDom[1] - xDom[0]) * 0.7;
-    g.append("text").attr("x", xScale(midX)).attr("y", yScale(evalFn(cfg.fnTop,    midX)) - 10)
-      .attr("fill", COL.blue).attr("font-size", 13).attr("font-style", "italic").attr("font-family", "sans-serif").text("f(x)");
-    g.append("text").attr("x", xScale(midX)).attr("y", yScale(evalFn(cfg.fnBottom, midX)) + 18)
-      .attr("fill", COL.red).attr("font-size", 13).attr("font-style", "italic").attr("font-family", "sans-serif").text("g(x)");
+    if (showLabel) {
+      // label top curve to the right of shaded region
+      const lxTop = x1 + (xDom[1] - x1) * 0.4;
+      const lyTop = evalFn(cfg.fnTop, lxTop);
+      if (isFinite(lyTop) && lyTop >= yDom[0] && lyTop <= yDom[1]) {
+        g.append("text").attr("x", xScale(lxTop)).attr("y", yScale(lyTop) - 8)
+          .attr("fill", COL.blue).attr("font-size", 12).attr("font-style", "italic").attr("font-family", "sans-serif")
+          .text(cfg.fnTopLabel || "f(x)");
+      }
+      // label bottom curve below the shaded region
+      const lxBot = x1 + (xDom[1] - x1) * 0.4;
+      const lyBot = evalFn(cfg.fnBottom, lxBot);
+      if (isFinite(lyBot) && lyBot >= yDom[0] && lyBot <= yDom[1]) {
+        g.append("text").attr("x", xScale(lxBot)).attr("y", yScale(lyBot) + 16)
+          .attr("fill", COL.red).attr("font-size", 12).attr("font-style", "italic").attr("font-family", "sans-serif")
+          .text(cfg.fnBottomLabel || "g(x)");
+      }
+    }
 
   } else if (cfg.type === "domain") {
     drawDomainShade(cfg.boundary, cfg.shadeAbove !== false, false);
     drawCurve(cfg.boundary, null, COL.red, cfg.boundaryDashed !== false);
-    const labelX = xDom[0] + (xDom[1] - xDom[0]) * 0.65;
-    g.append("text").attr("x", xScale(labelX)).attr("y", yScale(evalFn(cfg.boundary, labelX)) + 18)
-      .attr("fill", COL.red).attr("font-size", 13).attr("font-style", "italic").attr("font-family", "sans-serif")
-      .text(cfg.boundaryLabel || "boundary");
+    if (showLabel) {
+      const lx = xDom[0] + (xDom[1] - xDom[0]) * 0.65;
+      const ly = evalFn(cfg.boundary, lx);
+      if (isFinite(ly) && ly >= yDom[0] && ly <= yDom[1]) {
+        g.append("text").attr("x", xScale(lx)).attr("y", yScale(ly) + 16)
+          .attr("fill", COL.red).attr("font-size", 12).attr("font-style", "italic").attr("font-family", "sans-serif")
+          .text(cfg.boundaryLabel || "boundary");
+      }
+    }
   }
 
   return svgNode;
