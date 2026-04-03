@@ -1890,6 +1890,7 @@ ${body}
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
   <Default Extension="xml" ContentType="application/xml"/>
+  <Default Extension="png" ContentType="image/png"/>
   <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
 </Types>`);
 
@@ -1905,7 +1906,7 @@ ${body}
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">`;
   let imgIdx = 1;
   for (const m of imgMatches) {
-    const rid = `rImg${imgIdx}`;
+    const rid = m[1]; // use the rid from the placeholder tag directly
     const b64 = m[2];
     const imgBytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
     zip.file(`word/media/graph${imgIdx}.png`, imgBytes);
@@ -2498,7 +2499,7 @@ ${body}
   }
 
   const zip = new window.JSZip();
-  zip.file("[Content_Types].xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>`);
+  zip.file("[Content_Types].xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="png" ContentType="image/png"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>`);
   zip.file("_rels/.rels", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>`);
   // extract image data from GRAPH_REL_PLACEHOLDER tags (buildDocxCompare)
   const imgReC = /<GRAPH_REL_PLACEHOLDER rid="([^"]+)" b64="([^"]+)"\/>/g;
@@ -2506,7 +2507,7 @@ ${body}
   let relsXmlC = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">`;
   let imgIdxC = 1;
   for (const m of imgMatchesC) {
-    const rid = `rImg${imgIdxC}`;
+    const rid = m[1]; // use rid from placeholder directly
     const b64 = m[2];
     const imgBytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
     zip.file(`word/media/graph${imgIdxC}.png`, imgBytes);
@@ -4588,9 +4589,8 @@ export default function TestBankApp() {
 
         const getGraphImg = (q) => {
           const b64 = printGraphCache[q.id || q.question];
-          if (b64) return `<img src="${b64}" style="max-width:100%;display:block;margin-bottom:8pt;border:1px solid #eee;" />`;
-          if (q.hasGraph) return `<div style="width:100%;height:160pt;border:1px solid #ccc;margin-bottom:8pt;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:10pt;">[Graph loading...]</div>`;
-          return "";
+          if (b64) return `<img src="${b64}" style="max-width:100%;display:block;margin-bottom:8pt;" />`;
+          return ""; // don't show placeholder — wait for cache
         };
 
         const printHTML = `
