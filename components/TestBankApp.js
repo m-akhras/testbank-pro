@@ -1035,13 +1035,25 @@ function renderGraphToSVG(graphConfig, width = 480, height = 300) {
     blue:  "#185FA5", red:   "#E24B4A", green: "#1D9E75", shade: "#378ADD",
   };
 
+  // Smart tick generator — max 10 ticks, rounded step
+  function smartTicks(min, max, maxTicks=10) {
+    const range = max - min;
+    const rawStep = range / maxTicks;
+    const mag = Math.pow(10, Math.floor(Math.log10(rawStep)));
+    const step = Math.ceil(rawStep / mag) * mag;
+    const start = Math.ceil(min / step) * step;
+    const ticks = [];
+    for (let t = start; t <= max + 0.001; t += step) ticks.push(Math.round(t * 1000) / 1000);
+    return ticks;
+  }
+
   function drawGrid() {
     if (!showGrid) return;
-    d3.range(Math.ceil(xDom[0]), Math.floor(xDom[1]) + 1).forEach(t => {
+    smartTicks(xDom[0], xDom[1]).forEach(t => {
       g.append("line").attr("x1", xScale(t)).attr("x2", xScale(t))
         .attr("y1", 0).attr("y2", iH).attr("stroke", COL.grid).attr("stroke-width", 0.5);
     });
-    d3.range(Math.ceil(yDom[0]), Math.floor(yDom[1]) + 1).forEach(t => {
+    smartTicks(yDom[0], yDom[1]).forEach(t => {
       g.append("line").attr("y1", yScale(t)).attr("y2", yScale(t))
         .attr("x1", 0).attr("x2", iW).attr("stroke", COL.grid).attr("stroke-width", 0.5);
     });
@@ -1060,12 +1072,12 @@ function renderGraphToSVG(graphConfig, width = 480, height = 300) {
 
   function drawAxisNumbers() {
     if (!showNumbers) return;
-    d3.range(Math.ceil(xDom[0]), Math.floor(xDom[1]) + 1).filter(t => t !== 0).forEach(t => {
+    smartTicks(xDom[0], xDom[1]).filter(t => t !== 0).forEach(t => {
       g.append("text").attr("x", xScale(t)).attr("y", yScale(0) + 15)
         .attr("text-anchor", "middle").attr("fill", COL.muted)
         .attr("font-size", 10).attr("font-family", "sans-serif").text(t);
     });
-    d3.range(Math.ceil(yDom[0]), Math.floor(yDom[1]) + 1).filter(t => t !== 0).forEach(t => {
+    smartTicks(yDom[0], yDom[1]).filter(t => t !== 0).forEach(t => {
       g.append("text").attr("x", xScale(0) - 6).attr("y", yScale(t) + 4)
         .attr("text-anchor", "end").attr("fill", COL.muted)
         .attr("font-size", 10).attr("font-family", "sans-serif").text(t);
@@ -1074,11 +1086,16 @@ function renderGraphToSVG(graphConfig, width = 480, height = 300) {
 
   function drawCurve(fnExpr, domainOverride, color, dashed) {
     const [x0, x1] = domainOverride || xDom;
-    const pts = d3.range(x0, x1 + 0.01, (x1 - x0) / 300)
+    const step = (x1 - x0) / 300;
+    const pts = d3.range(x0, x1 + step * 0.5, step)
       .map(x => [x, evalFn(fnExpr, x)])
-      .filter(([, y]) => isFinite(y) && y >= yDom[0] - 0.5 && y <= yDom[1] + 0.5);
+      .filter(([, y]) => isFinite(y));
     if (!pts.length) return;
-    const line = d3.line().x(d => xScale(d[0])).y(d => yScale(d[1])).defined(d => isFinite(d[1]));
+    // split into segments when y goes far out of range (discontinuities)
+    const line = d3.line()
+      .x(d => xScale(d[0]))
+      .y(d => yScale(Math.max(yDom[0] - 1, Math.min(yDom[1] + 1, d[1]))))
+      .defined(d => isFinite(d[1]) && d[1] >= yDom[0] - 2 && d[1] <= yDom[1] + 2);
     g.append("path").datum(pts).attr("d", line)
       .attr("fill", "none").attr("stroke", color || COL.blue).attr("stroke-width", 2.5)
       .attr("stroke-dasharray", dashed ? "6,4" : "none");
@@ -1095,10 +1112,18 @@ function renderGraphToSVG(graphConfig, width = 480, height = 300) {
   }
 
   function drawShadePolygon(topFnExpr, bottomFnExpr, x0, x1, fillColor) {
-    const xs      = d3.range(x0, x1 + 0.01, (x1 - x0) / 300);
-    const topPts  = xs.map(x => ({ x: xScale(x), y: yScale(evalFn(topFnExpr,    x)) }));
-    const botPts  = xs.map(x => ({ x: xScale(x), y: yScale(evalFn(bottomFnExpr, x)) }));
-    const poly    = [...topPts, ...[...botPts].reverse()];
+    const step = (x1 - x0) / 300;
+    const xs = d3.range(x0, x1 + step * 0.5, step);
+    const topPts = xs.map(x => {
+      const y = evalFn(topFnExpr, x);
+      return isFinite(y) ? { x: xScale(x), y: yScale(Math.max(yDom[0], Math.min(yDom[1], y))) } : null;
+    }).filter(Boolean);
+    const botPts = xs.map(x => {
+      const y = evalFn(bottomFnExpr, x);
+      return isFinite(y) ? { x: xScale(x), y: yScale(Math.max(yDom[0], Math.min(yDom[1], y))) } : null;
+    }).filter(Boolean);
+    if (!topPts.length || !botPts.length) return;
+    const poly = [...topPts, ...[...botPts].reverse()];
     g.append("polygon").attr("points", poly.map(p => `${p.x},${p.y}`).join(" "))
       .attr("fill", fillColor || COL.shade).attr("fill-opacity", 0.25).attr("stroke", "none");
   }
@@ -1142,11 +1167,11 @@ function renderGraphToSVG(graphConfig, width = 480, height = 300) {
         .attr("font-family", "sans-serif").text(labels[idx]);
 
       if (showGrid) {
-        d3.range(Math.ceil(xDom[0]), Math.floor(xDom[1]) + 1).forEach(t => {
+        smartTicks(xDom[0], xDom[1], 6).forEach(t => {
           inn.append("line").attr("x1", mx(t)).attr("x2", mx(t))
             .attr("y1", 0).attr("y2", mH).attr("stroke", COL.grid).attr("stroke-width", 0.5);
         });
-        d3.range(Math.ceil(yDom[0]), Math.floor(yDom[1]) + 1).forEach(t => {
+        smartTicks(yDom[0], yDom[1], 6).forEach(t => {
           inn.append("line").attr("y1", my(t)).attr("y2", my(t))
             .attr("x1", 0).attr("x2", mW).attr("stroke", COL.grid).attr("stroke-width", 0.5);
         });
@@ -1155,12 +1180,12 @@ function renderGraphToSVG(graphConfig, width = 480, height = 300) {
       inn.append("line").attr("x1", 0).attr("x2", mW).attr("y1", my(0)).attr("y2", my(0)).attr("stroke", COL.text).attr("stroke-width", 1.2);
 
       if (showNumbers) {
-        [-2,-1,1,2].filter(t => t >= xDom[0] && t <= xDom[1]).forEach(t => {
+        smartTicks(xDom[0], xDom[1], 5).filter(t => t !== 0).forEach(t => {
           inn.append("text").attr("x", mx(t)).attr("y", my(0) + 12)
             .attr("text-anchor", "middle").attr("fill", COL.muted)
             .attr("font-size", 8).attr("font-family", "sans-serif").text(t);
         });
-        [1,2,3,4].filter(t => t >= yDom[0] && t <= yDom[1]).forEach(t => {
+        smartTicks(yDom[0], yDom[1], 5).filter(t => t !== 0).forEach(t => {
           inn.append("text").attr("x", mx(0) - 4).attr("y", my(t) + 3)
             .attr("text-anchor", "end").attr("fill", COL.muted)
             .attr("font-size", 8).attr("font-family", "sans-serif").text(t);
