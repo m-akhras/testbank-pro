@@ -429,8 +429,33 @@ function GraphDisplay({ graphConfig, authorMode = false }) {
 //   onSave(config) — called with the new graphConfig
 //   onRemove()     — called to remove the graph entirely
 //   onClose()      — called to close without saving
+function autoScaleY(fns, xMin, xMax, padding=0.15) {
+  // Evaluate all functions across x range and find min/max y
+  const xs = Array.from({length: 200}, (_, i) => xMin + (xMax - xMin) * i / 199);
+  let yMin = Infinity, yMax = -Infinity;
+  fns.forEach(fn => {
+    if (!fn) return;
+    xs.forEach(x => {
+      const y = evalFn(fn, x);
+      if (isFinite(y)) { yMin = Math.min(yMin, y); yMax = Math.max(yMax, y); }
+    });
+  });
+  if (!isFinite(yMin) || !isFinite(yMax)) return [-5, 5];
+  const range = yMax - yMin || 2;
+  const pad = range * padding;
+  return [Math.round((yMin - pad) * 10) / 10, Math.round((yMax + pad) * 10) / 10];
+}
+
+function inferGraphType(cfg) {
+  if (!cfg) return "single";
+  if (cfg.type) return cfg.type;
+  if (cfg.fnTop || cfg.fnBottom) return "area";
+  if (cfg.boundary) return "domain";
+  return "single";
+}
+
 function GraphEditor({ initialConfig, onSave, onRemove, onClose }) {
-  const [type,        setType]        = useState(initialConfig?.type        || "single");
+  const type = inferGraphType(initialConfig);
   const [fn,          setFn]          = useState(initialConfig?.fn          || "x^2 - 3");
   const [fnTop,       setFnTop]       = useState(initialConfig?.fnTop       || "x + 2");
   const [fnBottom,    setFnBottom]    = useState(initialConfig?.fnBottom    || "x^2");
@@ -444,8 +469,8 @@ function GraphEditor({ initialConfig, onSave, onRemove, onClose }) {
   const [points,      setPoints]      = useState(initialConfig?.points      || []);
   const [xMin,        setXMin]        = useState(initialConfig?.xDomain?.[0] ?? -5);
   const [xMax,        setXMax]        = useState(initialConfig?.xDomain?.[1] ?? 5);
-  const [yMin,        setYMin]        = useState(initialConfig?.yDomain?.[0] ?? -5);
-  const [yMax,        setYMax]        = useState(initialConfig?.yDomain?.[1] ?? 5);
+  const [yMinState,   setYMinState]   = useState(null); // null = auto
+  const [yMaxState,   setYMaxState]   = useState(null);
   const [showNumbers, setShowNumbers] = useState(initialConfig?.showAxisNumbers !== false);
   const [showGrid,    setShowGrid]    = useState(initialConfig?.showGrid !== false);
   const [fnLabel,      setFnLabel]      = useState(initialConfig?.fnLabel      || "");
@@ -456,16 +481,28 @@ function GraphEditor({ initialConfig, onSave, onRemove, onClose }) {
   const [pointInput,  setPointInput]  = useState("");
   const previewRef = useRef(null);
 
+  // Compute y domain — auto if not overridden
+  const getYDomain = () => {
+    const xN = Number(xMin); const xX = Number(xMax);
+    if (yMinState !== null && yMaxState !== null) return [Number(yMinState), Number(yMaxState)];
+    if (type === "single") return autoScaleY([fn], xN, xX);
+    if (type === "piecewise") return autoScaleY((initialConfig?.pieces||[]).map(p=>p.fn), xN, xX);
+    if (type === "area") return autoScaleY([fnTop, fnBottom], xN, xX);
+    if (type === "domain") return autoScaleY([boundary], xN, xX);
+    return [-5, 5];
+  };
+
   const buildConfig = () => {
+    const yDom = getYDomain();
     const base = {
       type, showAxisNumbers: showNumbers, showGrid,
       xDomain: [Number(xMin), Number(xMax)],
-      yDomain: [Number(yMin), Number(yMax)],
+      yDomain: yDom,
     };
-    if (type === "single")   return { ...base, fn, fnLabel: fnLabel||undefined, showFnLabel, holes, points };
+    if (type === "single")    return { ...base, fn, fnLabel: fnLabel||undefined, showFnLabel, holes, points };
     if (type === "piecewise") return { ...base, fn, fnLabel: fnLabel||undefined, showFnLabel, holes, points };
-    if (type === "area")     return { ...base, fnTop, fnBottom, fnTopLabel: fnTopLabel||undefined, fnBottomLabel: fnBottomLabel||undefined, showFnLabel, shadeFrom: Number(shadeFrom), shadeTo: Number(shadeTo) };
-    if (type === "domain")   return { ...base, boundary, shadeAbove, boundaryDashed: boundDashed, boundaryLabel: boundLabel, showFnLabel };
+    if (type === "area")      return { ...base, fnTop, fnBottom, fnTopLabel: fnTopLabel||undefined, fnBottomLabel: fnBottomLabel||undefined, showFnLabel, shadeFrom: Number(shadeFrom), shadeTo: Number(shadeTo) };
+    if (type === "domain")    return { ...base, boundary, shadeAbove, boundaryDashed: boundDashed, boundaryLabel: boundLabel, showFnLabel };
     return base;
   };
 
@@ -500,28 +537,18 @@ function GraphEditor({ initialConfig, onSave, onRemove, onClose }) {
     </div>
   );
 
+  const typeLabel = type === "area" ? "Area between curves" : type === "domain" ? "Domain sketch" : "Single curve";
+
   return (
     <div style={{marginTop:"0.75rem", padding:"1rem", background:"#0f1629", border:"1px solid #1e3a5f",
       borderRadius:"8px"}}>
-      <div style={{fontSize:"0.78rem", color:"#60a5fa", fontWeight:"600", marginBottom:"0.75rem"}}>📈 Graph Editor</div>
-
-      {/* Type selector */}
-      {row(<>
-        {lbl("Type:")}
-        {["single","area","domain"].map(t => (
-          <button key={t} onClick={() => setType(t)}
-            style={{padding:"0.2rem 0.6rem", fontSize:"0.72rem", borderRadius:"4px", cursor:"pointer",
-              background: type===t ? "#185FA5" : "transparent",
-              color: type===t ? "#fff" : "#94a3b8",
-              border: `1px solid ${type===t ? "#185FA5" : "#334155"}`}}>
-            {t === "single" ? "Single curve" : t === "area" ? "Area between curves" : "Domain sketch"}
-          </button>
-        ))}
-      </>)}
+      <div style={{fontSize:"0.78rem", color:"#60a5fa", fontWeight:"600", marginBottom:"0.75rem"}}>
+        📈 Graph Editor — <span style={{color:"#94a3b8", fontWeight:"400"}}>{typeLabel}</span>
+      </div>
 
       {/* Single curve inputs */}
       {type === "single" && <>
-        {row(<>{lbl("f(x) =")} {inp(fn, setFn, "e.g. x^2 - 3", "180px")}</>)}
+        {row(<>{lbl("f(x) =")} {inp(fn, setFn, "e.g. x^2 - 3", "200px")}</>)}
         {row(<>
           {lbl("Label:")} {inp(fnLabel, setFnLabel, "e.g. f(x) = x²-3", "150px")}
           <label style={{display:"flex",alignItems:"center",gap:"5px",fontSize:"0.72rem",color:"#94a3b8",cursor:"pointer"}}>
@@ -550,8 +577,8 @@ function GraphEditor({ initialConfig, onSave, onRemove, onClose }) {
 
       {/* Area between curves */}
       {type === "area" && <>
-        {row(<>{lbl("f(x) top =")}    {inp(fnTop,    setFnTop,    "top curve",    "140px")} {lbl("label:")} {inp(fnTopLabel,    setFnTopLabel,    "f(x)", "70px")}</>)}
-        {row(<>{lbl("g(x) bottom =")} {inp(fnBottom, setFnBottom, "bottom curve", "140px")} {lbl("label:")} {inp(fnBottomLabel, setFnBottomLabel, "g(x)", "70px")}</>)}
+        {row(<>{lbl("f(x) top =")}    {inp(fnTop,    setFnTop,    "top curve",    "160px")} {lbl("label:")} {inp(fnTopLabel,    setFnTopLabel,    "f(x)", "70px")}</>)}
+        {row(<>{lbl("g(x) bottom =")} {inp(fnBottom, setFnBottom, "bottom curve", "160px")} {lbl("label:")} {inp(fnBottomLabel, setFnBottomLabel, "g(x)", "70px")}</>)}
         {row(<>
           {lbl("Shade from x =")} {inp(shadeFrom, setShadeFrom, "-1", "55px")} {lbl("to x =")} {inp(shadeTo, setShadeTo, "2", "55px")}
           <label style={{display:"flex",alignItems:"center",gap:"5px",fontSize:"0.72rem",color:"#94a3b8",cursor:"pointer"}}>
@@ -583,13 +610,17 @@ function GraphEditor({ initialConfig, onSave, onRemove, onClose }) {
         {row(<>{lbl("Boundary label:")} {inp(boundLabel, setBoundLabel, "y = x²", "140px")}</>)}
       </>}
 
-      {/* Shared: domain + display */}
-      <div style={{display:"flex", gap:"12px", flexWrap:"wrap", marginBottom:"0.5rem", marginTop:"0.25rem"}}>
+      {/* x domain + display toggles */}
+      <div style={{display:"flex", gap:"12px", flexWrap:"wrap", marginBottom:"0.5rem", marginTop:"0.25rem", alignItems:"center"}}>
         <div style={{display:"flex", alignItems:"center", gap:"6px"}}>
           {lbl("x:")} {inp(xMin, setXMin, "-5", "44px")} <span style={{color:"#94a3b8",fontSize:"0.72rem"}}>to</span> {inp(xMax, setXMax, "5", "44px")}
         </div>
         <div style={{display:"flex", alignItems:"center", gap:"6px"}}>
-          {lbl("y:")} {inp(yMin, setYMin, "-5", "44px")} <span style={{color:"#94a3b8",fontSize:"0.72rem"}}>to</span> {inp(yMax, setYMax, "5", "44px")}
+          {lbl("y:")}
+          {inp(yMinState ?? "", v => setYMinState(v===""?null:v), "auto", "44px")}
+          <span style={{color:"#94a3b8",fontSize:"0.72rem"}}>to</span>
+          {inp(yMaxState ?? "", v => setYMaxState(v===""?null:v), "auto", "44px")}
+          <span style={{fontSize:"0.65rem", color:"#475569"}}>(blank = auto)</span>
         </div>
         <label style={{display:"flex",alignItems:"center",gap:"5px",fontSize:"0.72rem",color:"#94a3b8",cursor:"pointer"}}>
           <input type="checkbox" checked={showNumbers} onChange={e=>setShowNumbers(e.target.checked)} /> Axis numbers
@@ -957,7 +988,30 @@ function renderGraphToSVG(graphConfig, width = 480, height = 300) {
   const showNumbers = cfg.showAxisNumbers !== false;
   const showGrid    = cfg.showGrid !== false;
   const xDom = cfg.xDomain || [-5, 5];
-  const yDom = cfg.yDomain || [-5, 5];
+
+  // Auto-scale yDomain from function values if not provided
+  let yDom = cfg.yDomain || null;
+  if (!yDom) {
+    const fns = [];
+    if (cfg.fn) fns.push(cfg.fn);
+    if (cfg.fnTop) fns.push(cfg.fnTop);
+    if (cfg.fnBottom) fns.push(cfg.fnBottom);
+    if (cfg.boundary) fns.push(cfg.boundary);
+    if (cfg.pieces) cfg.pieces.forEach(p => fns.push(p.fn));
+    if (fns.length) {
+      const xs = Array.from({length:200}, (_,i) => xDom[0] + (xDom[1]-xDom[0])*i/199);
+      let yMin=Infinity, yMax=-Infinity;
+      fns.forEach(fn => xs.forEach(x => {
+        const y = evalFn(fn,x);
+        if (isFinite(y)) { yMin=Math.min(yMin,y); yMax=Math.max(yMax,y); }
+      }));
+      if (isFinite(yMin)) {
+        const pad = (yMax-yMin)*0.15 || 1;
+        yDom = [Math.round((yMin-pad)*10)/10, Math.round((yMax+pad)*10)/10];
+      }
+    }
+    yDom = yDom || [-5, 5];
+  }
 
   const svgNode = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   svgNode.setAttribute("xmlns",   "http://www.w3.org/2000/svg");
@@ -2365,13 +2419,25 @@ function buildGeneratePrompt(course, selectedSections, sectionCounts, qType, dif
   const graphInstructions = hasGraphQuestions ? `
 GRAPH QUESTIONS:
 - graphType "graph": MUST include hasGraph:true and graphConfig in the JSON.
-- graphType "mix": include graphConfig only when it genuinely helps (area between curves, limits with holes, domain questions).
+- graphType "mix": include graphConfig only when it genuinely helps (area, limits with holes, domain sketch).
 - graphType "normal": do NOT include graphConfig.
-- graphConfig shapes:
-  Single curve:  {"type":"single","fn":"x^2-3","holes":[[2,3]],"points":[[2,5]],"xDomain":[-4,4],"yDomain":[-4,6],"showAxisNumbers":true,"showGrid":true}
-  Area between:  {"type":"area","fnTop":"x+2","fnBottom":"x^2","shadeFrom":-1,"shadeTo":2,"xDomain":[-3,4],"yDomain":[-1,6],"showAxisNumbers":true,"showGrid":true}
-  Domain sketch: {"type":"domain","boundary":"x^2","shadeAbove":true,"boundaryDashed":true,"boundaryLabel":"y = x²","xDomain":[-3,3],"yDomain":[-1,6],"showAxisNumbers":true,"showGrid":true}
-- Question text should say "Based on the graph above, ..." — do NOT describe the graph in text.
+
+CRITICAL — Choose graphConfig type based on how many functions appear in the question:
+- Question mentions 1 function (e.g. f(x) = x²-3) → use type "single", put expression in "fn"
+- Question mentions 2 functions (e.g. f(x) = x+2 and g(x) = x²) → use type "area", put higher curve in "fnTop", lower in "fnBottom", set "shadeFrom" and "shadeTo" to x-intersection points
+- Question is about a region/domain (e.g. y > x², x²+y²≤1) → use type "domain", put boundary in "boundary", set "shadeAbove" true/false
+
+DO NOT include yDomain — it will be auto-calculated from the functions.
+DO include xDomain set to a range that shows the full curve clearly.
+
+graphConfig examples:
+  1 function: {"type":"single","fn":"x^2-3","showAxisNumbers":true,"showGrid":true,"xDomain":[-4,4]}
+  2 functions: {"type":"area","fnTop":"x+2","fnBottom":"x^2","shadeFrom":-1,"shadeTo":2,"showAxisNumbers":true,"showGrid":true,"xDomain":[-3,4]}
+  Domain:     {"type":"domain","boundary":"x^2","shadeAbove":true,"boundaryDashed":true,"boundaryLabel":"y = x²","showAxisNumbers":true,"showGrid":true,"xDomain":[-3,3]}
+
+For limit questions with holes: use "single" and include "holes":[[x,y]] for open circles and "points":[[x,y]] for filled dots.
+Question text must say "Based on the graph above, ..." — never describe the graph in the question text.
+The expressions in graphConfig must EXACTLY match the functions mentioned in the question text.
 ` : "";
   const typeInstructions = {
     "Multiple Choice": "4 choices as plain strings. answer = exact text of correct choice.",
