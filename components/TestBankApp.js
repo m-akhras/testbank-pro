@@ -4587,10 +4587,15 @@ export default function TestBankApp() {
         const courseName = v.questions[0]?.course || "Exam";
         const titleLabel = cs ? `Section ${cs} — Version ${v.label}` : `Version ${v.label}`;
 
+        // check if any graph questions still need rendering
+        const graphQs = v.questions.filter(q => q.hasGraph && q.graphConfig);
+        const graphsReady = graphQs.every(q => printGraphCache[q.id || q.question]);
+        const graphsLoading = graphQs.length > 0 && !graphsReady;
+
         const getGraphImg = (q) => {
           const b64 = printGraphCache[q.id || q.question];
           if (b64) return `<img src="${b64}" style="max-width:100%;display:block;margin-bottom:8pt;" />`;
-          return ""; // don't show placeholder — wait for cache
+          return ""; // graphs not ready yet — will re-render when cache updates
         };
 
         const printHTML = `
@@ -4649,8 +4654,13 @@ export default function TestBankApp() {
             </div>
 
             {/* Preview content */}
-            <div style={{flex:1, overflowY:"auto", display:"flex", justifyContent:"center", padding:"2rem 1rem"}}>
-              <div style={{background:"#fff", color:"#000", width:"21cm", minHeight:"29.7cm", padding:"2cm", boxShadow:"0 4px 32px rgba(0,0,0,0.5)", fontFamily:"'Times New Roman',serif", fontSize:"12pt", lineHeight:1.6}}
+            <div style={{flex:1, overflowY:"auto", display:"flex", justifyContent:"center", padding:"2rem 1rem", flexDirection:"column", alignItems:"center"}}>
+              {graphsLoading && (
+                <div style={{color:"#60a5fa", fontSize:"0.85rem", marginBottom:"1rem", padding:"0.5rem 1rem", background:"#1e3a5f", borderRadius:"6px"}}>
+                  ⏳ Rendering graphs...
+                </div>
+              )}
+              <div key={Object.keys(printGraphCache).length} style={{background:"#fff", color:"#000", width:"21cm", minHeight:"29.7cm", padding:"2cm", boxShadow:"0 4px 32px rgba(0,0,0,0.5)", fontFamily:"'Times New Roman',serif", fontSize:"12pt", lineHeight:1.6}}
                 dangerouslySetInnerHTML={{__html: printHTML}}
               />
             </div>
