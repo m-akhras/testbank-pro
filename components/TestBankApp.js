@@ -429,20 +429,25 @@ function GraphDisplay({ graphConfig, authorMode = false }) {
 //   onSave(config) — called with the new graphConfig
 //   onRemove()     — called to remove the graph entirely
 //   onClose()      — called to close without saving
-function autoScaleY(fns, xMin, xMax, padding=0.15) {
-  // Evaluate all functions across x range and find min/max y
-  const xs = Array.from({length: 200}, (_, i) => xMin + (xMax - xMin) * i / 199);
-  let yMin = Infinity, yMax = -Infinity;
+function autoScaleY(fns, xMin, xMax, padding=0.18) {
+  const xs = Array.from({length: 400}, (_, i) => xMin + (xMax - xMin) * i / 399);
+  const allY = [];
   fns.forEach(fn => {
     if (!fn) return;
     xs.forEach(x => {
       const y = evalFn(fn, x);
-      if (isFinite(y)) { yMin = Math.min(yMin, y); yMax = Math.max(yMax, y); }
+      if (isFinite(y) && !isNaN(y)) allY.push(y);
     });
   });
-  if (!isFinite(yMin) || !isFinite(yMax)) return [-5, 5];
-  const range = yMax - yMin || 2;
-  const pad = range * padding;
+  if (!allY.length) return [-5, 5];
+  allY.sort((a, b) => a - b);
+  // trim top/bottom 2% to ignore asymptotes
+  const trim = Math.max(1, Math.floor(allY.length * 0.02));
+  const trimmed = allY.slice(trim, allY.length - trim);
+  if (!trimmed.length) return [-5, 5];
+  const yMin = trimmed[0];
+  const yMax = trimmed[trimmed.length - 1];
+  const pad = (yMax - yMin) * padding || 1;
   return [Math.round((yMin - pad) * 10) / 10, Math.round((yMax + pad) * 10) / 10];
 }
 
@@ -964,19 +969,54 @@ function mathToHTMLInline(s) {
 
 function evalFn(exprRaw, xVal) {
   try {
-    const expr = String(exprRaw ?? "")
-      .replace(/\^/g,      "**")
-      .replace(/\bsqrt\b/g,"Math.sqrt")
-      .replace(/\babs\b/g, "Math.abs")
-      .replace(/\bsin\b/g, "Math.sin")
-      .replace(/\bcos\b/g, "Math.cos")
-      .replace(/\btan\b/g, "Math.tan")
-      .replace(/\bln\b/g,  "Math.log")
-      .replace(/\blog\b/g, "Math.log10")
-      .replace(/\bpi\b/g,  "Math.PI")
-      .replace(/\be\b/g,   "Math.E");
+    let expr = String(exprRaw ?? "")
+      // operators
+      .replace(/\^/g, "**")
+      // implicit multiplication: 2x → 2*x, 3sin → 3*Math.sin, (x+1)(x-1) → (x+1)*(x-1)
+      .replace(/(\d)\s*([a-zA-Z(])/g, "$1*$2")
+      .replace(/([)\d])\s*\(/g, "$1*(")
+      // trig
+      .replace(/\bsin\b/g,    "Math.sin")
+      .replace(/\bcos\b/g,    "Math.cos")
+      .replace(/\btan\b/g,    "Math.tan")
+      .replace(/\bsec\b/g,    "(1/Math.cos)")
+      .replace(/\bcsc\b/g,    "(1/Math.sin)")
+      .replace(/\bcot\b/g,    "(1/Math.tan)")
+      .replace(/\barcsin\b/g, "Math.asin")
+      .replace(/\barccos\b/g, "Math.acos")
+      .replace(/\barctan\b/g, "Math.atan")
+      .replace(/\basin\b/g,   "Math.asin")
+      .replace(/\bacos\b/g,   "Math.acos")
+      .replace(/\batan\b/g,   "Math.atan")
+      .replace(/\bsinh\b/g,   "Math.sinh")
+      .replace(/\bcosh\b/g,   "Math.cosh")
+      .replace(/\btanh\b/g,   "Math.tanh")
+      // roots & abs
+      .replace(/\bsqrt\b/g,   "Math.sqrt")
+      .replace(/\bcbrt\b/g,   "Math.cbrt")
+      .replace(/\babs\b/g,    "Math.abs")
+      // logs
+      .replace(/\bln\b/g,     "Math.log")
+      .replace(/\blog10\b/g,  "Math.log10")
+      .replace(/\blog2\b/g,   "Math.log2")
+      .replace(/\blog\b/g,    "Math.log10")
+      // exp
+      .replace(/\bexp\b/g,    "Math.exp")
+      // constants
+      .replace(/\bpi\b/gi,    "Math.PI")
+      .replace(/\bPI\b/g,     "Math.PI")
+      // e as constant — careful not to replace 'e' inside words like 'exp'
+      .replace(/(?<![a-zA-Z])e(?![a-zA-Z0-9_])/g, "Math.E")
+      // floor/ceil
+      .replace(/\bfloor\b/g,  "Math.floor")
+      .replace(/\bceil\b/g,   "Math.ceil")
+      .replace(/\bround\b/g,  "Math.round")
+      // max/min
+      .replace(/\bmax\b/g,    "Math.max")
+      .replace(/\bmin\b/g,    "Math.min");
     // eslint-disable-next-line no-new-func
-    return Function("x", `"use strict"; return (${expr});`)(xVal);
+    const result = Function("x", `"use strict"; return (${expr});`)(xVal);
+    return (isFinite(result) && !isNaN(result)) ? result : NaN;
   } catch { return NaN; }
 }
 
@@ -999,15 +1039,24 @@ function renderGraphToSVG(graphConfig, width = 480, height = 300) {
     if (cfg.boundary) fns.push(cfg.boundary);
     if (cfg.pieces) cfg.pieces.forEach(p => fns.push(p.fn));
     if (fns.length) {
-      const xs = Array.from({length:200}, (_,i) => xDom[0] + (xDom[1]-xDom[0])*i/199);
-      let yMin=Infinity, yMax=-Infinity;
+      const xs = Array.from({length:400}, (_,i) => xDom[0] + (xDom[1]-xDom[0])*i/399);
+      const allY = [];
       fns.forEach(fn => xs.forEach(x => {
-        const y = evalFn(fn,x);
-        if (isFinite(y)) { yMin=Math.min(yMin,y); yMax=Math.max(yMax,y); }
+        const y = evalFn(fn, x);
+        if (isFinite(y) && !isNaN(y)) allY.push(y);
       }));
-      if (isFinite(yMin)) {
-        const pad = (yMax-yMin)*0.15 || 1;
-        yDom = [Math.round((yMin-pad)*10)/10, Math.round((yMax+pad)*10)/10];
+      if (allY.length) {
+        // remove outliers — ignore top/bottom 2% to handle asymptotes (tan, 1/x etc)
+        allY.sort((a,b) => a-b);
+        const trim = Math.max(1, Math.floor(allY.length * 0.02));
+        const trimmed = allY.slice(trim, allY.length - trim);
+        const yMin = trimmed[0];
+        const yMax = trimmed[trimmed.length - 1];
+        const pad = (yMax - yMin) * 0.18 || 1;
+        yDom = [
+          Math.round((yMin - pad) * 10) / 10,
+          Math.round((yMax + pad) * 10) / 10
+        ];
       }
     }
     yDom = yDom || [-5, 5];
@@ -1275,26 +1324,45 @@ function renderGraphToSVG(graphConfig, width = 480, height = 300) {
   } else if (cfg.type === "area") {
     const x0 = cfg.shadeFrom ?? xDom[0];
     const x1 = cfg.shadeTo   ?? xDom[1];
-    drawShadePolygon(cfg.fnTop, cfg.fnBottom, x0, x1, COL.shade);
-    drawCurve(cfg.fnTop,    null, COL.blue, false);
-    drawCurve(cfg.fnBottom, null, COL.red,  false);
-    [[x0, evalFn(cfg.fnTop, x0)], [x1, evalFn(cfg.fnTop, x1)]].forEach(([x, y]) => drawFilledDot(x, y, COL.text));
+    // auto-detect which function is actually on top at the midpoint
+    const xMid = (x0 + x1) / 2;
+    const yA = evalFn(cfg.fnTop, xMid);
+    const yB = evalFn(cfg.fnBottom, xMid);
+    const actualTop = (isFinite(yA) && isFinite(yB) && yB > yA) ? cfg.fnBottom : cfg.fnTop;
+    const actualBot = (isFinite(yA) && isFinite(yB) && yB > yA) ? cfg.fnTop    : cfg.fnBottom;
+    const topLabel = (isFinite(yA) && isFinite(yB) && yB > yA) ? (cfg.fnBottomLabel || "f(x)") : (cfg.fnTopLabel    || "f(x)");
+    const botLabel = (isFinite(yA) && isFinite(yB) && yB > yA) ? (cfg.fnTopLabel    || "g(x)") : (cfg.fnBottomLabel || "g(x)");
+    drawShadePolygon(actualTop, actualBot, x0, x1, COL.shade);
+    drawCurve(actualTop, null, COL.blue, false);
+    drawCurve(actualBot, null, COL.red,  false);
+    [[x0, evalFn(actualTop, x0)], [x1, evalFn(actualTop, x1)]].forEach(([x, y]) => {
+      if (isFinite(y)) drawFilledDot(x, y, COL.text);
+    });
     if (showLabel) {
-      // label top curve to the right of shaded region
-      const lxTop = x1 + (xDom[1] - x1) * 0.4;
-      const lyTop = evalFn(cfg.fnTop, lxTop);
-      if (isFinite(lyTop) && lyTop >= yDom[0] && lyTop <= yDom[1]) {
-        g.append("text").attr("x", xScale(lxTop)).attr("y", yScale(lyTop) - 8)
+      // label top curve — try right of shaded region first, fallback to left
+      const lxRight = x1 + (xDom[1] - x1) * 0.4;
+      const lxLeft  = xDom[0] + (x0 - xDom[0]) * 0.4;
+      const tryLabelX = (fn, color, offset) => {
+        for (const lx of [lxRight, lxLeft, (x0+x1)/2]) {
+          const ly = evalFn(fn, lx);
+          if (isFinite(ly) && ly >= yDom[0] && ly <= yDom[1]) {
+            g.append("text").attr("x", xScale(lx)).attr("y", yScale(ly) + offset)
+              .attr("fill", color).attr("font-size", 12).attr("font-style", "italic").attr("font-family", "sans-serif");
+            return { lx, ly };
+          }
+        }
+      };
+      const lyTopR = evalFn(actualTop, lxRight);
+      if (isFinite(lyTopR) && lyTopR >= yDom[0] && lyTopR <= yDom[1]) {
+        g.append("text").attr("x", xScale(lxRight)).attr("y", yScale(lyTopR) - 8)
           .attr("fill", COL.blue).attr("font-size", 12).attr("font-style", "italic").attr("font-family", "sans-serif")
-          .text(cfg.fnTopLabel || "f(x)");
+          .text(topLabel);
       }
-      // label bottom curve below the shaded region
-      const lxBot = x1 + (xDom[1] - x1) * 0.4;
-      const lyBot = evalFn(cfg.fnBottom, lxBot);
-      if (isFinite(lyBot) && lyBot >= yDom[0] && lyBot <= yDom[1]) {
-        g.append("text").attr("x", xScale(lxBot)).attr("y", yScale(lyBot) + 16)
+      const lyBotR = evalFn(actualBot, lxRight);
+      if (isFinite(lyBotR) && lyBotR >= yDom[0] && lyBotR <= yDom[1]) {
+        g.append("text").attr("x", xScale(lxRight)).attr("y", yScale(lyBotR) + 16)
           .attr("fill", COL.red).attr("font-size", 12).attr("font-style", "italic").attr("font-family", "sans-serif")
-          .text(cfg.fnBottomLabel || "g(x)");
+          .text(botLabel);
       }
     }
 
