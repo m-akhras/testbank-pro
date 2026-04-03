@@ -2919,7 +2919,11 @@ export default function TestBankApp() {
   const [bankSelected, setBankSelected] = useState(new Set());
   const [graphEditorQId, setGraphEditorQId] = useState(null); // which question has graph editor open
 
-  // Pre-render graphs for print preview
+  const [qtiExamName, setQtiExamName] = useState("");
+  const [showPrintPreview, setShowPrintPreview] = useState(false);
+  const [printGraphCache, setPrintGraphCache] = useState({});
+
+  // Pre-render graphs for print preview — must be after state declarations
   useEffect(() => {
     if (!showPrintPreview) { setPrintGraphCache({}); return; }
     const v = versions[activeVersion];
@@ -2937,9 +2941,7 @@ export default function TestBankApp() {
       setPrintGraphCache(cache);
     })();
   }, [showPrintPreview, activeVersion]);
-  const [qtiExamName, setQtiExamName] = useState("");
-  const [showPrintPreview, setShowPrintPreview] = useState(false);
-  const [printGraphCache, setPrintGraphCache] = useState({});
+
   const [dupWarnings, setDupWarnings] = useState([]);
   const [saveExamName, setSaveExamName] = useState("");
   const [savingExam, setSavingExam] = useState(false);
