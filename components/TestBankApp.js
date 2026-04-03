@@ -4660,9 +4660,11 @@ export default function TestBankApp() {
                   ⏳ Rendering graphs...
                 </div>
               )}
-              <div key={Object.keys(printGraphCache).length} style={{background:"#fff", color:"#000", width:"21cm", minHeight:"29.7cm", padding:"2cm", boxShadow:"0 4px 32px rgba(0,0,0,0.5)", fontFamily:"'Times New Roman',serif", fontSize:"12pt", lineHeight:1.6}}
-                dangerouslySetInnerHTML={{__html: printHTML}}
-              />
+              <div style={{width:"100%", maxWidth:"900px", transformOrigin:"top center"}}>
+                <div key={Object.keys(printGraphCache).length} style={{background:"#fff", color:"#000", width:"21cm", minHeight:"29.7cm", padding:"2cm", boxShadow:"0 4px 32px rgba(0,0,0,0.5)", fontFamily:"'Times New Roman',serif", fontSize:"12pt", lineHeight:1.6, transform:"scale(0.82)", transformOrigin:"top left", marginBottom:"-18%"}}
+                  dangerouslySetInnerHTML={{__html: printHTML}}
+                />
+              </div>
             </div>
           </div>
         );
