@@ -1722,14 +1722,14 @@ function makeDocxImageXml(base64png, widthEmu=4800000, heightEmu=2800000) {
   const b64 = base64png.replace(/^data:image\/png;base64,/, "");
   const rid  = `rImg${_docxImgCounter}`;
   const docId = _docxImgCounter;
-  return `<w:p><w:pPr><w:spacing w:after="120"/></w:pPr><w:r><w:drawing><wp:inline xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${widthEmu}" cy="${heightEmu}"/><wp:effectExtent l="0" t="0" r="0" b="0"/><wp:docPr id="${docId}" name="Graph${docId}"/><wp:cNvGraphicFramePr><a:graphicFrameLocks xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" noChangeAspect="1"/></wp:cNvGraphicFramePr><a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:nvPicPr><pic:cNvPr id="${docId}" name="Graph${docId}"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="${rid}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${widthEmu}" cy="${heightEmu}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>
+  return `<w:p><w:pPr><w:spacing w:after="120"/></w:pPr><w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${widthEmu}" cy="${heightEmu}"/><wp:effectExtent l="0" t="0" r="0" b="0"/><wp:docPr id="${docId}" name="Graph${docId}"/><wp:cNvGraphicFramePr><a:graphicFrameLocks noChangeAspect="1"/></wp:cNvGraphicFramePr><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic><pic:nvPicPr><pic:cNvPr id="${docId}" name="Graph${docId}"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="${rid}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${widthEmu}" cy="${heightEmu}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>
 <GRAPH_REL_PLACEHOLDER rid="${rid}" b64="${b64}"/>`;
 }
 
 async function buildDocx(questions, course, vLabel, classSection=null) {
   _docxImgCounter = 0; // reset per export
   // We build the docx XML manually for full math support
-  const ns = `xmlns:wpc="http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:wp14="http://schemas.microsoft.com/office/word/2010/wordprocessingDrawing" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:w10="urn:schemas-microsoft-com:office:word" xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml" xmlns:wpg="http://schemas.microsoft.com/office/word/2010/wordprocessingGroup" xmlns:wpi="http://schemas.microsoft.com/office/word/2010/wordprocessingInk" xmlns:wne="http://schemas.microsoft.com/office/word/2006/wordml" xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape"`;
+  const ns = `xmlns:wpc="http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:wp14="http://schemas.microsoft.com/office/word/2010/wordprocessingDrawing" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:w10="urn:schemas-microsoft-com:office:word" xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml" xmlns:wpg="http://schemas.microsoft.com/office/word/2010/wordprocessingGroup" xmlns:wpi="http://schemas.microsoft.com/office/word/2010/wordprocessingInk" xmlns:wne="http://schemas.microsoft.com/office/word/2006/wordml" xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"`;
 
   function para(text, opts={}) {
     const {bold=false, size=24, color="000000", indent=0, spacing=160} = opts;
@@ -2386,7 +2386,7 @@ ${groupSections.join("\n")}
 
 async function buildDocxCompare(versions, course) {
   _docxImgCounter = 0; // reset per export
-  const ns = `xmlns:wpc="http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math" xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml"`;
+  const ns = `xmlns:wpc="http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math" xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"`;
 
   function para(text, opts={}) {
     const {bold=false, size=24, color="000000", indent=0, spacing=120} = opts;
@@ -2918,8 +2918,28 @@ export default function TestBankApp() {
   const [bankSelectMode, setBankSelectMode] = useState(false);
   const [bankSelected, setBankSelected] = useState(new Set());
   const [graphEditorQId, setGraphEditorQId] = useState(null); // which question has graph editor open
+
+  // Pre-render graphs for print preview
+  useEffect(() => {
+    if (!showPrintPreview) { setPrintGraphCache({}); return; }
+    const v = versions[activeVersion];
+    if (!v) return;
+    const graphQs = v.questions.filter(q => q.hasGraph && q.graphConfig);
+    if (!graphQs.length) return;
+    (async () => {
+      const cache = {};
+      for (const q of graphQs) {
+        try {
+          const b64 = await graphToBase64PNG(q.graphConfig, 480, 280);
+          if (b64) cache[q.id || q.question] = b64;
+        } catch(e) { console.warn("print graph failed", e); }
+      }
+      setPrintGraphCache(cache);
+    })();
+  }, [showPrintPreview, activeVersion]);
   const [qtiExamName, setQtiExamName] = useState("");
   const [showPrintPreview, setShowPrintPreview] = useState(false);
+  const [printGraphCache, setPrintGraphCache] = useState({});
   const [dupWarnings, setDupWarnings] = useState([]);
   const [saveExamName, setSaveExamName] = useState("");
   const [savingExam, setSavingExam] = useState(false);
@@ -4564,13 +4584,22 @@ export default function TestBankApp() {
         const courseName = v.questions[0]?.course || "Exam";
         const titleLabel = cs ? `Section ${cs} — Version ${v.label}` : `Version ${v.label}`;
 
+        const getGraphImg = (q) => {
+          const b64 = printGraphCache[q.id || q.question];
+          if (b64) return `<img src="${b64}" style="max-width:100%;display:block;margin-bottom:8pt;border:1px solid #eee;" />`;
+          if (q.hasGraph) return `<div style="width:100%;height:160pt;border:1px solid #ccc;margin-bottom:8pt;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:10pt;">[Graph loading...]</div>`;
+          return "";
+        };
+
         const printHTML = `
           <h2 style="font-size:16pt;margin-bottom:4pt;">${courseName} — ${titleLabel}</h2>
           <div style="font-size:10pt;color:#555;margin-bottom:20pt;">Name: _________________________ &nbsp;&nbsp; Date: _____________</div>
           ${v.questions.map((q, qi) => {
+            const graphImg = getGraphImg(q);
             if (q.type === "Branched") return `
               <div style="margin-bottom:20pt;page-break-inside:avoid;">
                 <div style="font-weight:bold;margin-bottom:4pt;">Question ${qi+1}.</div>
+                ${graphImg}
                 <div style="margin-bottom:8pt;">Given: ${q.stem}</div>
                 ${(q.parts||[]).map((p,pi) => `
                   <div style="margin-left:20pt;margin-bottom:6pt;">
@@ -4581,6 +4610,7 @@ export default function TestBankApp() {
             return `
               <div style="margin-bottom:20pt;page-break-inside:avoid;">
                 <div style="font-weight:bold;margin-bottom:4pt;">Question ${qi+1}.</div>
+                ${graphImg}
                 <div style="margin-bottom:8pt;">${q.question}</div>
                 ${q.choices ? q.choices.map((c,ci) => `
                   <div style="margin:3pt 0 3pt 24pt;">${String.fromCharCode(65+ci)}.&nbsp; ${c}</div>`).join("") : ""}
