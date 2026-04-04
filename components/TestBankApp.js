@@ -664,6 +664,112 @@ function GraphEditor({ initialConfig, onSave, onRemove, onClose }) {
 }
 // ─── End GraphEditor ──────────────────────────────────────────────────────────
 
+// ─── InlineEditor ─────────────────────────────────────────────────────────────
+function InlineEditor({ q, onSave, onClose }) {
+  const [question,  setQuestion]  = useState(q.question  || "");
+  const [stem,      setStem]      = useState(q.stem      || "");
+  const [choices,   setChoices]   = useState(q.choices   ? [...q.choices] : []);
+  const [answer,    setAnswer]    = useState(q.answer    || "");
+  const [explanation, setExplanation] = useState(q.explanation || "");
+  const [parts,     setParts]     = useState(q.parts     ? q.parts.map(p => ({...p})) : []);
+  const [saving,    setSaving]    = useState(false);
+
+  const inp = (val, set, ph, rows) => rows
+    ? <textarea value={val} onChange={e => set(e.target.value)} placeholder={ph} rows={rows}
+        style={{width:"100%", padding:"0.4rem 0.6rem", background:"#0d1425", border:"1px solid #1e3a5f",
+          color:"#e8e8e0", borderRadius:"6px", fontSize:"0.82rem", resize:"vertical",
+          lineHeight:1.5, fontFamily:"inherit", boxSizing:"border-box"}} />
+    : <input value={val} onChange={e => set(e.target.value)} placeholder={ph}
+        style={{width:"100%", padding:"0.35rem 0.6rem", background:"#0d1425", border:"1px solid #1e3a5f",
+          color:"#e8e8e0", borderRadius:"6px", fontSize:"0.82rem", fontFamily:"inherit", boxSizing:"border-box"}} />;
+
+  const lbl = (t) => <div style={{fontSize:"0.68rem", color:"#4a6fa5", textTransform:"uppercase",
+    letterSpacing:"0.1em", fontWeight:"600", marginBottom:"0.3rem", marginTop:"0.75rem"}}>{t}</div>;
+
+  const handleSave = async () => {
+    setSaving(true);
+    let updated = { ...q, question, answer, explanation };
+    if (choices.length) updated.choices = choices;
+    if (q.type === "Branched") updated = { ...updated, stem, parts };
+    await onSave(updated);
+    setSaving(false);
+  };
+
+  return (
+    <div style={{marginTop:"0.75rem", padding:"1rem", background:"#080d1a",
+      border:"1px solid #1e3a5f", borderRadius:"8px", borderLeft:"3px solid #60a5fa"}}>
+      <div style={{fontSize:"0.75rem", color:"#60a5fa", fontWeight:"700", marginBottom:"0.75rem",
+        display:"flex", alignItems:"center", gap:"0.5rem"}}>
+        ✏️ Edit Question
+        <span style={{fontSize:"0.65rem", color:"#3a5a8a", fontWeight:"400"}}>— changes save to Supabase</span>
+      </div>
+
+      {q.type === "Branched" ? (<>
+        {lbl("Given (stem)")}
+        {inp(stem, setStem, "Shared context for all parts...", 2)}
+        {parts.map((p, pi) => (
+          <div key={pi} style={{marginTop:"0.75rem", paddingLeft:"0.75rem", borderLeft:"2px solid #1e3a5f"}}>
+            <div style={{fontSize:"0.68rem", color:"#4a6fa5", marginBottom:"0.3rem"}}>Part ({String.fromCharCode(97+pi)})</div>
+            {inp(p.question, (v) => { const np=[...parts]; np[pi]={...np[pi],question:v}; setParts(np); }, "Question text...", 2)}
+            <div style={{fontSize:"0.65rem", color:"#4a6fa5", margin:"0.3rem 0 0.2rem"}}>Answer</div>
+            {inp(p.answer, (v) => { const np=[...parts]; np[pi]={...np[pi],answer:v}; setParts(np); }, "Answer...")}
+          </div>
+        ))}
+      </>) : (<>
+        {lbl("Question Text")}
+        {inp(question, setQuestion, "Question text...", 3)}
+
+        {choices.length > 0 && (<>
+          {lbl("Answer Choices")}
+          {choices.map((c, ci) => (
+            <div key={ci} style={{display:"flex", alignItems:"center", gap:"0.5rem", marginBottom:"0.35rem"}}>
+              <button onClick={() => setAnswer(c)}
+                style={{flexShrink:0, width:"24px", height:"24px", borderRadius:"50%", border:"none",
+                  cursor:"pointer", fontSize:"0.7rem", fontWeight:"700",
+                  background: answer===c ? "#10b981" : "#1e3a5f",
+                  color: answer===c ? "#fff" : "#4a6fa5"}}>
+                {String.fromCharCode(65+ci)}
+              </button>
+              <input value={c} onChange={e => { const nc=[...choices]; nc[ci]=e.target.value; setChoices(nc);
+                  if (answer===c) setAnswer(e.target.value); }}
+                style={{flex:1, padding:"0.3rem 0.5rem", background:"#0d1425",
+                  border:"1px solid "+(answer===c?"#10b981":"#1e3a5f"),
+                  color:"#e8e8e0", borderRadius:"5px", fontSize:"0.8rem"}} />
+            </div>
+          ))}
+          <div style={{fontSize:"0.65rem", color:"#3a5a8a", marginTop:"0.3rem"}}>
+            Click a letter to mark as correct answer · Currently: <span style={{color:"#10b981"}}>{answer || "none selected"}</span>
+          </div>
+        </>)}
+
+        {!choices.length && (<>
+          {lbl("Answer")}
+          {inp(answer, setAnswer, "Answer...")}
+        </>)}
+      </>)}
+
+      {lbl("Explanation (optional)")}
+      {inp(explanation, setExplanation, "Step-by-step explanation...", 2)}
+
+      <div style={{display:"flex", gap:"0.5rem", marginTop:"0.85rem"}}>
+        <button onClick={handleSave} disabled={saving}
+          style={{padding:"0.35rem 0.9rem", background:"#10b981", color:"#000",
+            border:"none", borderRadius:"6px", fontSize:"0.78rem", fontWeight:"600",
+            cursor:saving?"not-allowed":"pointer", opacity:saving?0.7:1}}>
+          {saving ? "Saving…" : "✓ Save Changes"}
+        </button>
+        <button onClick={onClose}
+          style={{padding:"0.35rem 0.8rem", background:"transparent", color:"#4a6fa5",
+            border:"1px solid #1e3a5f", borderRadius:"6px", fontSize:"0.78rem", cursor:"pointer"}}>
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+// ─── End InlineEditor ─────────────────────────────────────────────────────────
+
+
 // ─── Course data ──────────────────────────────────────────────────────────────
 const COURSES = {
   "Calculus 1": {
@@ -3064,6 +3170,7 @@ export default function TestBankApp() {
   const [bankSelectMode, setBankSelectMode] = useState(false);
   const [bankSelected, setBankSelected] = useState(new Set());
   const [graphEditorQId, setGraphEditorQId] = useState(null); // which question has graph editor open
+  const [inlineEditQId,  setInlineEditQId]  = useState(null); // which question has inline editor open
 
   const [qtiExamName, setQtiExamName] = useState("");
   const [showPrintPreview, setShowPrintPreview] = useState(false);
@@ -4075,8 +4182,12 @@ export default function TestBankApp() {
                       setPendingType("bank_replace"); setPendingMeta({qId: q.id}); setPasteInput(""); setPasteError("");
                     }}>↻</button>
                   <button style={{...S.smBtn, color:"#60a5fa", border:"1px solid #60a5fa44"}}
-                    onClick={() => setGraphEditorQId(graphEditorQId === q.id ? null : q.id)}>
+                    onClick={() => { setGraphEditorQId(graphEditorQId === q.id ? null : q.id); setInlineEditQId(null); }}>
                     📈{q.hasGraph ? " Edit" : " Graph"}
+                  </button>
+                  <button style={{...S.smBtn, color: inlineEditQId===q.id ? "#60a5fa" : "#a78bfa", border:"1px solid #a78bfa44"}}
+                    onClick={() => { setInlineEditQId(inlineEditQId===q.id ? null : q.id); setGraphEditorQId(null); }}>
+                    ✏️ Edit
                   </button>
                   <button style={{...S.smBtn, color:inExam?accent:text2, border:"1px solid "+(inExam?accent+"44":border)}}
                     onClick={() => setSelectedForExam(p => p.includes(q.id) ? p.filter(id => id !== q.id) : [...p, q.id])}>
@@ -4103,6 +4214,17 @@ export default function TestBankApp() {
                       setGraphEditorQId(null);
                     }}
                     onClose={() => setGraphEditorQId(null)}
+                  />
+                )}
+                {inlineEditQId === q.id && (
+                  <InlineEditor
+                    q={q}
+                    onSave={async (updated) => {
+                      await saveQuestion(updated);
+                      setBank(prev => prev.map(bq => bq.id === q.id ? updated : bq));
+                      setInlineEditQId(null);
+                    }}
+                    onClose={() => setInlineEditQId(null)}
                   />
                 )}
                 {q.type === "Branched" ? (
