@@ -393,7 +393,10 @@ function GraphDisplay({ graphConfig, authorMode = false }) {
     if (!ref.current || !graphConfig || typeof window === "undefined" || !window.d3) return;
     ref.current.innerHTML = "";
     const cfg = { ...graphConfig, showAxisNumbers: showNumbers, showGrid };
-    const svgNode = window.renderGraphToSVG(cfg, ref.current.offsetWidth || 480, 260);
+    const isStatChart = cfg.type && ["bar","histogram","scatter","discrete_dist","continuous_dist","standard_normal"].includes(cfg.type);
+    const renderFn = isStatChart ? window.renderStatChartToSVG : window.renderGraphToSVG;
+    if (!renderFn) return;
+    const svgNode = renderFn(cfg, ref.current.offsetWidth || 480, 260);
     if (svgNode) {
       svgNode.style.width = "100%";
       svgNode.style.height = "260px";
@@ -451,11 +454,19 @@ function autoScaleY(fns, xMin, xMax, padding=0.18) {
   return [Math.round((yMin - pad) * 10) / 10, Math.round((yMax + pad) * 10) / 10];
 }
 
+const STAT_CHART_TYPES = new Set(["bar","histogram","scatter","discrete_dist","continuous_dist","standard_normal"]);
+
 function inferGraphType(cfg) {
   if (!cfg) return "single";
   if (cfg.type) return cfg.type;
   if (cfg.fnTop || cfg.fnBottom) return "area";
   if (cfg.boundary) return "domain";
+  if (cfg.labels && cfg.values) return "bar";
+  if (cfg.bins) return "histogram";
+  if (cfg.points) return "scatter";
+  if (cfg.data) return "discrete_dist";
+  if (cfg.distType === "standard_normal") return "continuous_dist";
+  if (cfg.distType || cfg.mu !== undefined) return "continuous_dist";
   return "single";
 }
 
@@ -508,14 +519,22 @@ function GraphEditor({ initialConfig, onSave, onRemove, onClose }) {
     if (type === "piecewise") return { ...base, fn, fnLabel: fnLabel||undefined, showFnLabel, holes, points };
     if (type === "area")      return { ...base, fnTop, fnBottom, fnTopLabel: fnTopLabel||undefined, fnBottomLabel: fnBottomLabel||undefined, showFnLabel, shadeFrom: Number(shadeFrom), shadeTo: Number(shadeTo) };
     if (type === "domain")    return { ...base, boundary, shadeAbove, boundaryDashed: boundDashed, boundaryLabel: boundLabel, showFnLabel };
+    // Stat chart types — pass through initialConfig, just add display flags
+    if (["bar","histogram","scatter","discrete_dist","continuous_dist"].includes(type)) {
+      return { ...(initialConfig || {}), showAxisNumbers: showNumbers, showGrid };
+    }
     return base;
   };
 
   useEffect(() => {
-    if (!previewRef.current || typeof window === "undefined" || !window.d3 || !window.renderGraphToSVG) return;
+    if (!previewRef.current || typeof window === "undefined" || !window.d3) return;
     previewRef.current.innerHTML = "";
     try {
-      const svg = window.renderGraphToSVG(buildConfig(), previewRef.current.offsetWidth || 400, 220);
+      const cfg = buildConfig();
+      const isStatChart = cfg.type && ["bar","histogram","scatter","discrete_dist","continuous_dist","standard_normal"].includes(cfg.type);
+      const renderFn = isStatChart ? window.renderStatChartToSVG : window.renderGraphToSVG;
+      if (!renderFn) return;
+      const svg = renderFn(cfg, previewRef.current.offsetWidth || 400, 220);
       if (svg) { svg.style.width = "100%"; svg.style.height = "220px"; previewRef.current.appendChild(svg); }
     } catch(e) { console.warn("preview error", e); }
   });
@@ -542,7 +561,16 @@ function GraphEditor({ initialConfig, onSave, onRemove, onClose }) {
     </div>
   );
 
-  const typeLabel = type === "area" ? "Area between curves" : type === "domain" ? "Domain sketch" : "Single curve";
+  const typeLabel = {
+    "single": "Single curve", "piecewise": "Piecewise function", "area": "Area between curves",
+    "domain": "Domain sketch", "bar": "Bar chart", "histogram": "Histogram",
+    "scatter": "Scatter plot", "discrete_dist": "Discrete probability distribution",
+    "continuous_dist": initialConfig?.distType === "standard_normal"
+      ? "Standard Normal Distribution (Z)"
+      : initialConfig?.distType === "uniform" ? "Uniform Distribution"
+      : initialConfig?.distType === "exponential" ? "Exponential Distribution"
+      : "Normal Distribution"
+  }[type] || type;
 
   return (
     <div style={{marginTop:"0.75rem", padding:"1rem", background:"#0f1629", border:"1px solid #1e3a5f",
@@ -1642,10 +1670,312 @@ async function graphToBase64PNG(graphConfig, width = 480, height = 300) {
     } catch (e) { reject(e); }
   });
 }
+// ─── QM Statistical Chart Renderer ──────────────────────────────────────────
+function renderStatChartToSVG(chartConfig, width=480, height=300) {
+  if (typeof window === "undefined" || !window.d3) return null;
+  const d3 = window.d3;
+  const cfg = chartConfig || {};
+  const margin = {top:30, right:30, bottom:55, left:55};
+  const iW = width  - margin.left - margin.right;
+  const iH = height - margin.top  - margin.bottom;
+
+  const svgNode = document.createElementNS("http://www.w3.org/2000/svg","svg");
+  svgNode.setAttribute("width", width);
+  svgNode.setAttribute("height", height);
+  svgNode.setAttribute("xmlns","http://www.w3.org/2000/svg");
+  const svg = d3.select(svgNode);
+  svg.append("rect").attr("width",width).attr("height",height).attr("fill","#ffffff");
+  const g = svg.append("g").attr("transform",`translate(${margin.left},${margin.top})`);
+
+  const COL = { blue:"#185FA5", red:"#E24B4A", green:"#1D9E75", shade:"#378ADD",
+                text:"#1a1a1a", muted:"#888888", grid:"#e8e8e8", bar:"#185FA5", barHl:"#E24B4A" };
+
+  function gridLine(x1,y1,x2,y2) {
+    g.append("line").attr("x1",x1).attr("y1",y1).attr("x2",x2).attr("y2",y2)
+      .attr("stroke",COL.grid).attr("stroke-width",0.8);
+  }
+  function axisLabel(text, x, y, anchor="middle", size=11) {
+    g.append("text").attr("x",x).attr("y",y).attr("text-anchor",anchor)
+      .attr("font-size",size).attr("font-family","sans-serif").attr("fill",COL.text).text(text);
+  }
+
+  // ── Bar Chart ──────────────────────────────────────────────────────────────
+  if (cfg.type === "bar") {
+    const labels = cfg.labels || [];
+    const values = cfg.values || [];
+    const xScale = d3.scaleBand().domain(labels).range([0,iW]).padding(0.25);
+    const yMax   = d3.max(values) * 1.15 || 10;
+    const yScale = d3.scaleLinear().domain([0,yMax]).range([iH,0]);
+    // grid
+    d3.ticks(0, yMax, 6).forEach(t => { gridLine(0,yScale(t),iW,yScale(t)); });
+    // bars
+    labels.forEach((lbl,i) => {
+      const x = xScale(lbl);
+      const bw = xScale.bandwidth();
+      const highlighted = cfg.highlight === lbl || cfg.highlight === i;
+      g.append("rect").attr("x",x).attr("y",yScale(values[i]))
+        .attr("width",bw).attr("height",iH-yScale(values[i]))
+        .attr("fill", highlighted ? COL.barHl : COL.bar).attr("rx",2);
+      g.append("text").attr("x",x+bw/2).attr("y",yScale(values[i])-5)
+        .attr("text-anchor","middle").attr("font-size",10).attr("fill",COL.text).text(values[i]);
+      g.append("text").attr("x",x+bw/2).attr("y",iH+15)
+        .attr("text-anchor","middle").attr("font-size",10).attr("fill",COL.text).text(lbl);
+    });
+    // axes
+    g.append("line").attr("x1",0).attr("y1",iH).attr("x2",iW).attr("y2",iH).attr("stroke",COL.text).attr("stroke-width",1.5);
+    g.append("line").attr("x1",0).attr("y1",0).attr("x2",0).attr("y2",iH).attr("stroke",COL.text).attr("stroke-width",1.5);
+    d3.ticks(0, yMax, 6).forEach(t => { axisLabel(t, -8, yScale(t)+4, "end", 10); });
+    if (cfg.xLabel) axisLabel(cfg.xLabel, iW/2, iH+42);
+    if (cfg.yLabel) g.append("text").attr("transform",`translate(-40,${iH/2}) rotate(-90)`).attr("text-anchor","middle").attr("font-size",11).attr("fill",COL.text).text(cfg.yLabel);
+    if (cfg.title)  axisLabel(cfg.title, iW/2, -12, "middle", 13);
+  }
+
+  // ── Histogram ─────────────────────────────────────────────────────────────
+  else if (cfg.type === "histogram") {
+    const bins   = cfg.bins   || [];   // [{x0, x1, count}]
+    const counts = bins.map(b => b.count||0);
+    const yMax   = d3.max(counts) * 1.15 || 10;
+    const xMin   = bins[0]?.x0 ?? 0;
+    const xMax   = bins[bins.length-1]?.x1 ?? 10;
+    const xScale = d3.scaleLinear().domain([xMin,xMax]).range([0,iW]);
+    const yScale = d3.scaleLinear().domain([0,yMax]).range([iH,0]);
+    d3.ticks(0,yMax,6).forEach(t => { gridLine(0,yScale(t),iW,yScale(t)); });
+    bins.forEach(b => {
+      const x = xScale(b.x0), w = xScale(b.x1)-xScale(b.x0)-1;
+      g.append("rect").attr("x",x).attr("y",yScale(b.count)).attr("width",w)
+        .attr("height",iH-yScale(b.count)).attr("fill",COL.bar).attr("stroke","#fff").attr("stroke-width",1);
+      if (w > 20) g.append("text").attr("x",x+w/2).attr("y",yScale(b.count)-5)
+        .attr("text-anchor","middle").attr("font-size",10).attr("fill",COL.text).text(b.count);
+    });
+    g.append("line").attr("x1",0).attr("y1",iH).attr("x2",iW).attr("y2",iH).attr("stroke",COL.text).attr("stroke-width",1.5);
+    g.append("line").attr("x1",0).attr("y1",0).attr("x2",0).attr("y2",iH).attr("stroke",COL.text).attr("stroke-width",1.5);
+    // x axis ticks
+    bins.forEach(b => { axisLabel(b.x0, xScale(b.x0), iH+15, "middle", 10); });
+    axisLabel(bins[bins.length-1]?.x1 ?? xMax, xScale(xMax), iH+15, "middle", 10);
+    d3.ticks(0,yMax,6).forEach(t => { axisLabel(t,-8,yScale(t)+4,"end",10); });
+    if (cfg.xLabel) axisLabel(cfg.xLabel, iW/2, iH+42);
+    if (cfg.yLabel) g.append("text").attr("transform",`translate(-40,${iH/2}) rotate(-90)`).attr("text-anchor","middle").attr("font-size",11).attr("fill",COL.text).text(cfg.yLabel);
+    if (cfg.title)  axisLabel(cfg.title, iW/2, -12, "middle", 13);
+  }
+
+  // ── Scatter Plot ──────────────────────────────────────────────────────────
+  else if (cfg.type === "scatter") {
+    const points = cfg.points || []; // [{x,y}]
+    const xs = points.map(p=>p.x), ys = points.map(p=>p.y);
+    const xMin = d3.min(xs)||0, xMax = d3.max(xs)||10;
+    const yMin = d3.min(ys)||0, yMax = d3.max(ys)||10;
+    const xPad = (xMax-xMin)*0.1||1, yPad = (yMax-yMin)*0.1||1;
+    const xScale = d3.scaleLinear().domain([xMin-xPad, xMax+xPad]).range([0,iW]);
+    const yScale = d3.scaleLinear().domain([yMin-yPad, yMax+yPad]).range([iH,0]);
+    d3.ticks(xMin-xPad,xMax+xPad,6).forEach(t => { gridLine(xScale(t),0,xScale(t),iH); });
+    d3.ticks(yMin-yPad,yMax+yPad,6).forEach(t => { gridLine(0,yScale(t),iW,yScale(t)); });
+    // regression line if provided
+    if (cfg.regressionLine) {
+      const {slope, intercept} = cfg.regressionLine;
+      const rx1=xMin-xPad, rx2=xMax+xPad;
+      g.append("line").attr("x1",xScale(rx1)).attr("y1",yScale(slope*rx1+intercept))
+        .attr("x2",xScale(rx2)).attr("y2",yScale(slope*rx2+intercept))
+        .attr("stroke",COL.red).attr("stroke-width",1.8).attr("stroke-dasharray","5,3");
+    }
+    points.forEach(p => {
+      g.append("circle").attr("cx",xScale(p.x)).attr("cy",yScale(p.y)).attr("r",5)
+        .attr("fill",COL.blue).attr("fill-opacity",0.75).attr("stroke","#fff").attr("stroke-width",1);
+    });
+    g.append("line").attr("x1",0).attr("y1",iH).attr("x2",iW).attr("y2",iH).attr("stroke",COL.text).attr("stroke-width",1.5);
+    g.append("line").attr("x1",0).attr("y1",0).attr("x2",0).attr("y2",iH).attr("stroke",COL.text).attr("stroke-width",1.5);
+    d3.ticks(xMin-xPad,xMax+xPad,6).forEach(t => { axisLabel(Math.round(t*10)/10,xScale(t),iH+18,"middle",10); });
+    d3.ticks(yMin-yPad,yMax+yPad,6).forEach(t => { axisLabel(Math.round(t*10)/10,-8,yScale(t)+4,"end",10); });
+    if (cfg.xLabel) axisLabel(cfg.xLabel, iW/2, iH+42);
+    if (cfg.yLabel) g.append("text").attr("transform",`translate(-40,${iH/2}) rotate(-90)`).attr("text-anchor","middle").attr("font-size",11).attr("fill",COL.text).text(cfg.yLabel);
+    if (cfg.title)  axisLabel(cfg.title, iW/2, -12, "middle", 13);
+  }
+
+  // ── standard_normal alias → treat as continuous_dist ─────────────────────
+  if (cfg.type === "standard_normal") {
+    cfg = { ...cfg, type: "continuous_dist", distType: "standard_normal", mu: 0, sigma: 1 };
+  }
+
+  // ── Discrete Probability Distribution ────────────────────────────────────
+  else if (cfg.type === "discrete_dist") {
+    const data = cfg.data || []; // [{x, p}]
+    const xVals = data.map(d=>d.x);
+    const pVals = data.map(d=>d.p);
+    const pMax  = d3.max(pVals)*1.2 || 0.5;
+    const xScale = d3.scaleBand().domain(xVals.map(String)).range([0,iW]).padding(0.3);
+    const yScale = d3.scaleLinear().domain([0,pMax]).range([iH,0]);
+    d3.ticks(0,pMax,5).forEach(t => { gridLine(0,yScale(t),iW,yScale(t)); });
+    data.forEach(d => {
+      const bx = xScale(String(d.x)), bw = xScale.bandwidth();
+      const isHighlight = cfg.highlightX !== undefined && d.x === cfg.highlightX;
+      g.append("rect").attr("x",bx).attr("y",yScale(d.p)).attr("width",bw)
+        .attr("height",iH-yScale(d.p)).attr("fill",isHighlight ? COL.red : COL.blue).attr("rx",2);
+      g.append("text").attr("x",bx+bw/2).attr("y",yScale(d.p)-5)
+        .attr("text-anchor","middle").attr("font-size",10).attr("fill",COL.text)
+        .text(d.p.toFixed ? d.p.toFixed(3) : d.p);
+      g.append("text").attr("x",bx+bw/2).attr("y",iH+15)
+        .attr("text-anchor","middle").attr("font-size",11).attr("fill",COL.text).text(d.x);
+    });
+    g.append("line").attr("x1",0).attr("y1",iH).attr("x2",iW).attr("y2",iH).attr("stroke",COL.text).attr("stroke-width",1.5);
+    g.append("line").attr("x1",0).attr("y1",0).attr("x2",0).attr("y2",iH).attr("stroke",COL.text).attr("stroke-width",1.5);
+    d3.ticks(0,pMax,5).forEach(t => { axisLabel(t.toFixed(2),-8,yScale(t)+4,"end",10); });
+    axisLabel(cfg.xLabel||"x", iW/2, iH+42);
+    g.append("text").attr("transform",`translate(-40,${iH/2}) rotate(-90)`).attr("text-anchor","middle").attr("font-size",11).attr("fill",COL.text).text(cfg.yLabel||"P(X = x)");
+    if (cfg.title) axisLabel(cfg.title, iW/2, -12, "middle", 13);
+  }
+
+  // ── Continuous Probability Distribution (Normal / Uniform / Exponential) ──
+  else if (cfg.type === "continuous_dist") {
+    const distType  = cfg.distType || "normal";
+    const isStdNorm = distType === "standard_normal" || (distType === "normal" && cfg.mu === 0 && cfg.sigma === 1);
+    const mu     = cfg.mu     ?? 0;
+    const sigma  = cfg.sigma  ?? 1;
+    const lambda = cfg.lambda ?? 1;
+    const uMin   = cfg.uMin   ?? 0;
+    const uMax   = cfg.uMax   ?? 1;
+
+    // x range — standard normal always shows -3.5 to 3.5
+    const xLo = isStdNorm ? -3.8 : (cfg.a ?? mu - 4*sigma);
+    const xHi = isStdNorm ? 3.8  : (cfg.b ?? mu + 4*sigma);
+
+    // PDF
+    const pdf = (x) => {
+      if (distType === "normal" || distType === "standard_normal") {
+        const s = isStdNorm ? 1 : sigma;
+        const m = isStdNorm ? 0 : mu;
+        return (1/(s*Math.sqrt(2*Math.PI))) * Math.exp(-0.5*((x-m)/s)**2);
+      }
+      if (distType === "uniform") return (x>=uMin && x<=uMax) ? 1/(uMax-uMin) : 0;
+      if (distType === "exponential") return x>=0 ? lambda*Math.exp(-lambda*x) : 0;
+      return 0;
+    };
+
+    const xs   = d3.range(xLo, xHi+0.01, (xHi-xLo)/400);
+    const yMax = (d3.max(xs.map(pdf)) || 0.5) * 1.2;
+    const xScale = d3.scaleLinear().domain([xLo, xHi]).range([0, iW]);
+    const yScale = d3.scaleLinear().domain([0, yMax]).range([iH, 0]);
+
+    // grid
+    d3.ticks(xLo, xHi, 8).forEach(t => gridLine(xScale(t),0,xScale(t),iH));
+    d3.ticks(0, yMax, 5).forEach(t => gridLine(0,yScale(t),iW,yScale(t)));
+
+    // shaded region
+    const sFrom = cfg.shadeFrom ?? null;
+    const sTo   = cfg.shadeTo   ?? null;
+    if (sFrom !== null || sTo !== null) {
+      const lo = Math.max(xLo, sFrom ?? xLo);
+      const hi = Math.min(xHi, sTo   ?? xHi);
+      const sxs = d3.range(lo, hi+0.01, (xHi-xLo)/400);
+      const poly = [[lo,0], ...sxs.map(x=>[x,pdf(x)]), [hi,0]];
+      const areaPath = d3.line().x(d=>xScale(d[0])).y(d=>yScale(d[1]));
+      g.append("path").datum(poly).attr("d",areaPath)
+        .attr("fill",COL.shade).attr("fill-opacity",0.38).attr("stroke","none");
+    }
+
+    // main curve
+    const lineGen = d3.line().x(d=>xScale(d[0])).y(d=>yScale(d[1])).defined(d=>isFinite(d[1]));
+    g.append("path").datum(xs.map(x=>[x,pdf(x)])).attr("d",lineGen)
+      .attr("fill","none").attr("stroke",COL.blue).attr("stroke-width",2.5);
+
+    // boundary vertical lines + z/x labels
+    const drawBoundary = (val, label) => {
+      if (val === null || val <= xLo || val >= xHi) return;
+      const px = xScale(val);
+      const py = yScale(pdf(val));
+      g.append("line").attr("x1",px).attr("y1",yScale(0)).attr("x2",px).attr("y2",py)
+        .attr("stroke",COL.red).attr("stroke-width",1.8).attr("stroke-dasharray","5,4");
+      // label below axis
+      g.append("text").attr("x",px).attr("y",iH+28)
+        .attr("text-anchor","middle").attr("font-size",10).attr("font-weight","600")
+        .attr("fill",COL.red).text(label || (Math.round(val*100)/100));
+    };
+
+    if (sFrom !== null) {
+      const lbl = isStdNorm ? `z=${Math.round(sFrom*100)/100}` : `${Math.round(sFrom*100)/100}`;
+      drawBoundary(sFrom, lbl);
+    }
+    if (sTo !== null) {
+      const lbl = isStdNorm ? `z=${Math.round(sTo*100)/100}` : `${Math.round(sTo*100)/100}`;
+      drawBoundary(sTo, lbl);
+    }
+
+    // probability label inside shaded region
+    if (cfg.probability) {
+      const midX = ((sFrom??xLo) + (sTo??xHi)) / 2;
+      const midPdf = pdf(midX);
+      if (isFinite(midPdf) && midPdf > 0) {
+        g.append("text").attr("x",xScale(midX)).attr("y",yScale(midPdf * 0.42))
+          .attr("text-anchor","middle").attr("font-size",11).attr("font-weight","700")
+          .attr("fill",COL.blue).text(cfg.probability);
+      }
+    }
+
+    // axes
+    g.append("line").attr("x1",0).attr("y1",iH).attr("x2",iW).attr("y2",iH).attr("stroke",COL.text).attr("stroke-width",1.5);
+    g.append("line").attr("x1",0).attr("y1",0).attr("x2",0).attr("y2",iH).attr("stroke",COL.text).attr("stroke-width",1.5);
+
+    // x-axis tick labels — for standard normal show -3,-2,-1,0,1,2,3
+    const ticks = isStdNorm ? [-3,-2,-1,0,1,2,3] : d3.ticks(xLo, xHi, 8);
+    ticks.forEach(t => axisLabel(Math.round(t*100)/100, xScale(t), iH+16, "middle", 10));
+
+    // y-axis ticks
+    d3.ticks(0, yMax, 5).forEach(t => axisLabel(Math.round(t*1000)/1000, -8, yScale(t)+4, "end", 9));
+
+    // x/z axis label
+    const axX = isStdNorm ? "z" : (cfg.xLabel || "x");
+    axisLabel(axX, iW/2, iH+44);
+    g.append("text").attr("transform",`translate(-40,${iH/2}) rotate(-90)`)
+      .attr("text-anchor","middle").attr("font-size",11).attr("fill",COL.text)
+      .text(cfg.yLabel || "f(x)");
+
+    // title
+    if (cfg.title) axisLabel(cfg.title, iW/2, -12, "middle", 13);
+
+    // μ marker for normal distributions
+    if ((distType === "normal" || distType === "standard_normal") && xScale(mu) >= 0 && xScale(mu) <= iW) {
+      g.append("line").attr("x1",xScale(mu)).attr("y1",yScale(0))
+        .attr("x2",xScale(mu)).attr("y2",yScale(pdf(mu))*0.15)
+        .attr("stroke",COL.muted).attr("stroke-width",1).attr("stroke-dasharray","3,3");
+      const muLabel = isStdNorm ? "μ=0" : `μ=${mu}`;
+      if (sFrom !== mu && sTo !== mu) // don't overlap with boundary label
+        axisLabel(muLabel, xScale(mu), iH+42, "middle", 9);
+    }
+  }
+
+  return svgNode;
+}
+
+async function statChartToBase64PNG(chartConfig, w=480, h=300) {
+  const svgNode = renderStatChartToSVG(chartConfig, w, h);
+  if (!svgNode) return null;
+  return new Promise((resolve, reject) => {
+    try {
+      const serializer = new XMLSerializer();
+      const svgStr = serializer.serializeToString(svgNode);
+      const blob = new Blob([svgStr], {type:"image/svg+xml;charset=utf-8"});
+      const url  = URL.createObjectURL(blob);
+      const img  = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0,0,w,h);
+        ctx.drawImage(img, 0, 0, w, h);
+        URL.revokeObjectURL(url);
+        resolve(canvas.toDataURL("image/png"));
+      };
+      img.onerror = e => { URL.revokeObjectURL(url); reject(e); };
+      img.src = url;
+    } catch(e) { reject(e); }
+  });
+}
+
 // expose to window for console testing + export pipeline
 if (typeof window !== "undefined") {
   window.renderGraphToSVG = renderGraphToSVG;
   window.graphToBase64PNG = graphToBase64PNG;
+  window.renderStatChartToSVG = renderStatChartToSVG;
+  window.statChartToBase64PNG = statChartToBase64PNG;
 }
 // ─── End Graph Engine ──────────────────────────────────────────────────────────
 
@@ -2014,7 +2344,8 @@ async function buildDocx(questions, course, vLabel, classSection=null, startNum=
     // ── graph image (buildDocx) ──
     if (q.hasGraph && q.graphConfig) {
       try {
-        const b64 = await graphToBase64PNG(q.graphConfig, 480, 280);
+        const _isStat = q.graphConfig.type && ["bar","histogram","scatter","discrete_dist","continuous_dist","standard_normal"].includes(q.graphConfig.type);
+        const b64 = _isStat ? await statChartToBase64PNG(q.graphConfig, 480, 280) : await graphToBase64PNG(q.graphConfig, 480, 280);
         if (b64) body += makeDocxImageXml(b64);
       } catch(e) { console.warn("graph png failed", e); }
     }
@@ -2221,7 +2552,8 @@ async function buildQTIZip(qtiXml, title) {
     imgIdx++;
     if (cfg) {
       try {
-        const b64 = await graphToBase64PNG(cfg, 480, 280);
+        const _isStatQTI = cfg.type && ["bar","histogram","scatter","discrete_dist","continuous_dist"].includes(cfg.type);
+        const b64 = _isStatQTI ? await statChartToBase64PNG(cfg, 480, 280) : await graphToBase64PNG(cfg, 480, 280);
         if (b64) {
           const imgName = `graph_${imgIdx}.png`;
           const imgWebPath = `web_resources/${imgName}`;
@@ -2687,7 +3019,8 @@ async function buildDocxCompare(versions, course) {
       // ── graph image (buildDocxCompare) ──
       if (q.hasGraph && q.graphConfig) {
         try {
-          const b64 = await graphToBase64PNG(q.graphConfig, 480, 280);
+          const _isStat = q.graphConfig.type && ["bar","histogram","scatter","discrete_dist","continuous_dist","standard_normal"].includes(q.graphConfig.type);
+          const b64 = _isStat ? await statChartToBase64PNG(q.graphConfig, 480, 280) : await graphToBase64PNG(q.graphConfig, 480, 280);
           if (b64) body += makeDocxImageXml(b64);
         } catch(e) { console.warn("graph png failed", e); }
       }
@@ -2825,23 +3158,58 @@ The expressions in graphConfig must EXACTLY match the functions mentioned in the
   const isDiscrete = course === "Discrete Mathematics";
 
   const tableInstructions = isQM ? `
-TABLE-BASED QUESTIONS (required for Quantitative Methods):
-- Randomly mix table-based and non-table-based questions. Some questions should present data in a table, others should be purely text/numeric scenarios. Vary naturally — do not force all questions to use tables.
-- Use plain-text ASCII tables formatted like this example:
-  | X | P(X) |
-  |---|------|
-  | 0 | 0.10 |
-  | 1 | 0.35 |
-  | 2 | 0.40 |
-  | 3 | 0.15 |
-- Table types to use depending on section:
-  * Probability/frequency tables for Random Variables and Distributions sections
-  * Joint probability tables for Conditional Probability and Bivariate sections
-  * Contingency tables for Bayes Theorem sections
-  * Payoff/decision tables for Decision Analysis sections
-  * Data tables with x_i and f_i columns for Expected Value and Variance sections
-- After presenting the table, ask students to compute a specific value (probability, expected value, variance, conditional probability, covariance, etc.)
-- Non-table questions should still use specific numerical scenarios, not abstract formulas.
+QUANTITATIVE METHODS — QUESTION FORMAT RULES:
+Mix these formats naturally across questions. Choose based on what fits the content:
+
+1. NORMAL (text/calculation): Pure numeric scenario, no table or chart needed.
+   Example: "A binomial distribution has n=10, p=0.3. Find P(X=4)."
+
+2. TABLE: Present data in a pipe table, ask student to compute from it.
+   Use these table types by section:
+   * Probability/frequency tables → Random Variables, Distributions
+   * Joint probability tables → Conditional Probability, Bivariate
+   * Contingency tables → Bayes Theorem
+   * Payoff/decision tables → Decision Analysis
+   * Regression output tables → Regression sections
+   Table format (pipe tables only):
+   | X | P(X) |
+   |---|------|
+   | 0 | 0.10 |
+   | 1 | 0.35 |
+   | 2 | 0.40 |
+   | 3 | 0.15 |
+
+3. CHART (when graphType is "graph" or "mix"): Include hasGraph:true and graphConfig.
+   Choose chart type based on content:
+   * Bar chart → categorical frequency, relative frequency distributions
+     graphConfig: {"type":"bar","labels":["A","B","C"],"values":[10,25,15],"xLabel":"Category","yLabel":"Frequency","title":"Frequency Distribution"}
+   * Histogram → continuous data distributions, class intervals
+     graphConfig: {"type":"histogram","bins":[{"x0":10,"x1":20,"count":5},{"x0":20,"x1":30,"count":12}],"xLabel":"Value","yLabel":"Frequency","title":"Sales Distribution"}
+   * Scatter plot → correlation, regression, bivariate data
+     graphConfig: {"type":"scatter","points":[{"x":1,"y":3},{"x":2,"y":5}],"xLabel":"x","yLabel":"y","title":"Scatter Plot","regressionLine":{"slope":1.8,"intercept":1.2}}
+   * Discrete probability distribution → P(X=x) bar chart
+     graphConfig: {"type":"discrete_dist","data":[{"x":0,"p":0.10},{"x":1,"p":0.35},{"x":2,"p":0.40},{"x":3,"p":0.15}],"title":"Probability Distribution","highlightX":2}
+   * Normal distribution → bell curve with shaded region, actual μ and σ values
+     graphConfig: {"type":"continuous_dist","distType":"normal","mu":50,"sigma":10,"shadeFrom":65,"shadeTo":null,"probability":"P(X>65)","title":"Normal Distribution","xLabel":"x"}
+
+   * Standard normal distribution → z-score curve, always μ=0 σ=1, x-axis shows z values
+     graphConfig: {"type":"continuous_dist","distType":"standard_normal","mu":0,"sigma":1,"shadeFrom":1.5,"shadeTo":null,"probability":"P(Z>1.5)","title":"Standard Normal Distribution"}
+     Use standard_normal when question involves z-scores, z-tables, or standardization.
+     Shade boundaries are z-score values (e.g. shadeFrom:1.28, shadeTo:null for P(Z>1.28)).
+
+   * Uniform distribution → flat rectangle with shading
+     graphConfig: {"type":"continuous_dist","distType":"uniform","uMin":2,"uMax":8,"shadeFrom":4,"shadeTo":7,"probability":"P(4<X<7)","title":"Uniform Distribution"}
+
+   * Exponential distribution → decaying curve
+     graphConfig: {"type":"continuous_dist","distType":"exponential","lambda":0.5,"shadeFrom":null,"shadeTo":3,"probability":"P(X<3)","title":"Exponential Distribution"}
+
+   SHADING RULES for continuous_dist:
+   - P(X > a): set shadeFrom=a, shadeTo=null
+   - P(X < b): set shadeFrom=null, shadeTo=b
+   - P(a < X < b): set shadeFrom=a, shadeTo=b
+   - Same rules apply for Z in standard normal
+   - Always include "probability" field as string e.g. "P(Z > 1.5)" — shown inside shaded area
+   Question text must say "Based on the distribution above, find..." — never describe the chart in text.
 ` : isDiscrete ? `
 DISCRETE MATHEMATICS QUESTION GUIDELINES:
 - Base questions on Susanna Epp "Discrete Mathematics with Applications" textbook structure.
@@ -3237,7 +3605,10 @@ export default function TestBankApp() {
       const cache = {};
       for (const q of graphQs) {
         try {
-          const b64 = await graphToBase64PNG(q.graphConfig, 480, 280);
+          const isStatChart = q.graphConfig?.type && ["bar","histogram","scatter","discrete_dist","continuous_dist","standard_normal"].includes(q.graphConfig.type);
+          const b64 = isStatChart
+            ? await (window.statChartToBase64PNG ? window.statChartToBase64PNG(q.graphConfig, 480, 280) : null)
+            : await graphToBase64PNG(q.graphConfig, 480, 280);
           if (b64) cache[q.id || q.question] = b64;
         } catch(e) { console.warn("print graph failed", e); }
       }
