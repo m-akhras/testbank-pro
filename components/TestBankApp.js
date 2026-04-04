@@ -1694,9 +1694,17 @@ function renderStatChartToSVG(chartConfig, width=480, height=300) {
   const COL = { blue:"#185FA5", red:"#E24B4A", green:"#1D9E75", shade:"#378ADD",
                 text:"#1a1a1a", muted:"#888888", grid:"#e8e8e8", bar:"#185FA5", barHl:"#E24B4A" };
 
+  const showGrid    = cfg.showGrid    !== false;
+  const showNumbers = cfg.showAxisNumbers !== false;
+
   function gridLine(x1,y1,x2,y2) {
+    if (!showGrid) return;
     g.append("line").attr("x1",x1).attr("y1",y1).attr("x2",x2).attr("y2",y2)
       .attr("stroke",COL.grid).attr("stroke-width",0.8);
+  }
+  function axisNum(val, x, y, anchor="middle", size=10) {
+    if (!showNumbers) return;
+    axisLabel(val, x, y, anchor, size);
   }
   function axisLabel(text, x, y, anchor="middle", size=11) {
     g.append("text").attr("x",x).attr("y",y).attr("text-anchor",anchor)
@@ -1720,15 +1728,17 @@ function renderStatChartToSVG(chartConfig, width=480, height=300) {
       g.append("rect").attr("x",x).attr("y",yScale(values[i]))
         .attr("width",bw).attr("height",iH-yScale(values[i]))
         .attr("fill", highlighted ? COL.barHl : COL.bar).attr("rx",2);
-      g.append("text").attr("x",x+bw/2).attr("y",yScale(values[i])-5)
-        .attr("text-anchor","middle").attr("font-size",10).attr("fill",COL.text).text(values[i]);
-      g.append("text").attr("x",x+bw/2).attr("y",iH+15)
-        .attr("text-anchor","middle").attr("font-size",10).attr("fill",COL.text).text(lbl);
+      if (showNumbers) {
+        g.append("text").attr("x",x+bw/2).attr("y",yScale(values[i])-5)
+          .attr("text-anchor","middle").attr("font-size",10).attr("fill",COL.text).text(values[i]);
+        g.append("text").attr("x",x+bw/2).attr("y",iH+15)
+          .attr("text-anchor","middle").attr("font-size",10).attr("fill",COL.text).text(lbl);
+      }
     });
     // axes
     g.append("line").attr("x1",0).attr("y1",iH).attr("x2",iW).attr("y2",iH).attr("stroke",COL.text).attr("stroke-width",1.5);
     g.append("line").attr("x1",0).attr("y1",0).attr("x2",0).attr("y2",iH).attr("stroke",COL.text).attr("stroke-width",1.5);
-    d3.ticks(0, yMax, 6).forEach(t => { axisLabel(t, -8, yScale(t)+4, "end", 10); });
+    if (showNumbers) d3.ticks(0, yMax, 6).forEach(t => { axisLabel(t, -8, yScale(t)+4, "end", 10); });
     if (cfg.xLabel) axisLabel(cfg.xLabel, iW/2, iH+42);
     if (cfg.yLabel) g.append("text").attr("transform",`translate(-40,${iH/2}) rotate(-90)`).attr("text-anchor","middle").attr("font-size",11).attr("fill",COL.text).text(cfg.yLabel);
     if (cfg.title)  axisLabel(cfg.title, iW/2, -12, "middle", 13);
@@ -1754,9 +1764,11 @@ function renderStatChartToSVG(chartConfig, width=480, height=300) {
     g.append("line").attr("x1",0).attr("y1",iH).attr("x2",iW).attr("y2",iH).attr("stroke",COL.text).attr("stroke-width",1.5);
     g.append("line").attr("x1",0).attr("y1",0).attr("x2",0).attr("y2",iH).attr("stroke",COL.text).attr("stroke-width",1.5);
     // x axis ticks
-    bins.forEach(b => { axisLabel(b.x0, xScale(b.x0), iH+15, "middle", 10); });
-    axisLabel(bins[bins.length-1]?.x1 ?? xMax, xScale(xMax), iH+15, "middle", 10);
-    d3.ticks(0,yMax,6).forEach(t => { axisLabel(t,-8,yScale(t)+4,"end",10); });
+    if (showNumbers) {
+      bins.forEach(b => { axisLabel(b.x0, xScale(b.x0), iH+15, "middle", 10); });
+      axisLabel(bins[bins.length-1]?.x1 ?? xMax, xScale(xMax), iH+15, "middle", 10);
+      d3.ticks(0,yMax,6).forEach(t => { axisLabel(t,-8,yScale(t)+4,"end",10); });
+    }
     if (cfg.xLabel) axisLabel(cfg.xLabel, iW/2, iH+42);
     if (cfg.yLabel) g.append("text").attr("transform",`translate(-40,${iH/2}) rotate(-90)`).attr("text-anchor","middle").attr("font-size",11).attr("fill",COL.text).text(cfg.yLabel);
     if (cfg.title)  axisLabel(cfg.title, iW/2, -12, "middle", 13);
@@ -1787,8 +1799,10 @@ function renderStatChartToSVG(chartConfig, width=480, height=300) {
     });
     g.append("line").attr("x1",0).attr("y1",iH).attr("x2",iW).attr("y2",iH).attr("stroke",COL.text).attr("stroke-width",1.5);
     g.append("line").attr("x1",0).attr("y1",0).attr("x2",0).attr("y2",iH).attr("stroke",COL.text).attr("stroke-width",1.5);
-    d3.ticks(xMin-xPad,xMax+xPad,6).forEach(t => { axisLabel(Math.round(t*10)/10,xScale(t),iH+18,"middle",10); });
-    d3.ticks(yMin-yPad,yMax+yPad,6).forEach(t => { axisLabel(Math.round(t*10)/10,-8,yScale(t)+4,"end",10); });
+    if (showNumbers) {
+      d3.ticks(xMin-xPad,xMax+xPad,6).forEach(t => { axisLabel(Math.round(t*10)/10,xScale(t),iH+18,"middle",10); });
+      d3.ticks(yMin-yPad,yMax+yPad,6).forEach(t => { axisLabel(Math.round(t*10)/10,-8,yScale(t)+4,"end",10); });
+    }
     if (cfg.xLabel) axisLabel(cfg.xLabel, iW/2, iH+42);
     if (cfg.yLabel) g.append("text").attr("transform",`translate(-40,${iH/2}) rotate(-90)`).attr("text-anchor","middle").attr("font-size",11).attr("fill",COL.text).text(cfg.yLabel);
     if (cfg.title)  axisLabel(cfg.title, iW/2, -12, "middle", 13);
@@ -1816,7 +1830,7 @@ function renderStatChartToSVG(chartConfig, width=480, height=300) {
     });
     g.append("line").attr("x1",0).attr("y1",iH).attr("x2",iW).attr("y2",iH).attr("stroke",COL.text).attr("stroke-width",1.5);
     g.append("line").attr("x1",0).attr("y1",0).attr("x2",0).attr("y2",iH).attr("stroke",COL.text).attr("stroke-width",1.5);
-    d3.ticks(0,pMax,5).forEach(t => { axisLabel(t.toFixed(2),-8,yScale(t)+4,"end",10); });
+    if (showNumbers) d3.ticks(0,pMax,5).forEach(t => { axisLabel(t.toFixed(2),-8,yScale(t)+4,"end",10); });
     axisLabel(cfg.xLabel||"x", iW/2, iH+42);
     g.append("text").attr("transform",`translate(-40,${iH/2}) rotate(-90)`).attr("text-anchor","middle").attr("font-size",11).attr("fill",COL.text).text(cfg.yLabel||"P(X = x)");
     if (cfg.title) axisLabel(cfg.title, iW/2, -12, "middle", 13);
@@ -1832,9 +1846,15 @@ function renderStatChartToSVG(chartConfig, width=480, height=300) {
     const uMin   = cfg.uMin   ?? 0;
     const uMax   = cfg.uMax   ?? 1;
 
-    // x range — standard normal always shows -3.5 to 3.5
-    const xLo = isStdNorm ? -3.8 : (cfg.a ?? mu - 4*sigma);
-    const xHi = isStdNorm ? 3.8  : (cfg.b ?? mu + 4*sigma);
+    // x range — standard normal shows -3.8 to 3.8, uniform uses uMin/uMax with padding
+    const xLo = isStdNorm ? -3.8
+      : distType === "uniform" ? (uMin - (uMax-uMin)*0.15)
+      : distType === "exponential" ? 0
+      : (cfg.a ?? mu - 4*sigma);
+    const xHi = isStdNorm ? 3.8
+      : distType === "uniform" ? (uMax + (uMax-uMin)*0.15)
+      : distType === "exponential" ? (cfg.b ?? 5/lambda)
+      : (cfg.b ?? mu + 4*sigma);
 
     // PDF
     const pdf = (x) => {
@@ -1912,12 +1932,13 @@ function renderStatChartToSVG(chartConfig, width=480, height=300) {
     g.append("line").attr("x1",0).attr("y1",iH).attr("x2",iW).attr("y2",iH).attr("stroke",COL.text).attr("stroke-width",1.5);
     g.append("line").attr("x1",0).attr("y1",0).attr("x2",0).attr("y2",iH).attr("stroke",COL.text).attr("stroke-width",1.5);
 
-    // x-axis tick labels — for standard normal show -3,-2,-1,0,1,2,3
-    const ticks = isStdNorm ? [-3,-2,-1,0,1,2,3] : d3.ticks(xLo, xHi, 8);
-    ticks.forEach(t => axisLabel(Math.round(t*100)/100, xScale(t), iH+16, "middle", 10));
-
-    // y-axis ticks
-    d3.ticks(0, yMax, 5).forEach(t => axisLabel(Math.round(t*1000)/1000, -8, yScale(t)+4, "end", 9));
+    // x-axis tick labels
+    if (showNumbers) {
+      const ticks = isStdNorm ? [-3,-2,-1,0,1,2,3] : d3.ticks(xLo, xHi, 8);
+      ticks.forEach(t => axisLabel(Math.round(t*100)/100, xScale(t), iH+16, "middle", 10));
+      // y-axis ticks
+      d3.ticks(0, yMax, 5).forEach(t => axisLabel(Math.round(t*1000)/1000, -8, yScale(t)+4, "end", 9));
+    }
 
     // x/z axis label
     const axX = isStdNorm ? "z" : (cfg.xLabel || "x");
@@ -3199,6 +3220,7 @@ Mix these formats naturally across questions. Choose based on what fits the cont
 
    * Uniform distribution → flat rectangle with shading
      graphConfig: {"type":"continuous_dist","distType":"uniform","uMin":2,"uMax":8,"shadeFrom":4,"shadeTo":7,"probability":"P(4<X<7)","title":"Uniform Distribution"}
+     CRITICAL for uniform: ALWAYS set uMin and uMax to the actual distribution boundaries from the question. Never leave them at defaults.
 
    * Exponential distribution → decaying curve
      graphConfig: {"type":"continuous_dist","distType":"exponential","lambda":0.5,"shadeFrom":null,"shadeTo":3,"probability":"P(X<3)","title":"Exponential Distribution"}
