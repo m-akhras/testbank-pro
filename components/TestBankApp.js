@@ -2009,7 +2009,7 @@ function renderStatChartToSVG(chartConfig, width=480, height=300) {
       g.append("line").attr("x1",xScale(mu)).attr("y1",yScale(0))
         .attr("x2",xScale(mu)).attr("y2",yScale(pdf(mu))*0.15)
         .attr("stroke",COL.muted).attr("stroke-width",1).attr("stroke-dasharray","3,3");
-      const muLabel = isStdNorm ? "μ=0" : `μ=${mu}`;
+      const muLabel = isStdNorm ? "\u03bc=0" : ("\u03bc=" + mu);
       if (sFrom !== mu && sTo !== mu) // don't overlap with boundary label
         axisLabel(muLabel, xScale(mu), iH+42, "middle", 9);
     }
@@ -3447,6 +3447,37 @@ function buildReplacePrompt(q, mutationType="numbers") {
   return `TESTBANK_REPLACE_REQUEST\nGenerate 1 replacement question.\nSection: ${q.section} | Type: ${q.type} | Difficulty: ${q.difficulty}\nOriginal: ${q.type==="Branched" ? q.stem : q.question}\nMutation: ${mutationType} — ${mutationRule}\nRequirements: same section, same question type, same difficulty, DIFFERENT question.\nUse plain-text math notation.\n${q.type==="Multiple Choice"?"Include 4 choices and correct answer.":""}\n${q.type==="Formula"?"Include variables array and answerFormula.":""}\n${q.type==="Branched"?"Include stem and parts array.":""}\nReply with ONLY a JSON array containing exactly 1 item, no markdown.`;
 }
 
+function buildConvertPrompt(q, targetFormat) {
+  const isQM = q.course === "Quantitative Methods I" || q.course === "Quantitative Methods II";
+  const formatRules = {
+    "text": "Convert to a pure text/calculation question. Remove any graph or table. Keep the same concept, numbers, and answer.",
+    "table": `Convert to a table-based question. Present the data in a pipe table like:
+| X | Value |
+|---|-------|
+| 1 | ...   |
+Keep the same concept and answer. Remove any graphConfig.`,
+    "graph": isQM
+      ? `Convert to a graph question. Add hasGraph:true and appropriate graphConfig based on the concept:
+- For distributions: use continuous_dist with correct distType, mu, sigma, shadeFrom/shadeTo, probability
+- For frequency data: use bar or histogram
+- For correlation: use scatter
+- Keep same question concept and answer. Question text should say "Based on the distribution/chart above, ..."`
+      : `Convert to a graph question. Add hasGraph:true and graphConfig with type based on functions in the question:
+- 1 function → type:"single", fn:"..."
+- 2 functions → type:"area", fnTop:"...", fnBottom:"...", shadeFrom:x0, shadeTo:x1
+Keep same concept and answer. Question text should say "Based on the graph above, ..."`,
+  };
+  return `TESTBANK_CONVERT_REQUEST
+Convert this question to a different format.
+Section: ${q.section} | Type: ${q.type} | Difficulty: ${q.difficulty} | Course: ${q.course}
+Original question: ${q.type === "Branched" ? q.stem : q.question}
+Current format: ${q.hasGraph ? "graph" : "text/table"}
+Target format: ${targetFormat}
+Rule: ${formatRules[targetFormat]}
+Keep: same section, same type (${q.type}), same difficulty, same answer.
+Reply with ONLY a JSON array containing exactly 1 item, no markdown.`;
+}
+
 // ─── Paste Panel ──────────────────────────────────────────────────────────────
 function PastePanel({ label, S, text2, pasteInput, setPasteInput, pasteError, handlePaste, onCancel }) {
   return (
@@ -4840,10 +4871,28 @@ export default function TestBankApp() {
                     <div style={{fontSize:"0.72rem", color:"#f59e0b", fontWeight:"600", marginBottom:"0.4rem"}}>
                       ↻ Replace this question — copy prompt to Claude, paste response back:
                     </div>
-                    <div style={{display:"flex", gap:"0.5rem", marginBottom:"0.5rem", flexWrap:"wrap"}}>
+                    <div style={{display:"flex", gap:"0.5rem", marginBottom:"0.35rem", flexWrap:"wrap"}}>
+                      <span style={{fontSize:"0.65rem", color:text3, alignSelf:"center"}}>Regenerate:</span>
                       <button style={S.ghostBtn("#f59e0b")} onClick={() => { const p = buildReplacePrompt(q,"numbers"); setGeneratedPrompt(p); }}>Same type</button>
                       <button style={S.ghostBtn("#e879f9")} onClick={() => { const p = buildReplacePrompt(q,"function"); setGeneratedPrompt(p); }}>Diff. function</button>
-                      <button style={{...S.ghostBtn(text3)}} onClick={() => { setPendingType(null); setPasteInput(""); setGeneratedPrompt(""); }}>Cancel</button>
+                    </div>
+                    {(q.course === "Quantitative Methods I" || q.course === "Quantitative Methods II" || q.hasGraph) && (
+                      <div style={{display:"flex", gap:"0.5rem", marginBottom:"0.5rem", flexWrap:"wrap", paddingTop:"0.35rem", borderTop:"1px solid #334155"}}>
+                        <span style={{fontSize:"0.65rem", color:text3, alignSelf:"center"}}>Convert to:</span>
+                        {!q.hasGraph && (
+                          <button style={S.ghostBtn("#10b981")} onClick={() => { const p = buildConvertPrompt(q,"graph"); setGeneratedPrompt(p); }}>📈 Graph</button>
+                        )}
+                        {q.hasGraph && (
+                          <button style={S.ghostBtn("#94a3b8")} onClick={() => { const p = buildConvertPrompt(q,"text"); setGeneratedPrompt(p); }}>📝 Text only</button>
+                        )}
+                        {(q.course === "Quantitative Methods I" || q.course === "Quantitative Methods II") && (<>
+                          {!q.hasGraph && <button style={S.ghostBtn("#185FA5")} onClick={() => { const p = buildConvertPrompt(q,"table"); setGeneratedPrompt(p); }}>📊 Table</button>}
+                          {q.hasGraph && <button style={S.ghostBtn("#185FA5")} onClick={() => { const p = buildConvertPrompt(q,"table"); setGeneratedPrompt(p); }}>📊 Table</button>}
+                        </>)}
+                      </div>
+                    )}
+                    <div style={{display:"flex", justifyContent:"flex-end"}}>
+                      <button style={{...S.ghostBtn(text3), fontSize:"0.68rem"}} onClick={() => { setPendingType(null); setPasteInput(""); setGeneratedPrompt(""); }}>Cancel</button>
                     </div>
                     <div style={S.promptBox}>{generatedPrompt}</div>
                     <button style={{...S.oBtn("#f59e0b"), fontSize:"0.72rem", padding:"0.3rem 0.7rem", marginBottom:"0.5rem"}}
