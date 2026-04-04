@@ -2882,7 +2882,7 @@ function PastePanel({ label, S, text2, pasteInput, setPasteInput, pasteError, ha
 }
 
 // ─── Saved Exams Screen ───────────────────────────────────────────────────────
-function SavedExamsScreen({ S, text2, text3, border }) {
+function SavedExamsScreen({ S, text2, text3, border, onLoad }) {
   const [exams, setExams] = useState([]);
   const [loading, setLoading] = useState(true);
   const [exportLog, setExportLog] = useState([]);
@@ -2920,32 +2920,103 @@ function SavedExamsScreen({ S, text2, text3, border }) {
         </div>
       )}
 
-      {exams.map(exam => (
+      {exams.map(exam => {
+        const versions = exam.versions || [];
+        // detect sections from classSection field on questions
+        const sectionNums = [...new Set(versions.map(v => v.questions?.[0]?.classSection).filter(Boolean))].sort((a,b)=>a-b);
+        const hasMultipleSections = sectionNums.length > 1;
+        const safeName = (exam.name||"Exam").replace(/[^a-zA-Z0-9]/g,"_");
+
+        return (
         <div key={exam.id} style={S.card}>
           <div style={{display:"flex", justifyContent:"space-between", alignItems:"flex-start", flexWrap:"wrap", gap:"0.5rem"}}>
             <div>
               <div style={{fontSize:"1rem", fontWeight:"bold", color:"#e8e8e0", marginBottom:"0.25rem"}}>{exam.name}</div>
               <div style={{fontSize:"0.72rem", color:text3}}>
-                {new Date(exam.created_at).toLocaleDateString()} · {exam.versions?.length || 0} version(s)
+                {new Date(exam.created_at).toLocaleDateString()} · {versions.length} version(s)
+                {hasMultipleSections && ` · ${sectionNums.length} sections`}
               </div>
+              <button style={{marginTop:"0.4rem", padding:"0.25rem 0.7rem", fontSize:"0.72rem",
+                background:"#10b981", color:"#000", border:"none", borderRadius:"4px",
+                cursor:"pointer", fontWeight:"600"}}
+                onClick={() => onLoad && onLoad(exam)}>
+                ▶ Load into Versions tab
+              </button>
             </div>
-            <div style={{display:"flex", gap:"0.5rem", flexWrap:"wrap"}}>
-              {(exam.versions || []).map(v => (
-                <button
-                  key={v.label}
-                  style={S.oBtn("#8b5cf6")}
+            <div style={{display:"flex", gap:"0.5rem", flexWrap:"wrap", alignItems:"center"}}>
+              {/* QTI per version */}
+              {versions.map(v => (
+                <button key={v.label} style={S.oBtn("#8b5cf6")}
                   onClick={async () => {
                     dlFile(buildQTI(v.questions, exam.name, v.label), `${exam.name}_V${v.label}.xml`, "text/xml");
                     await logExport(exam.name, "QTI", v.label);
-                  }}
-                >
+                  }}>
                   ⬇ V{v.label} QTI
                 </button>
               ))}
             </div>
           </div>
+
+          {/* Word export section — one zip per section */}
+          <div style={{marginTop:"0.75rem", borderTop:"1px solid #1e2d45", paddingTop:"0.75rem", display:"flex", gap:"0.5rem", flexWrap:"wrap", alignItems:"center"}}>
+            <span style={{fontSize:"0.72rem", color:text3, marginRight:"0.25rem"}}>Word:</span>
+            {hasMultipleSections ? (
+              // One zip button per section
+              sectionNums.map(sec => (
+                <button key={sec} style={S.oBtn("#10b981")}
+                  onClick={async () => {
+                    // load JSZip
+                    if (!window.JSZip) {
+                      await new Promise((res,rej) => {
+                        const s = document.createElement("script");
+                        s.src = "https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js";
+                        s.onload = res; s.onerror = rej;
+                        document.head.appendChild(s);
+                      });
+                    }
+                    const zip = new window.JSZip();
+                    const secVersions = versions.filter(v => v.questions?.[0]?.classSection === sec || (!v.questions?.[0]?.classSection && sec === sectionNums[0]));
+                    for (const v of secVersions) {
+                      const blob = await buildDocx(v.questions, exam.name, v.label, sec);
+                      const bytes = await blob.arrayBuffer();
+                      zip.file(`${safeName}_S${sec}_V${v.label}.docx`, bytes);
+                    }
+                    const zipBlob = await zip.generateAsync({type:"blob"});
+                    dlBlob(zipBlob, `${safeName}_S${sec}_Word.zip`);
+                    await logExport(exam.name, `Word S${sec} ZIP`, sec);
+                  }}>
+                  ⬇ S{sec} Word (.zip)
+                </button>
+              ))
+            ) : (
+              // No sections — one zip with all versions
+              <button style={S.oBtn("#10b981")}
+                onClick={async () => {
+                  if (!window.JSZip) {
+                    await new Promise((res,rej) => {
+                      const s = document.createElement("script");
+                      s.src = "https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js";
+                      s.onload = res; s.onerror = rej;
+                      document.head.appendChild(s);
+                    });
+                  }
+                  const zip = new window.JSZip();
+                  for (const v of versions) {
+                    const blob = await buildDocx(v.questions, exam.name, v.label, null);
+                    const bytes = await blob.arrayBuffer();
+                    zip.file(`${safeName}_V${v.label}.docx`, bytes);
+                  }
+                  const zipBlob = await zip.generateAsync({type:"blob"});
+                  dlBlob(zipBlob, `${safeName}_Word.zip`);
+                  await logExport(exam.name, "Word ZIP", "all");
+                }}>
+                ⬇ All Versions Word (.zip)
+              </button>
+            )}
+          </div>
         </div>
-      ))}
+        );
+      })}
 
       {exportLog.length > 0 && (
         <>
@@ -4679,7 +4750,31 @@ export default function TestBankApp() {
 
         {/* SAVED EXAMS */}
         {screen === "saved" && (
-          <SavedExamsScreen S={S} text2={text2} text3={text3} border={border} />
+          <SavedExamsScreen S={S} text2={text2} text3={text3} border={border}
+            onLoad={(exam) => {
+              // Restore exam into Versions tab
+              const vers = exam.versions || [];
+              // detect sections
+              const sectionNums = [...new Set(vers.map(v => v.questions?.[0]?.classSection).filter(Boolean))].sort((a,b)=>a-b);
+              if (sectionNums.length > 1) {
+                // multi-section
+                const secVersions = {};
+                sectionNums.forEach(sec => {
+                  secVersions[sec] = vers.filter(v => v.questions?.[0]?.classSection === sec);
+                });
+                setClassSectionVersions(secVersions);
+                setVersions(secVersions[sectionNums[0]] || vers);
+              } else {
+                setClassSectionVersions({});
+                setVersions(vers);
+              }
+              setActiveVersion(0);
+              setExamSaved(true);
+              setSaveExamName(exam.name);
+              setCourse(vers[0]?.questions?.[0]?.course || null);
+              setScreen("versions");
+            }}
+          />
         )}
 
       </main>
