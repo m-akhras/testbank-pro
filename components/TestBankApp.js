@@ -1674,7 +1674,11 @@ async function graphToBase64PNG(graphConfig, width = 480, height = 300) {
 function renderStatChartToSVG(chartConfig, width=480, height=300) {
   if (typeof window === "undefined" || !window.d3) return null;
   const d3 = window.d3;
-  const cfg = chartConfig || {};
+  // normalize standard_normal alias
+  const rawCfg = chartConfig || {};
+  const cfg = rawCfg.type === "standard_normal"
+    ? { ...rawCfg, type: "continuous_dist", distType: "standard_normal", mu: 0, sigma: 1 }
+    : rawCfg;
   const margin = {top:30, right:30, bottom:55, left:55};
   const iW = width  - margin.left - margin.right;
   const iH = height - margin.top  - margin.bottom;
@@ -1788,11 +1792,6 @@ function renderStatChartToSVG(chartConfig, width=480, height=300) {
     if (cfg.xLabel) axisLabel(cfg.xLabel, iW/2, iH+42);
     if (cfg.yLabel) g.append("text").attr("transform",`translate(-40,${iH/2}) rotate(-90)`).attr("text-anchor","middle").attr("font-size",11).attr("fill",COL.text).text(cfg.yLabel);
     if (cfg.title)  axisLabel(cfg.title, iW/2, -12, "middle", 13);
-  }
-
-  // ── standard_normal alias → treat as continuous_dist ─────────────────────
-  if (cfg.type === "standard_normal") {
-    cfg = { ...cfg, type: "continuous_dist", distType: "standard_normal", mu: 0, sigma: 1 };
   }
 
   // ── Discrete Probability Distribution ────────────────────────────────────
