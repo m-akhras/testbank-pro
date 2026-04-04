@@ -1906,7 +1906,7 @@ function makeDocxImageXml(base64png, widthEmu=4800000, heightEmu=2800000) {
 <GRAPH_REL_PLACEHOLDER rid="${rid}" b64="${b64}"/>`;
 }
 
-async function buildDocx(questions, course, vLabel, classSection=null) {
+async function buildDocx(questions, course, vLabel, classSection=null, startNum=1) {
   _docxImgCounter = 0; // reset per export
   // We build the docx XML manually for full math support
   const ns = `xmlns:wpc="http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:wp14="http://schemas.microsoft.com/office/word/2010/wordprocessingDrawing" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:w10="urn:schemas-microsoft-com:office:word" xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml" xmlns:wpg="http://schemas.microsoft.com/office/word/2010/wordprocessingGroup" xmlns:wpi="http://schemas.microsoft.com/office/word/2010/wordprocessingInk" xmlns:wne="http://schemas.microsoft.com/office/word/2006/wordml" xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"`;
@@ -2010,7 +2010,7 @@ async function buildDocx(questions, course, vLabel, classSection=null) {
 
   for (let i = 0; i < questions.length; i++) {
     const q = questions[i];
-    const num = i + 1;
+    const num = startNum + i;
     // ── graph image (buildDocx) ──
     if (q.hasGraph && q.graphConfig) {
       try {
@@ -2051,6 +2051,8 @@ ${body}
 <w:sectPr>
   <w:pgSz w:w="12240" w:h="15840"/>
   <w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/>
+  <w:pgNumType w:fmt="decimal" w:start="1"/>
+  <w:footerReference w:type="default" r:id="rFooter1"/>
 </w:sectPr>
 </w:body>
 </w:document>`;
@@ -2097,6 +2099,45 @@ ${body}
   relsXml += "\n</Relationships>";
   // strip placeholder tags from documentXml
   documentXml = documentXml.replace(imgRe, "");
+
+  // ── Page number footer ──
+  const footerXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:ftr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:p><w:pPr><w:jc w:val="center"/></w:pPr>
+    <w:r><w:rPr><w:sz w:val="18"/><w:color w:val="999999"/></w:rPr>
+      <w:fldChar w:fldCharType="begin"/></w:r>
+    <w:r><w:rPr><w:sz w:val="18"/><w:color w:val="999999"/></w:rPr>
+      <w:instrText xml:space="preserve"> PAGE </w:instrText></w:r>
+    <w:r><w:rPr><w:sz w:val="18"/><w:color w:val="999999"/></w:rPr>
+      <w:fldChar w:fldCharType="separate"/></w:r>
+    <w:r><w:rPr><w:sz w:val="18"/><w:color w:val="999999"/></w:rPr>
+      <w:t>1</w:t></w:r>
+    <w:r><w:rPr><w:sz w:val="18"/><w:color w:val="999999"/></w:rPr>
+      <w:fldChar w:fldCharType="end"/></w:r>
+  </w:p>
+</w:ftr>`;
+  zip.file("word/footer1.xml", footerXml);
+  relsXml = relsXml.replace("</Relationships>",
+    `  <Relationship Id="rFooter1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" Target="footer1.xml"/>\n</Relationships>`);
+
+  // ── Answer key page ──
+  let answerKeyBody = para("Answer Key", {bold:true, size:28, spacing:120});
+  answerKeyBody += para(titleLabel, {size:20, color:"555555", spacing:200});
+  const mcTypes = ["Multiple Choice","True/False","Fill in the Blank"];
+  questions.forEach((q, i) => {
+    if (q.type === "Branched") {
+      answerKeyBody += para(`${i+1}.`, {bold:true, size:22, spacing:40});
+      (q.parts||[]).forEach((p,pi) => {
+        if (p.answer) answerKeyBody += mathPara(`  (${String.fromCharCode(97+pi)}) ${p.answer}`, {indent:360, size:20, color:"1a7a4a", spacing:40});
+      });
+    } else if (q.answer) {
+      answerKeyBody += mathPara(`${i+1}.  ${q.answer}`, {size:22, color: mcTypes.includes(q.type) ? "1a4a8a" : "1a7a4a", spacing:60});
+    }
+  });
+
+  // page break before answer key
+  documentXml = documentXml.replace("</w:body>",
+    `<w:p><w:r><w:br w:type="page"/></w:r></w:p>${answerKeyBody}</w:body>`);
 
   zip.file("word/document.xml", documentXml);
   zip.file("word/_rels/document.xml.rels", relsXml);
@@ -2665,6 +2706,8 @@ ${body}
 <w:sectPr>
   <w:pgSz w:w="12240" w:h="15840"/>
   <w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/>
+  <w:pgNumType w:fmt="decimal" w:start="1"/>
+  <w:footerReference w:type="default" r:id="rFooter1"/>
 </w:sectPr>
 </w:body>
 </w:document>`;
@@ -3162,6 +3205,7 @@ export default function TestBankApp() {
   const [versionCount, setVersionCount] = useState(2);
   const [versions, setVersions] = useState([]);
   const [activeVersion, setActiveVersion] = useState(0);
+  const [bankSearch, setBankSearch] = useState("");
   const [filterCourse, setFilterCourse] = useState("All");
   const [filterType, setFilterType] = useState("All");
   const [filterDiff, setFilterDiff] = useState("All");
@@ -3171,6 +3215,12 @@ export default function TestBankApp() {
   const [bankSelected, setBankSelected] = useState(new Set());
   const [graphEditorQId, setGraphEditorQId] = useState(null); // which question has graph editor open
   const [inlineEditQId,  setInlineEditQId]  = useState(null); // which question has inline editor open
+  const [toast, setToast] = useState(null); // {msg, type} — auto-dismisses
+
+  const showToast = (msg, type="success") => {
+    setToast({msg, type});
+    setTimeout(() => setToast(null), 2500);
+  };
 
   const [qtiExamName, setQtiExamName] = useState("");
   const [showPrintPreview, setShowPrintPreview] = useState(false);
@@ -3433,13 +3483,22 @@ export default function TestBankApp() {
     ? []
     : [...new Set(bank.filter(q => q.course === filterCourse).map(q => q.section).filter(Boolean))].sort();
 
-  const filteredBank = bank.filter(q =>
-    (filterCourse === "All" || q.course === filterCourse) &&
-    (filterType === "All" || q.type === filterType) &&
-    (filterDiff === "All" || q.difficulty === filterDiff) &&
-    (filterSection === "All" || q.section === filterSection) &&
-    (filterDate === "All" || new Date(q.createdAt).toLocaleString("en-US", {month:"short", day:"numeric", year:"numeric", hour:"2-digit", minute:"2-digit"}) === filterDate)
-  );
+  const filteredBank = bank.filter(q => {
+    const searchLower = bankSearch.toLowerCase().trim();
+    const matchesSearch = !searchLower || (
+      (q.question||"").toLowerCase().includes(searchLower) ||
+      (q.stem||"").toLowerCase().includes(searchLower) ||
+      (q.answer||"").toLowerCase().includes(searchLower) ||
+      (q.section||"").toLowerCase().includes(searchLower) ||
+      (q.choices||[]).some(c => c.toLowerCase().includes(searchLower))
+    );
+    return matchesSearch &&
+      (filterCourse === "All" || q.course === filterCourse) &&
+      (filterType === "All" || q.type === filterType) &&
+      (filterDiff === "All" || q.difficulty === filterDiff) &&
+      (filterSection === "All" || q.section === filterSection) &&
+      (filterDate === "All" || new Date(q.createdAt).toLocaleString("en-US", {month:"short", day:"numeric", year:"numeric", hour:"2-digit", minute:"2-digit"}) === filterDate);
+  });
 
   // Available dates from bank — unique days sorted newest first
   const availableDates = [...new Set(
@@ -3748,9 +3807,54 @@ export default function TestBankApp() {
     </aside>
   );
 
+  const [confirmDelete, setConfirmDelete] = useState(null); // {id, label}
+
   return (
     <div style={S.app}>
       <Sidebar />
+
+      {/* ── Toast notification ── */}
+      {toast && (
+        <div style={{position:"fixed", bottom:"1.5rem", right:"1.5rem", zIndex:99999,
+          padding:"0.65rem 1.1rem", borderRadius:"8px", fontSize:"0.82rem", fontWeight:"600",
+          background: toast.type==="error" ? "#7c2d12" : toast.type==="warn" ? "#451a03" : "#052e16",
+          color: toast.type==="error" ? "#fca5a5" : toast.type==="warn" ? "#fde68a" : "#86efac",
+          border: `1px solid ${toast.type==="error" ? "#f8717144" : toast.type==="warn" ? "#f59e0b44" : "#22c55e44"}`,
+          boxShadow:"0 4px 20px rgba(0,0,0,0.4)", animation:"fadeIn 0.2s ease"}}>
+          {toast.type==="success" ? "✓" : toast.type==="warn" ? "⚠" : "✕"} {toast.msg}
+        </div>
+      )}
+
+      {/* ── Delete confirmation dialog ── */}
+      {confirmDelete && (
+        <div style={{position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", zIndex:9998,
+          display:"flex", alignItems:"center", justifyContent:"center"}}>
+          <div style={{background:"#0d1425", border:"1px solid #1e3a5f", borderRadius:"12px",
+            padding:"1.5rem", maxWidth:"380px", width:"90%", boxShadow:"0 8px 32px rgba(0,0,0,0.5)"}}>
+            <div style={{fontSize:"1rem", fontWeight:"700", color:"#f0f4ff", marginBottom:"0.5rem"}}>Delete Question?</div>
+            <div style={{fontSize:"0.82rem", color:"#6b89b8", marginBottom:"1.25rem", lineHeight:1.5}}>
+              This will permanently remove the question from your bank. This cannot be undone.
+            </div>
+            <div style={{display:"flex", gap:"0.75rem"}}>
+              <button onClick={async () => {
+                await deleteQuestion(confirmDelete.id);
+                setBank(prev => prev.filter(q => q.id !== confirmDelete.id));
+                setConfirmDelete(null);
+                showToast("Question deleted");
+              }} style={{flex:1, padding:"0.5rem", background:"#7c2d12", color:"#fca5a5",
+                border:"1px solid #f8717144", borderRadius:"6px", cursor:"pointer", fontWeight:"600", fontSize:"0.82rem"}}>
+                Delete
+              </button>
+              <button onClick={() => setConfirmDelete(null)}
+                style={{flex:1, padding:"0.5rem", background:"transparent", color:"#6b89b8",
+                  border:"1px solid #1e3a5f", borderRadius:"6px", cursor:"pointer", fontSize:"0.82rem"}}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <main style={S.main}>
 
         {/* ── DASHBOARD ── */}
@@ -4004,6 +4108,16 @@ export default function TestBankApp() {
                 <button style={{...S.btn("#8b5cf6", false), fontSize:"0.75rem"}} onClick={() => setScreen("versions")}>Build Exam →</button>
               </div>
             </div>
+            {lastGenerated.length === 0 && (
+              <div style={{...S.card, textAlign:"center", padding:"3rem 2rem"}}>
+                <div style={{fontSize:"2.5rem", marginBottom:"1rem"}}>✨</div>
+                <div style={{fontSize:"1rem", fontWeight:"600", color:text1, marginBottom:"0.5rem"}}>No questions to review</div>
+                <div style={{fontSize:"0.82rem", color:text2, marginBottom:"1.5rem", lineHeight:1.6}}>
+                  Generate questions first, then paste the JSON here to review them before saving to your bank.
+                </div>
+                <button style={S.btn(accent, false)} onClick={() => setScreen("generate")}>✦ Generate Questions</button>
+              </div>
+            )}
             {dupWarnings.length > 0 && (
               <div style={{...S.card, borderColor:"#f59e0b44", background:"#f59e0b08", marginBottom:"1rem"}}>
                 <div style={{fontSize:"0.75rem", color:"#f59e0b", fontWeight:"600", marginBottom:"0.4rem"}}>⚠ Possible duplicates detected (same section)</div>
@@ -4125,6 +4239,15 @@ export default function TestBankApp() {
                 </>
               )}
             </div>
+            <div style={{marginBottom:"0.75rem"}}>
+              <input
+                value={bankSearch} onChange={e => setBankSearch(e.target.value)}
+                placeholder="🔍  Search questions, answers, sections..."
+                style={{width:"100%", padding:"0.5rem 0.75rem", background:"#0d1425",
+                  border:"1px solid #1e3a5f", color:"#e8e8e0", borderRadius:"8px",
+                  fontSize:"0.83rem", boxSizing:"border-box", outline:"none"}}
+              />
+            </div>
             <div style={{display:"flex", gap:"0.75rem", marginBottom:"1.25rem", flexWrap:"wrap"}}>
               <select style={{...S.sel, width:"155px"}} value={filterCourse} onChange={e => { setFilterCourse(e.target.value); setFilterSection("All"); }}>
                 <option>All</option>{Object.keys(COURSES).map(c => <option key={c}>{c}</option>)}
@@ -4149,7 +4272,20 @@ export default function TestBankApp() {
             </div>
 
             {!bankLoaded && <div style={{color:text2}}>Loading from database…</div>}
-            {bankLoaded && filteredBank.length === 0 && (
+            {bankLoaded && bank.length === 0 && (
+              <div style={{...S.card, textAlign:"center", padding:"3rem 2rem"}}>
+                <div style={{fontSize:"2.5rem", marginBottom:"1rem"}}>📭</div>
+                <div style={{fontSize:"1rem", fontWeight:"600", color:text1, marginBottom:"0.5rem"}}>Your bank is empty</div>
+                <div style={{fontSize:"0.82rem", color:text2, marginBottom:"1.5rem", lineHeight:1.6}}>
+                  Generate your first questions to get started.<br/>
+                  Choose a course, pick sections, and copy the prompt to Claude.
+                </div>
+                <button style={S.btn(accent, false)} onClick={() => setScreen("generate")}>
+                  ✦ Generate Questions
+                </button>
+              </div>
+            )}
+            {bankLoaded && bank.length > 0 && filteredBank.length === 0 && (
               <div style={{...S.card, textAlign:"center", color:text3, padding:"3rem"}}>
                 {bank.length === 0 ? "No questions yet. Go to Generate." : "No questions match filters."}
               </div>
@@ -4171,7 +4307,7 @@ export default function TestBankApp() {
                   )}
                   {!bankSelectMode && (
                     <button style={{...S.smBtn, marginLeft:"auto", color:"#f87171", border:"1px solid #f8717144"}}
-                      onClick={async () => { await deleteQuestion(q.id); setBank(prev => prev.filter(bq => bq.id !== q.id)); }}>
+                      onClick={() => setConfirmDelete({id: q.id, label: (q.question||q.stem||"").slice(0,60)})}>
                       ✕
                     </button>
                   )}
@@ -4206,6 +4342,7 @@ export default function TestBankApp() {
                       await saveQuestion(updated);
                       setBank(prev => prev.map(bq => bq.id === q.id ? updated : bq));
                       setGraphEditorQId(null);
+                      showToast("Graph saved ✓");
                     }}
                     onRemove={async () => {
                       const updated = { ...q, hasGraph: false, graphConfig: null };
@@ -4223,6 +4360,7 @@ export default function TestBankApp() {
                       await saveQuestion(updated);
                       setBank(prev => prev.map(bq => bq.id === q.id ? updated : bq));
                       setInlineEditQId(null);
+                      showToast("Question saved ✓");
                     }}
                     onClose={() => setInlineEditQId(null)}
                   />
@@ -4492,8 +4630,16 @@ export default function TestBankApp() {
             )}
 
             {versions.length === 0 && selectedForExam.length === 0 && (
-              <div style={{...S.card, textAlign:"center", color:text3, padding:"3rem"}}>
-                No questions selected yet. Go to <button style={{background:"none", border:"none", color:accent, cursor:"pointer", fontSize:"inherit", padding:0}} onClick={() => setScreen("bank")}>Question Bank</button> or use Generation History to add questions.
+              <div style={{...S.card, textAlign:"center", padding:"3rem 2rem"}}>
+                <div style={{fontSize:"2.5rem", marginBottom:"1rem"}}>📋</div>
+                <div style={{fontSize:"1rem", fontWeight:"600", color:text1, marginBottom:"0.5rem"}}>No exam built yet</div>
+                <div style={{fontSize:"0.82rem", color:text2, marginBottom:"1.5rem", lineHeight:1.6}}>
+                  Select questions from the bank, then click Build Exam here to create multiple versions.
+                </div>
+                <div style={{display:"flex", gap:"0.75rem", justifyContent:"center", flexWrap:"wrap"}}>
+                  <button style={S.btn(accent, false)} onClick={() => setScreen("bank")}>▦ Browse Question Bank</button>
+                  <button style={S.oBtn(text2)} onClick={() => setScreen("generate")}>✦ Generate Questions</button>
+                </div>
               </div>
             )}
 
