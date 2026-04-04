@@ -820,6 +820,80 @@ function escapeXML(s) { return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt
 // Convert plain-text math to HTML for Canvas QTI display
 // Convert plain-text math expression to LaTeX string
 // Convert plain-text math to simple HTML entities for Canvas QTI (proven to work)
+// ─── Question Validator ───────────────────────────────────────────────────────
+// Returns array of issue strings. Empty array = valid.
+function validateQuestion(q) {
+  const issues = [];
+  if (!q) return ["Empty question object"];
+
+  // blank question text
+  const qText = q.type === "Branched" ? q.stem : q.question;
+  if (!qText || !String(qText).trim()) issues.push("Question text is empty");
+
+  // blank answer
+  if (q.type !== "Branched" && q.type !== "Free Response") {
+    if (!q.answer && q.answer !== 0) issues.push("Answer is empty");
+  }
+
+  if (q.type === "Multiple Choice" || q.type === "True/False") {
+    const choices = q.choices || [];
+
+    // answer must be in choices
+    if (q.answer && choices.length && !choices.includes(q.answer)) {
+      issues.push("Correct answer does not match any choice");
+    }
+
+    // duplicate or equivalent choices
+    const normalizeChoice = (c) => String(c ?? "")
+      .trim()
+      .toLowerCase()
+      // strip LaTeX wrappers
+      .replace(/\[()[\]]/g, "")
+      .replace(/\s+/g, " ")
+      // normalize fractions: 1/2 and rac{1}{2} → same
+      .replace(/\frac\{(\d+)\}\{(\d+)\}/g, (_, n, d) => `${n}/${d}`)
+      // normalize common math: x^2 vs x² etc
+      .replace(/\^2/g, "²").replace(/\^3/g, "³")
+      // strip spaces around operators
+      .replace(/\s*([+\-*/=])\s*/g, "$1");
+
+    const seen = new Map();
+    choices.forEach((c, i) => {
+      const norm = normalizeChoice(c);
+      if (seen.has(norm)) {
+        issues.push(`Choices ${String.fromCharCode(65+seen.get(norm))} and ${String.fromCharCode(65+i)} are duplicate or equivalent`);
+      } else {
+        seen.set(norm, i);
+      }
+    });
+
+    // fewer than 2 choices
+    if (choices.length < 2) issues.push("Question has fewer than 2 choices");
+  }
+
+  if (q.type === "Branched") {
+    (q.parts || []).forEach((p, i) => {
+      if (!p.answer && p.answer !== 0) issues.push(`Part (${String.fromCharCode(97+i)}) has no answer`);
+    });
+  }
+
+  if (q.type === "Formula") {
+    if (!q.answerFormula) issues.push("Formula question missing answerFormula");
+    if (!q.variables || !q.variables.length) issues.push("Formula question missing variables");
+  }
+
+  // graph config validation
+  if (q.hasGraph && q.graphConfig) {
+    const gc = q.graphConfig;
+    if (gc.type === "area" && (!gc.fnTop || !gc.fnBottom)) issues.push("Area graph missing fnTop or fnBottom");
+    if (gc.type === "domain" && !gc.boundary) issues.push("Domain graph missing boundary");
+    if (gc.type === "single" && !gc.fn) issues.push("Single curve graph missing fn");
+  }
+
+  return issues;
+}
+// ─── End Question Validator ───────────────────────────────────────────────────
+
 function mathToHTML(s) {
   let r = String(s ?? "");
 
@@ -3684,13 +3758,22 @@ export default function TestBankApp() {
             )}
             {lastGenerated.map((q, qi) => (
               <div key={q.id || qi} style={S.qCard}>
+                {(() => { const issues = validateQuestion(q); return (
                 <div style={S.qMeta}>
                   <span>Q{qi+1}</span>
                   <span style={S.tag(courseColors[q.course])}>{q.course}</span>
                   <span style={S.tag()}>{q.type}</span>
                   <span style={S.tag()}>{q.section}</span>
                   <span style={S.tag()}>{q.difficulty}</span>
+                  {issues.length > 0 && (
+                    <span title={issues.join("\n")} style={{marginLeft:"auto", cursor:"help",
+                      background:"#7c2d12", color:"#fca5a5", fontSize:"0.68rem", fontWeight:"600",
+                      padding:"0.1rem 0.4rem", borderRadius:"4px", whiteSpace:"nowrap"}}>
+                      ⚠️ {issues.length} issue{issues.length > 1 ? "s" : ""}
+                    </span>
+                  )}
                 </div>
+                ); })()}
                 {q.hasGraph && q.graphConfig && (
                   <GraphDisplay graphConfig={q.graphConfig} authorMode={true} />
                 )}
@@ -4294,6 +4377,19 @@ export default function TestBankApp() {
                       </div>
 
 
+                      {(() => {
+                        const allIssues = v.questions.flatMap((q,qi) => {
+                          const issues = validateQuestion(q);
+                          return issues.map(issue => `Q${qi+1}: ${issue}`);
+                        });
+                        return allIssues.length > 0 ? (
+                          <div style={{background:"#7c2d1222", border:"1px solid #f8717144", borderRadius:"6px",
+                            padding:"0.6rem 0.85rem", marginBottom:"0.75rem", fontSize:"0.75rem", color:"#fca5a5"}}>
+                            <div style={{fontWeight:"600", marginBottom:"0.3rem"}}>⚠️ {allIssues.length} issue{allIssues.length>1?"s":""} found in this version</div>
+                            {allIssues.map((issue,i) => <div key={i} style={{opacity:0.85}}>• {issue}</div>)}
+                          </div>
+                        ) : null;
+                      })()}
                       <div style={{display:"flex", gap:"0.75rem", marginBottom:"1.25rem", flexWrap:"wrap"}}>
                         <button style={S.btn("#10b981",false)} onClick={async () => {
                           const cs = v.questions[0]?.classSection || null;
@@ -4407,11 +4503,19 @@ export default function TestBankApp() {
 
                       {v.questions.map((q,qi) => (
                         <div key={q.id||qi} style={S.qCard}>
+                          {(() => { const issues = validateQuestion(q); return (
                           <div style={S.qMeta}>
                             <span style={{fontWeight:"bold", color:text1}}>Q{qi+1}</span>
                             <span style={S.tag("#f43f5e")}>{q.type}</span>
                             <span style={S.tag()}>{q.section}</span>
                             <span style={S.tag()}>{q.difficulty}</span>
+                            {issues.length > 0 && (
+                              <span title={issues.join("\n")} style={{cursor:"help",
+                                background:"#7c2d12", color:"#fca5a5", fontSize:"0.68rem", fontWeight:"600",
+                                padding:"0.1rem 0.4rem", borderRadius:"4px", whiteSpace:"nowrap"}}>
+                                ⚠️ {issues.length}
+                              </span>
+                            )}
                             <div style={{marginLeft:"auto", display:"flex", gap:"0.3rem"}}>
                               <button style={{...S.smBtn, color:"#f59e0b", border:"1px solid #f59e0b44"}}
                                 onClick={() => triggerReplace(activeVersion,qi,"numbers")}>↻ Replace</button>
@@ -4419,6 +4523,7 @@ export default function TestBankApp() {
                                 onClick={() => triggerReplace(activeVersion,qi,"function")}>↻ Diff. Function</button>
                             </div>
                           </div>
+                          ); })()}
                           {q.type==="Branched" ? (
                             <>
                               <div style={{...S.qText,color:"#f43f5e99"}}>Given: <MathText>{q.stem}</MathText></div>
