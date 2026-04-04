@@ -3657,16 +3657,16 @@ export default function TestBankApp() {
             {/* Workflow connector */}
             <div style={{background:"#080d1a", border:"1px solid #0f1e3a", borderRadius:"12px", padding:"1.4rem", marginBottom:"1.5rem"}}>
               <div style={{fontSize:"0.6rem", color:"#1e3660", textTransform:"uppercase", letterSpacing:"0.14em", fontWeight:"700", marginBottom:"1rem"}}>Your Workflow</div>
-              <div style={{display:"grid", gridTemplateColumns:"1fr auto 1fr auto 1fr auto 1fr", alignItems:"center", gap:"0"}}>
+              <div style={{display:"flex", alignItems:"center", gap:"0"}}>
                 {[
                   { step:"1", label:"Generate", sub:"Create with AI", sc:"generate", color:"#10b981" },
                   { step:"2", label:"Review", sub:"Check & save", sc:"review", color:"#f59e0b", badge: lastGenerated.length || 0 },
                   { step:"3", label:"Build Exam", sub:"Select & version", sc:"versions", color:"#8b5cf6" },
                   { step:"4", label:"Export", sub:"Word · QTI · Print", sc:"versions", color:"#185FA5" },
                 ].map((s, i) => (
-                  <div key={i} style={{display:"contents"}}>
+                  <div key={i} style={{display:"flex", alignItems:"center", flex:1}}>
                     <div onClick={() => setScreen(s.sc)} style={{
-                      padding:"1rem 0.75rem", borderRadius:"10px", cursor:"pointer", textAlign:"center",
+                      flex:1, padding:"1rem 0.75rem", borderRadius:"10px", cursor:"pointer", textAlign:"center",
                       background: screen===s.sc ? s.color+"18" : "#0d1530",
                       border:"1px solid "+(screen===s.sc ? s.color+"50" : "#0f1e3a"),
                       transition:"all 0.15s"
@@ -3680,7 +3680,12 @@ export default function TestBankApp() {
                       <div style={{fontSize:"0.8rem", fontWeight:"600", color:s.color}}>{s.label}</div>
                       <div style={{fontSize:"0.62rem", color:"#3a5a8a", marginTop:"0.2rem"}}>{s.sub}</div>
                     </div>
-                    {i < 3 && <div style={{height:"1px", background:"#0f1e3a", margin:"0 0.2rem"}}/>}
+                    {i < 3 && (
+                      <div style={{display:"flex", alignItems:"center", padding:"0 0.3rem", flexShrink:0}}>
+                        <div style={{width:"20px", height:"1px", background:"#1a2f50"}}/>
+                        <div style={{color:"#1a2f50", fontSize:"0.7rem", lineHeight:1}}>›</div>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -3691,7 +3696,7 @@ export default function TestBankApp() {
               {[
                 { label:"Questions in Bank", value:bank.length, color:"#10b981", icon:"▦", action:() => setScreen("bank") },
                 { label:"Pending Review",    value:lastGenerated.length || 0, color:"#f59e0b", icon:"◎", action:() => setScreen("review") },
-                { label:"Issues Found",      value:bankIssueCount, color:bankIssueCount>0?"#f87171":"#10b981", icon:"⚠", action:() => setScreen("bank") },
+                { label:"Issues Found",      value:bankIssueCount, color:bankIssueCount>0?"#f87171":"#10b981", icon:bankIssueCount>0?"⚠":"✓", action:() => setScreen("bank") },
               ].map((s,i) => (
                 <div key={i} onClick={s.action} style={{...S.statCard(s.color), cursor:"pointer"}}>
                   <div style={S.statAccent(s.color)}/>
