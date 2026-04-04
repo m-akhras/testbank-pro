@@ -493,8 +493,12 @@ function GraphEditor({ initialConfig, onSave, onRemove, onClose }) {
   const [fnTopLabel,   setFnTopLabel]   = useState(initialConfig?.fnTopLabel   || "");
   const [fnBottomLabel,setFnBottomLabel]= useState(initialConfig?.fnBottomLabel|| "");
   const [showFnLabel,  setShowFnLabel]  = useState(initialConfig?.showFnLabel  !== false);
-  const [labelOffsetX, setLabelOffsetX] = useState(initialConfig?.labelOffsetX ?? 0);
-  const [labelOffsetY, setLabelOffsetY] = useState(initialConfig?.labelOffsetY ?? 0);
+  const [labelOffsetX,    setLabelOffsetX]    = useState(initialConfig?.labelOffsetX    ?? 0);
+  const [labelOffsetY,    setLabelOffsetY]    = useState(initialConfig?.labelOffsetY    ?? 0);
+  const [topLabelOffsetX, setTopLabelOffsetX] = useState(initialConfig?.topLabelOffsetX ?? 0);
+  const [topLabelOffsetY, setTopLabelOffsetY] = useState(initialConfig?.topLabelOffsetY ?? 0);
+  const [botLabelOffsetX, setBotLabelOffsetX] = useState(initialConfig?.botLabelOffsetX ?? 0);
+  const [botLabelOffsetY, setBotLabelOffsetY] = useState(initialConfig?.botLabelOffsetY ?? 0);
   const [holeInput,   setHoleInput]   = useState("");
   const [pointInput,  setPointInput]  = useState("");
   const previewRef = useRef(null);
@@ -519,7 +523,7 @@ function GraphEditor({ initialConfig, onSave, onRemove, onClose }) {
     };
     if (type === "single")    return { ...base, fn, fnLabel: fnLabel||undefined, showFnLabel, holes, points };
     if (type === "piecewise") return { ...base, fn, fnLabel: fnLabel||undefined, showFnLabel, holes, points };
-    if (type === "area")      return { ...base, fnTop, fnBottom, fnTopLabel: fnTopLabel||undefined, fnBottomLabel: fnBottomLabel||undefined, showFnLabel, shadeFrom: Number(shadeFrom), shadeTo: Number(shadeTo) };
+    if (type === "area")      return { ...base, fnTop, fnBottom, fnTopLabel: fnTopLabel||undefined, fnBottomLabel: fnBottomLabel||undefined, showFnLabel, shadeFrom: Number(shadeFrom), shadeTo: Number(shadeTo), topLabelOffsetX: Number(topLabelOffsetX)||0, topLabelOffsetY: Number(topLabelOffsetY)||0, botLabelOffsetX: Number(botLabelOffsetX)||0, botLabelOffsetY: Number(botLabelOffsetY)||0 };
     if (type === "domain")    return { ...base, boundary, shadeAbove, boundaryDashed: boundDashed, boundaryLabel: boundLabel, showFnLabel };
     // Stat chart types — pass through initialConfig, just add display flags
     if (["bar","histogram","scatter","discrete_dist","continuous_dist","standard_normal"].includes(type)) {
@@ -613,8 +617,26 @@ function GraphEditor({ initialConfig, onSave, onRemove, onClose }) {
 
       {/* Area between curves */}
       {type === "area" && <>
-        {row(<>{lbl("f(x) top =")}    {inp(fnTop,    setFnTop,    "top curve",    "160px")} {lbl("label:")} {inp(fnTopLabel,    setFnTopLabel,    "f(x)", "70px")}</>)}
-        {row(<>{lbl("g(x) bottom =")} {inp(fnBottom, setFnBottom, "bottom curve", "160px")} {lbl("label:")} {inp(fnBottomLabel, setFnBottomLabel, "g(x)", "70px")}</>)}
+        {row(<>
+          {lbl("f(x) top =")} {inp(fnTop, setFnTop, "top curve", "150px")}
+          {lbl("label:")} {inp(fnTopLabel, setFnTopLabel, "f(x)", "60px")}
+          {lbl("offset:")}
+          <input type="number" value={topLabelOffsetX} onChange={e=>setTopLabelOffsetX(Number(e.target.value))} placeholder="x" title="X offset in pixels"
+            style={{width:"42px",padding:"0.18rem 0.3rem",background:"#1a1a2e",border:"1px solid #334155",color:"#e8e8e0",borderRadius:"4px",fontSize:"0.72rem"}} />
+          <input type="number" value={topLabelOffsetY} onChange={e=>setTopLabelOffsetY(Number(e.target.value))} placeholder="y" title="Y offset in pixels"
+            style={{width:"42px",padding:"0.18rem 0.3rem",background:"#1a1a2e",border:"1px solid #334155",color:"#e8e8e0",borderRadius:"4px",fontSize:"0.72rem"}} />
+          <span style={{fontSize:"0.62rem",color:"#475569"}}>px</span>
+        </>)}
+        {row(<>
+          {lbl("g(x) bottom =")} {inp(fnBottom, setFnBottom, "bottom curve", "150px")}
+          {lbl("label:")} {inp(fnBottomLabel, setFnBottomLabel, "g(x)", "60px")}
+          {lbl("offset:")}
+          <input type="number" value={botLabelOffsetX} onChange={e=>setBotLabelOffsetX(Number(e.target.value))} placeholder="x" title="X offset in pixels"
+            style={{width:"42px",padding:"0.18rem 0.3rem",background:"#1a1a2e",border:"1px solid #334155",color:"#e8e8e0",borderRadius:"4px",fontSize:"0.72rem"}} />
+          <input type="number" value={botLabelOffsetY} onChange={e=>setBotLabelOffsetY(Number(e.target.value))} placeholder="y" title="Y offset in pixels"
+            style={{width:"42px",padding:"0.18rem 0.3rem",background:"#1a1a2e",border:"1px solid #334155",color:"#e8e8e0",borderRadius:"4px",fontSize:"0.72rem"}} />
+          <span style={{fontSize:"0.62rem",color:"#475569"}}>px</span>
+        </>)}
         {row(<>
           {lbl("Shade from x =")} {inp(shadeFrom, setShadeFrom, "-1", "55px")} {lbl("to x =")} {inp(shadeTo, setShadeTo, "2", "55px")}
           <label style={{display:"flex",alignItems:"center",gap:"5px",fontSize:"0.72rem",color:"#94a3b8",cursor:"pointer"}}>
@@ -666,7 +688,7 @@ function GraphEditor({ initialConfig, onSave, onRemove, onClose }) {
         </label>
         {["continuous_dist","discrete_dist","standard_normal"].includes(type) && (
           <label style={{display:"flex",alignItems:"center",gap:"5px",fontSize:"0.72rem",color:"#94a3b8",cursor:"pointer"}}>
-            <input type="checkbox" checked={showFnLabel} onChange={e=>setShowFnLabel(e.target.checked)} /> Show P(X) label
+            <input type="checkbox" checked={showFnLabel} onChange={e=>setShowFnLabel(e.target.checked)} /> Show label
           </label>
         )}
         {["continuous_dist","discrete_dist","standard_normal"].includes(type) && showFnLabel && (
@@ -1626,23 +1648,30 @@ function renderGraphToSVG(graphConfig, width = 480, height = 300) {
       const pxTop = isFinite(lyTopAt) ? yScale(clamp(lyTopAt)) : null;
       const pxBot = isFinite(lyBotAt) ? yScale(clamp(lyBotAt)) : null;
 
-      // top label: above the top curve at (lxLabel, lyTopAt)
+      // per-curve offsets (from graphConfig)
+      const tOffX = cfg.topLabelOffsetX || 0;
+      const tOffY = cfg.topLabelOffsetY || 0;
+      const bOffX = cfg.botLabelOffsetX || 0;
+      const bOffY = cfg.botLabelOffsetY || 0;
+
+      // top label: above the top curve + offset
       if (pxTop !== null) {
         g.append("text")
-          .attr("x", xScale(lxLabel))
-          .attr("y", pxTop - 9)
+          .attr("x", xScale(lxLabel) + tOffX)
+          .attr("y", pxTop - 9 + tOffY)
           .attr("fill", COL.blue).attr("font-size", 12).attr("font-style", "italic")
           .attr("font-family", "sans-serif").text(topLabel);
       }
 
-      // bottom label: below the bottom curve at (lxLabel, lyBotAt)
-      // enforce minimum pixel gap from top label
+      // bottom label: below the bottom curve + offset
+      // enforce minimum pixel gap from top label (unless overridden by offset)
       if (pxBot !== null) {
-        const topLabelBottom = pxTop !== null ? pxTop - 9 + 14 : -9999; // approx bottom of top label text
-        const naturalY = pxBot + 16;
-        const finalY = naturalY < topLabelBottom + 4 ? topLabelBottom + 18 : naturalY;
+        const topLabelBottom = pxTop !== null ? pxTop - 9 + 14 : -9999;
+        const naturalY = pxBot + 16 + bOffY;
+        const autoY = naturalY < topLabelBottom + 4 ? topLabelBottom + 18 : naturalY;
+        const finalY = bOffY !== 0 ? naturalY : autoY; // if user set offset, respect it exactly
         g.append("text")
-          .attr("x", xScale(lxLabel))
+          .attr("x", xScale(lxLabel) + bOffX)
           .attr("y", finalY)
           .attr("fill", COL.red).attr("font-size", 12).attr("font-style", "italic")
           .attr("font-family", "sans-serif").text(botLabel);
