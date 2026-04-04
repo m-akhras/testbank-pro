@@ -3664,7 +3664,7 @@ export default function TestBankApp() {
                   { step:"3", label:"Build Exam", sub:"Select & version", sc:"versions", color:"#8b5cf6" },
                   { step:"4", label:"Export", sub:"Word · QTI · Print", sc:"versions", color:"#185FA5" },
                 ].map((s, i) => (
-                  <React.Fragment key={i}>
+                  <div key={i} style={{display:"contents"}}>
                     <div onClick={() => setScreen(s.sc)} style={{
                       padding:"1rem 0.75rem", borderRadius:"10px", cursor:"pointer", textAlign:"center",
                       background: screen===s.sc ? s.color+"18" : "#0d1530",
@@ -3681,7 +3681,7 @@ export default function TestBankApp() {
                       <div style={{fontSize:"0.62rem", color:"#3a5a8a", marginTop:"0.2rem"}}>{s.sub}</div>
                     </div>
                     {i < 3 && <div style={{height:"1px", background:"#0f1e3a", margin:"0 0.2rem"}}/>}
-                  </React.Fragment>
+                  </div>
                 ))}
               </div>
             </div>
