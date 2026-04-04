@@ -493,6 +493,8 @@ function GraphEditor({ initialConfig, onSave, onRemove, onClose }) {
   const [fnTopLabel,   setFnTopLabel]   = useState(initialConfig?.fnTopLabel   || "");
   const [fnBottomLabel,setFnBottomLabel]= useState(initialConfig?.fnBottomLabel|| "");
   const [showFnLabel,  setShowFnLabel]  = useState(initialConfig?.showFnLabel  !== false);
+  const [labelOffsetX, setLabelOffsetX] = useState(initialConfig?.labelOffsetX ?? 0);
+  const [labelOffsetY, setLabelOffsetY] = useState(initialConfig?.labelOffsetY ?? 0);
   const [holeInput,   setHoleInput]   = useState("");
   const [pointInput,  setPointInput]  = useState("");
   const previewRef = useRef(null);
@@ -520,8 +522,9 @@ function GraphEditor({ initialConfig, onSave, onRemove, onClose }) {
     if (type === "area")      return { ...base, fnTop, fnBottom, fnTopLabel: fnTopLabel||undefined, fnBottomLabel: fnBottomLabel||undefined, showFnLabel, shadeFrom: Number(shadeFrom), shadeTo: Number(shadeTo) };
     if (type === "domain")    return { ...base, boundary, shadeAbove, boundaryDashed: boundDashed, boundaryLabel: boundLabel, showFnLabel };
     // Stat chart types — pass through initialConfig, just add display flags
-    if (["bar","histogram","scatter","discrete_dist","continuous_dist"].includes(type)) {
-      return { ...(initialConfig || {}), showAxisNumbers: showNumbers, showGrid };
+    if (["bar","histogram","scatter","discrete_dist","continuous_dist","standard_normal"].includes(type)) {
+      return { ...(initialConfig || {}), showAxisNumbers: showNumbers, showGrid, showFnLabel,
+               labelOffsetX: Number(labelOffsetX)||0, labelOffsetY: Number(labelOffsetY)||0 };
     }
     return base;
   };
@@ -665,6 +668,18 @@ function GraphEditor({ initialConfig, onSave, onRemove, onClose }) {
           <label style={{display:"flex",alignItems:"center",gap:"5px",fontSize:"0.72rem",color:"#94a3b8",cursor:"pointer"}}>
             <input type="checkbox" checked={showFnLabel} onChange={e=>setShowFnLabel(e.target.checked)} /> Show P(X) label
           </label>
+        )}
+        {["continuous_dist","discrete_dist","standard_normal"].includes(type) && showFnLabel && (
+          <div style={{display:"flex",alignItems:"center",gap:"5px",fontSize:"0.72rem",color:"#94a3b8"}}>
+            <span>Label offset:</span>
+            <span>x</span>
+            <input type="number" value={labelOffsetX} onChange={e=>setLabelOffsetX(Number(e.target.value))}
+              style={{width:"46px",padding:"0.18rem 0.3rem",background:"#1a1a2e",border:"1px solid #334155",color:"#e8e8e0",borderRadius:"4px",fontSize:"0.72rem"}} />
+            <span>y</span>
+            <input type="number" value={labelOffsetY} onChange={e=>setLabelOffsetY(Number(e.target.value))}
+              style={{width:"46px",padding:"0.18rem 0.3rem",background:"#1a1a2e",border:"1px solid #334155",color:"#e8e8e0",borderRadius:"4px",fontSize:"0.72rem"}} />
+            <span style={{fontSize:"0.65rem",color:"#475569"}}>px</span>
+          </div>
         )}
       </div>
 
@@ -1900,22 +1915,17 @@ function renderStatChartToSVG(chartConfig, width=480, height=300) {
     g.append("path").datum(xs.map(x=>[x,pdf(x)])).attr("d",lineGen)
       .attr("fill","none").attr("stroke",COL.blue).attr("stroke-width",2.5);
 
-    // track which x values have boundary labels (to avoid tick overlap)
-    const boundaryLabelXs = new Set();
-
-    // boundary vertical lines + value labels
+    // boundary vertical lines + z/x labels
     const drawBoundary = (val, label) => {
       if (val === null || val <= xLo || val >= xHi) return;
       const px = xScale(val);
       const py = yScale(pdf(val));
       g.append("line").attr("x1",px).attr("y1",yScale(0)).attr("x2",px).attr("y2",py)
         .attr("stroke",COL.red).attr("stroke-width",1.8).attr("stroke-dasharray","5,4");
-      if (showNumbers) {
-        g.append("text").attr("x",px).attr("y",iH+28)
-          .attr("text-anchor","middle").attr("font-size",10).attr("font-weight","600")
-          .attr("fill",COL.red).text(label || (Math.round(val*100)/100));
-        boundaryLabelXs.add(Math.round(val*100)/100);
-      }
+      // label below axis
+      g.append("text").attr("x",px).attr("y",iH+28)
+        .attr("text-anchor","middle").attr("font-size",10).attr("font-weight","600")
+        .attr("fill",COL.red).text(label || (Math.round(val*100)/100));
     };
 
     if (sFrom !== null) {
@@ -1927,14 +1937,18 @@ function renderStatChartToSVG(chartConfig, width=480, height=300) {
       drawBoundary(sTo, lbl);
     }
 
-    // probability label inside shaded region — respects showFnLabel toggle
+    // probability label inside shaded region — respects showFnLabel toggle + offset
     const showProb = cfg.showFnLabel !== false;
     if (showProb && cfg.probability && (sFrom !== null || sTo !== null)) {
       const midX = ((sFrom??xLo) + (sTo??xHi)) / 2;
       const midPdf = pdf(midX);
       if (isFinite(midPdf) && midPdf > 0) {
-        g.append("text").attr("x",xScale(midX)).attr("y",yScale(midPdf * 0.42))
-          .attr("text-anchor","middle").attr("font-size",11).attr("font-weight","700")
+        const offX = cfg.labelOffsetX || 0;
+        const offY = cfg.labelOffsetY || 0;
+        g.append("text")
+          .attr("x", xScale(midX) + offX)
+          .attr("y", yScale(midPdf * 0.42) + offY)
+          .attr("text-anchor","middle").attr("font-size",12).attr("font-weight","700")
           .attr("fill",COL.blue).text(cfg.probability);
       }
     }
@@ -1943,16 +1957,10 @@ function renderStatChartToSVG(chartConfig, width=480, height=300) {
     g.append("line").attr("x1",0).attr("y1",iH).attr("x2",iW).attr("y2",iH).attr("stroke",COL.text).attr("stroke-width",1.5);
     g.append("line").attr("x1",0).attr("y1",0).attr("x2",0).attr("y2",iH).attr("stroke",COL.text).attr("stroke-width",1.5);
 
-    // x-axis tick labels — skip ticks that are too close to boundary labels
+    // x-axis tick labels
     if (showNumbers) {
       const ticks = isStdNorm ? [-3,-2,-1,0,1,2,3] : d3.ticks(xLo, xHi, 8);
-      const tickStep = (xHi - xLo) / 8;
-      ticks.forEach(t => {
-        const rounded = Math.round(t*100)/100;
-        // skip if within half a tick-step of a boundary label
-        const nearBoundary = [...boundaryLabelXs].some(bx => Math.abs(rounded - bx) < tickStep * 0.6);
-        if (!nearBoundary) axisLabel(rounded, xScale(t), iH+16, "middle", 10);
-      });
+      ticks.forEach(t => axisLabel(Math.round(t*100)/100, xScale(t), iH+16, "middle", 10));
       // y-axis ticks
       d3.ticks(0, yMax, 5).forEach(t => axisLabel(Math.round(t*1000)/1000, -8, yScale(t)+4, "end", 9));
     }
