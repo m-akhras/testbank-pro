@@ -4403,7 +4403,7 @@ export default function TestBankApp() {
                                           style={{width:"40px", ...S.input, padding:"0.2rem 0.3rem", fontSize:"0.75rem"}}
                                           onChange={e => setSectionDiff(sec, d, "count", Number(e.target.value)||0)} />
                                         <span style={{fontSize:"0.65rem", color:text3}}>q</span>
-                                        {(isQM ? ["normal","table","graph","mix"] : ["normal","graph","mix"]).map(gt => (
+                                        {((course === "Quantitative Methods I" || course === "Quantitative Methods II") ? ["normal","table","graph","mix"] : ["normal","graph","mix"]).map(gt => (
                                           <button key={gt} onClick={() => setSectionDiff(sec, d, "graphType", gt)}
                                             style={{padding:"0.15rem 0.35rem", fontSize:"0.65rem", borderRadius:"3px", cursor:"pointer",
                                               background: cfg[d].graphType===gt
