@@ -3118,14 +3118,15 @@ function buildGeneratePrompt(course, selectedSections, sectionCounts, qType, dif
 
   const hasGraphQuestions = useCfg && selectedSections.some(s => {
     const c = sectionConfig[s];
-    return c && ["Easy","Medium","Hard"].some(d => c[d].graphType === "graph" || c[d].graphType === "mix");
+    return c && ["Easy","Medium","Hard"].some(d => c[d].graphType === "graph" || c[d].graphType === "mix" || c[d].graphType === "table");
   });
 
   const graphInstructions = hasGraphQuestions ? `
-GRAPH QUESTIONS:
+GRAPH/TABLE QUESTIONS:
 - graphType "graph": MUST include hasGraph:true and graphConfig in the JSON.
-- graphType "mix": include graphConfig only when it genuinely helps (area, limits with holes, domain sketch).
-- graphType "normal": do NOT include graphConfig.
+- graphType "table": MUST include a pipe table in the question text presenting the data. Do NOT include graphConfig.
+- graphType "mix": mix of normal text questions, table questions, and graph questions. Use tables and graphs when they genuinely help.
+- graphType "normal": pure text/calculation only. Do NOT include graphConfig or tables.
 
 CRITICAL — Choose graphConfig type based on how many functions appear in the question:
 - Question mentions 1 function (e.g. f(x) = x²-3) → use type "single", put expression in "fn"
@@ -4402,13 +4403,15 @@ export default function TestBankApp() {
                                           style={{width:"40px", ...S.input, padding:"0.2rem 0.3rem", fontSize:"0.75rem"}}
                                           onChange={e => setSectionDiff(sec, d, "count", Number(e.target.value)||0)} />
                                         <span style={{fontSize:"0.65rem", color:text3}}>q</span>
-                                        {["normal","graph","mix"].map(gt => (
+                                        {(isQM ? ["normal","table","graph","mix"] : ["normal","graph","mix"]).map(gt => (
                                           <button key={gt} onClick={() => setSectionDiff(sec, d, "graphType", gt)}
                                             style={{padding:"0.15rem 0.35rem", fontSize:"0.65rem", borderRadius:"3px", cursor:"pointer",
-                                              background: cfg[d].graphType===gt ? (gt==="graph"?"#1D9E75":gt==="mix"?"#8b5cf6":"#334155") : "transparent",
+                                              background: cfg[d].graphType===gt
+                                                ? (gt==="graph"?"#1D9E75":gt==="table"?"#185FA5":gt==="mix"?"#8b5cf6":"#334155")
+                                                : "transparent",
                                               color: cfg[d].graphType===gt ? "#fff" : text3,
-                                              border:`1px solid ${cfg[d].graphType===gt?(gt==="graph"?"#1D9E75":gt==="mix"?"#8b5cf6":"#475569"):"#334155"}`}}>
-                                            {gt==="normal"?"Text":gt==="graph"?"Graph":"Mix"}
+                                              border:`1px solid ${cfg[d].graphType===gt?(gt==="graph"?"#1D9E75":gt==="table"?"#185FA5":gt==="mix"?"#8b5cf6":"#475569"):"#334155"}`}}>
+                                            {gt==="normal"?"Text":gt==="graph"?"Graph":gt==="table"?"Table":"Mix"}
                                           </button>
                                         ))}
                                       </div>
