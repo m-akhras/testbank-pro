@@ -661,6 +661,11 @@ function GraphEditor({ initialConfig, onSave, onRemove, onClose }) {
         <label style={{display:"flex",alignItems:"center",gap:"5px",fontSize:"0.72rem",color:"#94a3b8",cursor:"pointer"}}>
           <input type="checkbox" checked={showGrid} onChange={e=>setShowGrid(e.target.checked)} /> Grid
         </label>
+        {["continuous_dist","discrete_dist","standard_normal"].includes(type) && (
+          <label style={{display:"flex",alignItems:"center",gap:"5px",fontSize:"0.72rem",color:"#94a3b8",cursor:"pointer"}}>
+            <input type="checkbox" checked={showFnLabel} onChange={e=>setShowFnLabel(e.target.checked)} /> Show P(X) label
+          </label>
+        )}
       </div>
 
       {/* Live preview */}
@@ -1895,17 +1900,22 @@ function renderStatChartToSVG(chartConfig, width=480, height=300) {
     g.append("path").datum(xs.map(x=>[x,pdf(x)])).attr("d",lineGen)
       .attr("fill","none").attr("stroke",COL.blue).attr("stroke-width",2.5);
 
-    // boundary vertical lines + z/x labels
+    // track which x values have boundary labels (to avoid tick overlap)
+    const boundaryLabelXs = new Set();
+
+    // boundary vertical lines + value labels
     const drawBoundary = (val, label) => {
       if (val === null || val <= xLo || val >= xHi) return;
       const px = xScale(val);
       const py = yScale(pdf(val));
       g.append("line").attr("x1",px).attr("y1",yScale(0)).attr("x2",px).attr("y2",py)
         .attr("stroke",COL.red).attr("stroke-width",1.8).attr("stroke-dasharray","5,4");
-      // label below axis
-      g.append("text").attr("x",px).attr("y",iH+28)
-        .attr("text-anchor","middle").attr("font-size",10).attr("font-weight","600")
-        .attr("fill",COL.red).text(label || (Math.round(val*100)/100));
+      if (showNumbers) {
+        g.append("text").attr("x",px).attr("y",iH+28)
+          .attr("text-anchor","middle").attr("font-size",10).attr("font-weight","600")
+          .attr("fill",COL.red).text(label || (Math.round(val*100)/100));
+        boundaryLabelXs.add(Math.round(val*100)/100);
+      }
     };
 
     if (sFrom !== null) {
@@ -1917,8 +1927,9 @@ function renderStatChartToSVG(chartConfig, width=480, height=300) {
       drawBoundary(sTo, lbl);
     }
 
-    // probability label inside shaded region
-    if (cfg.probability) {
+    // probability label inside shaded region — respects showFnLabel toggle
+    const showProb = cfg.showFnLabel !== false;
+    if (showProb && cfg.probability && (sFrom !== null || sTo !== null)) {
       const midX = ((sFrom??xLo) + (sTo??xHi)) / 2;
       const midPdf = pdf(midX);
       if (isFinite(midPdf) && midPdf > 0) {
@@ -1932,10 +1943,16 @@ function renderStatChartToSVG(chartConfig, width=480, height=300) {
     g.append("line").attr("x1",0).attr("y1",iH).attr("x2",iW).attr("y2",iH).attr("stroke",COL.text).attr("stroke-width",1.5);
     g.append("line").attr("x1",0).attr("y1",0).attr("x2",0).attr("y2",iH).attr("stroke",COL.text).attr("stroke-width",1.5);
 
-    // x-axis tick labels
+    // x-axis tick labels — skip ticks that are too close to boundary labels
     if (showNumbers) {
       const ticks = isStdNorm ? [-3,-2,-1,0,1,2,3] : d3.ticks(xLo, xHi, 8);
-      ticks.forEach(t => axisLabel(Math.round(t*100)/100, xScale(t), iH+16, "middle", 10));
+      const tickStep = (xHi - xLo) / 8;
+      ticks.forEach(t => {
+        const rounded = Math.round(t*100)/100;
+        // skip if within half a tick-step of a boundary label
+        const nearBoundary = [...boundaryLabelXs].some(bx => Math.abs(rounded - bx) < tickStep * 0.6);
+        if (!nearBoundary) axisLabel(rounded, xScale(t), iH+16, "middle", 10);
+      });
       // y-axis ticks
       d3.ticks(0, yMax, 5).forEach(t => axisLabel(Math.round(t*1000)/1000, -8, yScale(t)+4, "end", 9));
     }
