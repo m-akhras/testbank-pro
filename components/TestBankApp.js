@@ -3354,37 +3354,40 @@ export default function TestBankApp() {
     // Layout
     app: { display:"flex", minHeight:"100vh", background:bg0, fontFamily:"'Inter',system-ui,sans-serif", color:text1 },
     sidebar: {
-      width:"220px", flexShrink:0, background:bg1, borderRight:"1px solid "+border,
-      display:"flex", flexDirection:"column", padding:"0", position:"sticky", top:0, height:"100vh", overflowY:"auto"
+      width:"242px", flexShrink:0, background:"#080d1a",
+      borderRight:"1px solid #0f1e3a",
+      display:"flex", flexDirection:"column", padding:"0",
+      position:"sticky", top:0, height:"100vh", overflowY:"auto"
     },
     sidebarLogo: {
-      padding:"1.5rem 1.25rem 1rem", borderBottom:"1px solid "+border,
-      display:"flex", alignItems:"center", gap:"0.6rem"
+      padding:"1.4rem 1.2rem 1.1rem", borderBottom:"1px solid #0f1e3a",
+      display:"flex", alignItems:"center", gap:"0.75rem"
     },
     logoMark: {
-      width:"32px", height:"32px", borderRadius:"8px",
-      background:"linear-gradient(135deg, "+accent+" 0%, "+accent+"88 100%)",
+      width:"34px", height:"34px", borderRadius:"9px",
+      background:"linear-gradient(135deg, "+accent+" 0%, #0ea5e9 100%)",
       display:"flex", alignItems:"center", justifyContent:"center",
-      fontSize:"0.9rem", fontWeight:"900", color:"#000", flexShrink:0
+      fontSize:"0.95rem", fontWeight:"900", color:"#fff", flexShrink:0,
+      boxShadow:"0 0 14px "+accent+"55"
     },
-    logoText: { fontSize:"1rem", fontWeight:"700", letterSpacing:"-0.02em", color:text1 },
-    logoSub: { fontSize:"0.6rem", color:text2, letterSpacing:"0.05em", textTransform:"uppercase" },
-    navSection: { padding:"1rem 0.75rem 0.25rem", fontSize:"0.6rem", letterSpacing:"0.12em", textTransform:"uppercase", color:text3, fontWeight:"600" },
+    logoText: { fontSize:"0.97rem", fontWeight:"800", letterSpacing:"-0.03em", color:"#eef2ff" },
+    logoSub: { fontSize:"0.57rem", color:"#2d4a7a", letterSpacing:"0.1em", textTransform:"uppercase", marginTop:"2px" },
+    navSection: { padding:"1.1rem 1rem 0.3rem", fontSize:"0.57rem", letterSpacing:"0.14em", textTransform:"uppercase", color:"#1e3660", fontWeight:"700" },
     navBtn: (a) => ({
-      display:"flex", alignItems:"center", gap:"0.6rem",
-      padding:"0.55rem 0.75rem", margin:"0.1rem 0.5rem",
+      display:"flex", alignItems:"center", gap:"0.65rem",
+      padding:"0.58rem 0.85rem", margin:"0.06rem 0.55rem",
       borderRadius:"8px", border:"none", cursor:"pointer",
-      background: a ? accent+"22" : "transparent",
-      color: a ? accent : text2,
+      background: a ? accent+"1a" : "transparent",
+      color: a ? accent : "#5a7aa8",
       fontSize:"0.82rem", fontWeight: a ? "600" : "400",
-      textAlign:"left", width:"calc(100% - 1rem)",
-      transition:"all 0.15s", fontFamily:"'Inter',system-ui,sans-serif",
-      borderLeft: a ? "2px solid "+accent : "2px solid transparent"
+      textAlign:"left", width:"calc(100% - 1.1rem)",
+      transition:"background 0.12s, color 0.12s",
+      borderLeft: a ? "2px solid "+accent : "2px solid transparent",
     }),
-    navIcon: { fontSize:"0.95rem", width:"18px", textAlign:"center", flexShrink:0 },
+    navIcon: { fontSize:"1rem", width:"20px", textAlign:"center", flexShrink:0 },
     navBadge: (c) => ({
-      marginLeft:"auto", background:c+"22", color:c, border:"1px solid "+c+"44",
-      borderRadius:"10px", padding:"0.05rem 0.4rem", fontSize:"0.6rem", fontWeight:"700"
+      marginLeft:"auto", background:c+"20", color:c, border:"1px solid "+c+"40",
+      borderRadius:"10px", padding:"0.06rem 0.42rem", fontSize:"0.61rem", fontWeight:"700"
     }),
     main: { flex:1, minWidth:0, padding:"2rem 2.5rem", maxWidth:"960px" },
     pageHeader: { marginBottom:"2rem" },
@@ -3541,14 +3544,22 @@ export default function TestBankApp() {
     },
   };
 
-  // ── Sidebar nav items ────────────────────────────────────────────────────────
-  const navItems = [
-    { id:"home",     icon:"⌂",  label:"Dashboard" },
-    { id:"generate", icon:"✦",  label:"Generate",  badge: null },
-    { id:"review",   icon:"◉",  label:"Review",    badge: lastGenerated.length || null },
-    { id:"bank",     icon:"▦",  label:"Question Bank", badge: bank.length || null },
-    { id:"versions", icon:"⊞",  label:"Exam Builder" },
-    { id:"saved",    icon:"◈",  label:"Saved Exams" },
+  // ── Sidebar nav groups ───────────────────────────────────────────────────────
+  const bankIssueCount = bank.filter(q => validateQuestion(q).length > 0).length;
+
+  const navGroups = [
+    { label: null, items: [
+      { id:"home", icon:"⊟", label:"Dashboard" },
+    ]},
+    { label: "Question Bank", items: [
+      { id:"generate", icon:"✦", label:"Generate" },
+      { id:"review",   icon:"◎", label:"Review", badge: lastGenerated.length || null, alert: lastGenerated.length > 0 },
+      { id:"bank",     icon:"▦", label:"Browse & Edit", badge: bank.length || null },
+    ]},
+    { label: "Exam Builder", items: [
+      { id:"versions", icon:"⊞", label:"Build & Export" },
+      { id:"saved",    icon:"◈", label:"Saved Exams" },
+    ]},
   ];
 
   // ── Sidebar component ────────────────────────────────────────────────────────
@@ -3558,37 +3569,74 @@ export default function TestBankApp() {
       <div style={S.sidebarLogo}>
         <div style={S.logoMark}>T</div>
         <div>
-          <div style={S.logoText}>TestBank</div>
-          <div style={S.logoSub}>Pro</div>
+          <div style={S.logoText}>TestBank Pro</div>
+          <div style={S.logoSub}>Exam Authoring Suite</div>
         </div>
       </div>
 
-      {/* Nav */}
-      <div style={{padding:"0.75rem 0", flex:1}}>
-        <div style={S.navSection}>Navigation</div>
-        {navItems.map(n => (
-          <button key={n.id} style={S.navBtn(screen===n.id)} onClick={() => setScreen(n.id)}>
-            <span style={S.navIcon}>{n.icon}</span>
-            <span style={{flex:1}}>{n.label}</span>
-            {n.badge ? <span style={S.navBadge(accent)}>{n.badge}</span> : null}
-          </button>
-        ))}
-      </div>
-
-      {/* Course indicator */}
-      {course && (
-        <div style={{padding:"0.75rem 1rem", borderTop:"1px solid "+border, margin:"0"}}>
-          <div style={{fontSize:"0.6rem", color:text3, textTransform:"uppercase", letterSpacing:"0.1em", marginBottom:"0.3rem"}}>Active Course</div>
-          <div style={{display:"flex", alignItems:"center", gap:"0.5rem"}}>
-            <div style={{width:"8px", height:"8px", borderRadius:"50%", background:accent, flexShrink:0}}/>
-            <span style={{fontSize:"0.75rem", color:accent, fontWeight:"600", lineHeight:1.3}}>{course}</span>
+      {/* Notification banners */}
+      {lastGenerated.length > 0 && (
+        <div onClick={() => setScreen("review")} style={{
+          margin:"0.7rem 0.6rem 0", padding:"0.55rem 0.7rem",
+          background:"#f59e0b14", border:"1px solid #f59e0b40",
+          borderRadius:"8px", cursor:"pointer",
+          display:"flex", alignItems:"center", gap:"0.5rem"
+        }}>
+          <span style={{fontSize:"0.9rem"}}>⚡</span>
+          <div>
+            <div style={{fontSize:"0.71rem", color:"#f59e0b", fontWeight:"600", lineHeight:1.3}}>{lastGenerated.length} questions ready to review</div>
+            <div style={{fontSize:"0.62rem", color:"#7a5a10", marginTop:"1px"}}>Click to review →</div>
+          </div>
+        </div>
+      )}
+      {bankIssueCount > 0 && (
+        <div onClick={() => setScreen("bank")} style={{
+          margin:"0.4rem 0.6rem 0", padding:"0.5rem 0.7rem",
+          background:"#f8717114", border:"1px solid #f8717140",
+          borderRadius:"8px", cursor:"pointer",
+          display:"flex", alignItems:"center", gap:"0.5rem"
+        }}>
+          <span style={{fontSize:"0.9rem"}}>⚠️</span>
+          <div>
+            <div style={{fontSize:"0.71rem", color:"#fca5a5", fontWeight:"600", lineHeight:1.3}}>{bankIssueCount} question{bankIssueCount>1?"s":""} with issues</div>
+            <div style={{fontSize:"0.62rem", color:"#6b2525", marginTop:"1px"}}>Click to fix →</div>
           </div>
         </div>
       )}
 
-      {/* Version */}
-      <div style={{padding:"0.6rem 1rem", borderTop:"1px solid "+border}}>
-        <div style={{fontSize:"0.6rem", color:text3, textAlign:"center"}}>v50 · TestBank Pro</div>
+      {/* Nav groups */}
+      <div style={{padding:"0.4rem 0", flex:1}}>
+        {navGroups.map((group, gi) => (
+          <div key={gi}>
+            {group.label && <div style={S.navSection}>{group.label}</div>}
+            {group.items.map(n => (
+              <button key={n.id}
+                style={{...S.navBtn(screen===n.id), ...(n.alert && screen!==n.id ? {color:"#f59e0b"} : {})}}
+                onClick={() => setScreen(n.id)}>
+                <span style={S.navIcon}>{n.icon}</span>
+                <span style={{flex:1}}>{n.label}</span>
+                {n.badge ? <span style={S.navBadge(screen===n.id ? accent : n.alert ? "#f59e0b" : "#3a5a8a")}>{n.badge}</span> : null}
+              </button>
+            ))}
+          </div>
+        ))}
+      </div>
+
+      {/* Active course */}
+      {course && (
+        <div style={{padding:"0.7rem 1rem", borderTop:"1px solid #0f1e3a"}}>
+          <div style={{fontSize:"0.57rem", color:"#1e3660", textTransform:"uppercase", letterSpacing:"0.12em", marginBottom:"0.3rem"}}>Active Course</div>
+          <div style={{display:"flex", alignItems:"center", gap:"0.5rem"}}>
+            <div style={{width:"7px", height:"7px", borderRadius:"50%", background:accent, flexShrink:0, boxShadow:"0 0 6px "+accent}}/>
+            <span style={{fontSize:"0.74rem", color:accent, fontWeight:"600", lineHeight:1.3}}>{course}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Footer */}
+      <div style={{padding:"0.55rem 1rem", borderTop:"1px solid #0f1e3a", display:"flex", justifyContent:"space-between", alignItems:"center"}}>
+        <span style={{fontSize:"0.57rem", color:"#1e3660"}}>TestBank Pro</span>
+        <span style={{fontSize:"0.57rem", color:"#1e3660", background:"#0f1e3a", padding:"0.1rem 0.4rem", borderRadius:"4px", fontWeight:"600"}}>v55</span>
       </div>
     </aside>
   );
@@ -3603,43 +3651,62 @@ export default function TestBankApp() {
           <div>
             <div style={S.pageHeader}>
               <h1 style={S.h1}>Dashboard</h1>
-              <p style={S.sub}>Welcome back. Your exam toolkit is ready.</p>
+              <p style={S.sub}>Welcome to TestBank Pro — your exam authoring workspace.</p>
+            </div>
+
+            {/* Workflow connector */}
+            <div style={{background:"#080d1a", border:"1px solid #0f1e3a", borderRadius:"12px", padding:"1.4rem", marginBottom:"1.5rem"}}>
+              <div style={{fontSize:"0.6rem", color:"#1e3660", textTransform:"uppercase", letterSpacing:"0.14em", fontWeight:"700", marginBottom:"1rem"}}>Your Workflow</div>
+              <div style={{display:"grid", gridTemplateColumns:"1fr auto 1fr auto 1fr auto 1fr", alignItems:"center", gap:"0"}}>
+                {[
+                  { step:"1", label:"Generate", sub:"Create with AI", sc:"generate", color:"#10b981" },
+                  { step:"2", label:"Review", sub:"Check & save", sc:"review", color:"#f59e0b", badge: lastGenerated.length || 0 },
+                  { step:"3", label:"Build Exam", sub:"Select & version", sc:"versions", color:"#8b5cf6" },
+                  { step:"4", label:"Export", sub:"Word · QTI · Print", sc:"versions", color:"#185FA5" },
+                ].map((s, i) => (
+                  <React.Fragment key={i}>
+                    <div onClick={() => setScreen(s.sc)} style={{
+                      padding:"1rem 0.75rem", borderRadius:"10px", cursor:"pointer", textAlign:"center",
+                      background: screen===s.sc ? s.color+"18" : "#0d1530",
+                      border:"1px solid "+(screen===s.sc ? s.color+"50" : "#0f1e3a"),
+                      transition:"all 0.15s"
+                    }}>
+                      <div style={{display:"flex", alignItems:"center", justifyContent:"center", gap:"0.4rem", marginBottom:"0.4rem"}}>
+                        <div style={{width:"22px", height:"22px", borderRadius:"50%", background:s.color+"22",
+                          border:"1.5px solid "+s.color+"55", fontSize:"0.68rem", fontWeight:"700", color:s.color,
+                          display:"flex", alignItems:"center", justifyContent:"center"}}>{s.step}</div>
+                        {s.badge > 0 && <span style={{background:"#f59e0b22", color:"#f59e0b", fontSize:"0.6rem", fontWeight:"700", padding:"0.05rem 0.35rem", borderRadius:"8px"}}>{s.badge}</span>}
+                      </div>
+                      <div style={{fontSize:"0.8rem", fontWeight:"600", color:s.color}}>{s.label}</div>
+                      <div style={{fontSize:"0.62rem", color:"#3a5a8a", marginTop:"0.2rem"}}>{s.sub}</div>
+                    </div>
+                    {i < 3 && <div style={{height:"1px", background:"#0f1e3a", margin:"0 0.2rem"}}/>}
+                  </React.Fragment>
+                ))}
+              </div>
             </div>
 
             {/* Stats row */}
             <div style={{display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:"1rem", marginBottom:"1.5rem"}}>
               {[
-                { label:"Questions in Bank", value:bank.length, color:"#10b981", icon:"▦" },
-                { label:"Exams Created", value:"—", color:"#8b5cf6", icon:"◈" },
-                { label:"Last Generated", value: lastGenerated.length ? lastGenerated.length+" questions" : "None yet", color:"#f59e0b", icon:"✦" },
+                { label:"Questions in Bank", value:bank.length, color:"#10b981", icon:"▦", action:() => setScreen("bank") },
+                { label:"Pending Review",    value:lastGenerated.length || 0, color:"#f59e0b", icon:"◎", action:() => setScreen("review") },
+                { label:"Issues Found",      value:bankIssueCount, color:bankIssueCount>0?"#f87171":"#10b981", icon:"⚠", action:() => setScreen("bank") },
               ].map((s,i) => (
-                <div key={i} style={S.statCard(s.color)}>
+                <div key={i} onClick={s.action} style={{...S.statCard(s.color), cursor:"pointer"}}>
                   <div style={S.statAccent(s.color)}/>
-                  <div style={{fontSize:"1.4rem", marginBottom:"0.1rem"}}>{s.icon}</div>
-                  <div style={{fontSize:"1.5rem", fontWeight:"700", color:s.color, letterSpacing:"-0.02em"}}>{s.value}</div>
-                  <div style={{fontSize:"0.72rem", color:text2, marginTop:"0.15rem"}}>{s.label}</div>
+                  <div style={{fontSize:"1.5rem", marginBottom:"0.15rem"}}>{s.icon}</div>
+                  <div style={{fontSize:"1.6rem", fontWeight:"700", color:s.color, letterSpacing:"-0.03em"}}>{s.value}</div>
+                  <div style={{fontSize:"0.72rem", color:text2, marginTop:"0.2rem"}}>{s.label}</div>
                 </div>
               ))}
             </div>
 
-            {/* Quick actions */}
-            <div style={{...S.card, marginBottom:"1.5rem"}}>
-              <div style={{...S.h2, marginBottom:"1rem"}}>Quick Actions</div>
-              <div style={{display:"flex", gap:"0.75rem", flexWrap:"wrap"}}>
-                <button style={S.btn(accent, false)} onClick={() => setScreen("generate")}>
-                  ✦ Generate Questions
-                </button>
-                <button style={S.oBtn(text2)} onClick={() => setScreen("bank")}>
-                  ▦ Browse Bank
-                </button>
-                <button style={S.oBtn(text2)} onClick={() => setScreen("versions")}>
-                  ⊞ Build Exam
-                </button>
-              </div>
+            {/* Courses grid header */}
+            <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"0.75rem"}}>
+              <div style={S.h2}>Courses</div>
+              <button style={{...S.oBtn(accent), fontSize:"0.72rem", padding:"0.3rem 0.75rem"}} onClick={() => setScreen("generate")}>+ Generate Questions</button>
             </div>
-
-            {/* Courses grid */}
-            <div style={{...S.h2, marginBottom:"0.75rem"}}>Courses</div>
             <div style={{display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))", gap:"0.75rem", marginBottom:"1.5rem"}}>
               {Object.entries(COURSES).map(([name, { color, chapters }]) => {
                 const qCount = bank.filter(q => q.course === name).length;
@@ -3693,9 +3760,12 @@ export default function TestBankApp() {
         {/* GENERATE */}
         {screen === "generate" && (
           <div>
-            <div style={S.pageHeader}>
-              <h1 style={S.h1}>Generate Questions</h1>
-              <p style={S.sub}>Select a course, pick sections, and copy the prompt to Claude.</p>
+            <div style={{...S.pageHeader, display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:"1rem", flexWrap:"wrap"}}>
+              <div>
+                <h1 style={S.h1}>Generate Questions</h1>
+                <p style={S.sub}>Select a course, pick sections, and copy the prompt to Claude.</p>
+              </div>
+              <button style={{...S.oBtn(text2), fontSize:"0.75rem", flexShrink:0}} onClick={() => setScreen("bank")}>Browse Bank →</button>
             </div>
 
             {/* Course picker */}
@@ -3811,9 +3881,16 @@ export default function TestBankApp() {
         {/* REVIEW */}
         {screen === "review" && (
           <div>
-            <div style={S.pageHeader}>
-              <h1 style={S.h1}>Review Generated Questions</h1>
-              <p style={S.sub}>{lastGenerated.length} questions generated and saved to your bank.</p>
+            <div style={{...S.pageHeader, display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:"1rem", flexWrap:"wrap"}}>
+              <div>
+                <h1 style={S.h1}>Review Generated Questions</h1>
+                <p style={S.sub}>{lastGenerated.length} questions generated and saved to your bank.</p>
+              </div>
+              <div style={{display:"flex", gap:"0.5rem", flexShrink:0}}>
+                <button style={{...S.oBtn(text2), fontSize:"0.75rem"}} onClick={() => setScreen("generate")}>← Generate More</button>
+                <button style={{...S.oBtn(accent), fontSize:"0.75rem"}} onClick={() => setScreen("bank")}>Browse Bank →</button>
+                <button style={{...S.btn("#8b5cf6", false), fontSize:"0.75rem"}} onClick={() => setScreen("versions")}>Build Exam →</button>
+              </div>
             </div>
             {dupWarnings.length > 0 && (
               <div style={{...S.card, borderColor:"#f59e0b44", background:"#f59e0b08", marginBottom:"1rem"}}>
@@ -3876,9 +3953,15 @@ export default function TestBankApp() {
         {/* BANK */}
         {screen === "bank" && (
           <div>
-            <div style={S.pageHeader}>
-              <h1 style={S.h1}>Question Bank</h1>
-              <p style={S.sub}>{bank.length} questions saved · filter and select for exams.</p>
+            <div style={{...S.pageHeader, display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:"1rem", flexWrap:"wrap"}}>
+              <div>
+                <h1 style={S.h1}>Question Bank</h1>
+                <p style={S.sub}>{bank.length} questions saved{bankIssueCount > 0 ? ` · ⚠️ ${bankIssueCount} with issues` : " · ✓ all valid"}.</p>
+              </div>
+              <div style={{display:"flex", gap:"0.5rem", flexShrink:0}}>
+                <button style={{...S.oBtn(text2), fontSize:"0.75rem"}} onClick={() => setScreen("generate")}>+ Generate More</button>
+                <button style={{...S.btn("#8b5cf6", false), fontSize:"0.75rem"}} onClick={() => setScreen("versions")}>Build Exam →</button>
+              </div>
             </div>
 
             {/* Tab switcher */}
