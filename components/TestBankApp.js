@@ -1966,23 +1966,33 @@ function renderStatChartToSVG(chartConfig, width=480, height=300) {
       .attr("fill","none").attr("stroke",COL.blue).attr("stroke-width",2.5);
 
     // boundary vertical lines + z/x labels
+    const boundaryVals = new Set(); // track values with red labels to skip in x-axis ticks
+
     const drawBoundary = (val, label) => {
       if (val === null || val <= xLo || val >= xHi) return;
       const px = xScale(val);
       const py = yScale(pdf(val));
       g.append("line").attr("x1",px).attr("y1",yScale(0)).attr("x2",px).attr("y2",py)
         .attr("stroke",COL.red).attr("stroke-width",1.8).attr("stroke-dasharray","5,4");
-      // label below axis
-      g.append("text").attr("x",px).attr("y",iH+28)
-        .attr("text-anchor","middle").attr("font-size",10).attr("font-weight","600")
-        .attr("fill",COL.red).text(label || (Math.round(val*100)/100));
+      if (showNumbers) {
+        const rounded = Math.round(val*100)/100;
+        g.append("text").attr("x",px).attr("y",iH+28)
+          .attr("text-anchor","middle").attr("font-size",10).attr("font-weight","600")
+          .attr("fill",COL.red).text(label || rounded);
+        boundaryVals.add(rounded);
+      }
     };
 
-    if (sFrom !== null) {
+    // for uniform: draw uMin/uMax as boundaries
+    if (distType === "uniform") {
+      drawBoundary(uMin, `${Math.round(uMin*100)/100}`);
+      drawBoundary(uMax, `${Math.round(uMax*100)/100}`);
+    }
+    if (sFrom !== null && !(distType === "uniform" && sFrom === uMin)) {
       const lbl = isStdNorm ? `z=${Math.round(sFrom*100)/100}` : `${Math.round(sFrom*100)/100}`;
       drawBoundary(sFrom, lbl);
     }
-    if (sTo !== null) {
+    if (sTo !== null && !(distType === "uniform" && sTo === uMax)) {
       const lbl = isStdNorm ? `z=${Math.round(sTo*100)/100}` : `${Math.round(sTo*100)/100}`;
       drawBoundary(sTo, lbl);
     }
@@ -2007,10 +2017,15 @@ function renderStatChartToSVG(chartConfig, width=480, height=300) {
     g.append("line").attr("x1",0).attr("y1",iH).attr("x2",iW).attr("y2",iH).attr("stroke",COL.text).attr("stroke-width",1.5);
     g.append("line").attr("x1",0).attr("y1",0).attr("x2",0).attr("y2",iH).attr("stroke",COL.text).attr("stroke-width",1.5);
 
-    // x-axis tick labels
+    // x-axis tick labels — skip values already shown as red boundary labels
     if (showNumbers) {
       const ticks = isStdNorm ? [-3,-2,-1,0,1,2,3] : d3.ticks(xLo, xHi, 8);
-      ticks.forEach(t => axisLabel(Math.round(t*100)/100, xScale(t), iH+16, "middle", 10));
+      const tickStep = (xHi - xLo) / 8;
+      ticks.forEach(t => {
+        const rounded = Math.round(t*100)/100;
+        const nearBoundary = [...boundaryVals].some(bv => Math.abs(rounded - bv) < tickStep * 0.5);
+        if (!nearBoundary) axisLabel(rounded, xScale(t), iH+16, "middle", 10);
+      });
       // y-axis ticks
       d3.ticks(0, yMax, 5).forEach(t => axisLabel(Math.round(t*1000)/1000, -8, yScale(t)+4, "end", 9));
     }
