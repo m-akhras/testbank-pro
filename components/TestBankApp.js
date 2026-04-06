@@ -55,6 +55,8 @@ function toLatex(raw) {
   // Limits
   s = s.replace(/\blim(?:it)?\s+as\s+\(([^)]+)\)\s*(?:->|→)\s*\(([^)]+)\)/gi,
     (_,v,a)=>`\\(\\lim_{(${v})\\to(${fix(a)})}\\)`);
+  s = s.replace(/\blim(?:it)?\s+as\s+([a-zA-Z,\s]+?)\s*(?:->|→|\\to)\s*([^\s,;.(]+)\s*of\b/gi,
+    (_,v,a)=>`\\(\\lim_{${v.trim()}\\to ${fix(a)}}\\)`);
   s = s.replace(/\blim(?:it)?\s+as\s+([a-zA-Z,\s]+?)\s*(?:->|→|\\to)\s*([^\s,;.(]+)/gi,
     (_,v,a)=>`\\(\\lim_{${v.trim()}\\to ${fix(a)}}\\)`);
   // Also handle plain "lim_{x->a}" not wrapped in \( \)
@@ -1170,6 +1172,8 @@ function mathToHTMLInline(s) {
     (_, sub) => `lim<sub>${sub.replace(/\\to/g,'&rarr;').replace(/->/g,'&rarr;')}</sub>`);
   r = r.replace(/\blim_\{([^}]+)\}/gi,
     (_, sub) => `lim<sub>${sub.replace(/\\to/g,'&rarr;').replace(/->/g,'&rarr;')}</sub>`);
+  r = r.replace(/\blim(?:it)?\s*(?:as\s+)?([a-zA-Z])\s*(?:->|→|\\to)\s*([^\s,;.()]+)\s*of\b/gi,
+    (_, v, a) => `lim<sub>${v}&rarr;${a}</sub>`);
   r = r.replace(/\blim(?:it)?\s*(?:as\s+)?([a-zA-Z])\s*(?:->|→|\\to)\s*([^\s,;.()]+)/gi,
     (_, v, a) => `lim<sub>${v}&rarr;${a}</sub>`);
 
@@ -2282,6 +2286,8 @@ function mathToOmml(raw) {
   } while (w !== prev);
 
   // lim as x->a  /  lim_{x->a}  /  lim x->a
+  w = w.replace(/\blim(?:it)?\s*(?:as\s+)?([a-zA-Z])\s*(?:->|→|\\to)\s*([^\s,;.()]+)\s*of\b/gi,
+    (_, v, a) => addToken({t:'lim', sub: v.trim() + '→' + a.trim()}));
   w = w.replace(/\blim(?:it)?\s*(?:as\s+)?([a-zA-Z])\s*(?:->|→|\\to)\s*([^\s,;.()]+)/gi,
     (_, v, a) => addToken({t:'lim', sub: v.trim() + '→' + a.trim()}));
   w = w.replace(/\blim\s*_\{([^}]+)\}/gi,
