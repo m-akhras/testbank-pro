@@ -3556,7 +3556,7 @@ function PastePanel({ label, S, text2, pasteInput, setPasteInput, pasteError, ha
       />
       {pasteError && <div style={{color:"#f87171", fontSize:"0.78rem", marginTop:"0.4rem"}}>{pasteError}</div>}
       <div style={{display:"flex", gap:"0.75rem", marginTop:"0.75rem"}}>
-        <button style={S.btn("#10b981", !pasteInput.trim())} disabled={!pasteInput.trim()} onClick={handlePaste}>
+        <button id="auto-submit-paste" style={S.btn("#10b981", !pasteInput.trim())} disabled={!pasteInput.trim()} onClick={handlePaste}>
           ✓ Submit Response
         </button>
         <button style={S.oBtn(text2)} onClick={onCancel}>Cancel</button>
@@ -3811,6 +3811,8 @@ export default function TestBankApp() {
   const [savingExam, setSavingExam] = useState(false);
   const [examSaved, setExamSaved] = useState(false);
   const [generatedPrompt, setGeneratedPrompt] = useState("");
+  const [autoGenLoading, setAutoGenLoading] = useState(false);
+  const [autoGenError, setAutoGenError] = useState("");
   const [versionsViewMode, setVersionsViewMode] = useState("single"); // "single" | "compare"
   const [compareSection, setCompareSection] = useState("All");
   const [selectedQIndices, setSelectedQIndices] = useState([]);
@@ -4002,6 +4004,31 @@ export default function TestBankApp() {
       setPendingMeta({ selected, labels, mutationType, classSection: 1 });
     }
     setPasteInput(""); setPasteError("");
+  }
+
+  async function autoGenerateVersions(prompt, pendingTypeVal, pendingMetaVal) {
+    setAutoGenLoading(true);
+    setAutoGenError("");
+    try {
+      const res = await fetch("/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt }),
+      });
+      if (!res.ok) throw new Error(`API error: ${res.status}`);
+      const data = await res.json();
+      const text = data.content?.[0]?.text || data.text || "";
+      setPasteInput(text);
+      setPendingType(pendingTypeVal);
+      setPendingMeta(pendingMetaVal);
+      setGeneratedPrompt(prompt);
+      // auto-submit
+      setTimeout(() => { document.getElementById("auto-submit-paste")?.click(); }, 100);
+    } catch (e) {
+      setAutoGenError(e.message || "Generation failed. Try Copy Prompt instead.");
+    } finally {
+      setAutoGenLoading(false);
+    }
   }
 
   function triggerReplace(vIdx, qIdx, mutationType="numbers") {
@@ -5095,9 +5122,17 @@ export default function TestBankApp() {
                         : `Copy this prompt — generates ${pendingMeta?.labels?.join(", ")} versions:`}
                     </div>
                     <div style={S.promptBox}>{generatedPrompt}</div>
-                    <button style={{...S.oBtn(accent), marginBottom:"1rem"}} onClick={() => navigator.clipboard.writeText(generatedPrompt)}>
-                      Copy Prompt
-                    </button>
+                    <div style={{display:"flex", gap:"0.75rem", marginBottom:"1rem", flexWrap:"wrap"}}>
+                      <button style={{...S.btn("#10b981", autoGenLoading), minWidth:"160px"}}
+                        disabled={autoGenLoading}
+                        onClick={() => autoGenerateVersions(generatedPrompt, pendingType, pendingMeta)}>
+                        {autoGenLoading ? "⏳ Generating..." : "⚡ Generate Versions"}
+                      </button>
+                      <button style={S.oBtn(accent)} onClick={() => navigator.clipboard.writeText(generatedPrompt)}>
+                        Copy Prompt
+                      </button>
+                    </div>
+                    {autoGenError && <div style={{color:"#f87171", fontSize:"0.78rem", marginBottom:"0.75rem"}}>{autoGenError}</div>}
                     <PastePanel
                       label={pendingType === "version_all_sections"
                         ? `Paste the JSON object with all section+version keys ({"S1_A":[...], "S1_B":[...], "S2_A":[...], ...}) here.`
@@ -5319,7 +5354,15 @@ export default function TestBankApp() {
                         📋 Copy this prompt — paste to Claude — paste response back:
                       </div>
                       <div style={S.promptBox}>{generatedPrompt}</div>
-                      <button style={{...S.oBtn(accent), marginBottom:"1rem"}} onClick={() => navigator.clipboard.writeText(generatedPrompt)}>Copy Prompt</button>
+                      <div style={{display:"flex", gap:"0.75rem", marginBottom:"1rem", flexWrap:"wrap"}}>
+                        <button style={{...S.btn("#10b981", autoGenLoading), minWidth:"160px"}}
+                          disabled={autoGenLoading}
+                          onClick={() => autoGenerateVersions(generatedPrompt, pendingType, pendingMeta)}>
+                          {autoGenLoading ? "⏳ Generating..." : "⚡ Generate Versions"}
+                        </button>
+                        <button style={S.oBtn(accent)} onClick={() => navigator.clipboard.writeText(generatedPrompt)}>Copy Prompt</button>
+                      </div>
+                      {autoGenError && <div style={{color:"#f87171", fontSize:"0.78rem", marginBottom:"0.75rem"}}>{autoGenError}</div>}
                       <PastePanel
                         label="Paste Claude's JSON response here."
                         S={S} text2={text2}
@@ -5335,7 +5378,15 @@ export default function TestBankApp() {
                         📋 Copy this prompt — generates ALL {pendingMeta?.numClassSections} sections × {pendingMeta?.labels?.join(", ")} versions in one go:
                       </div>
                       <div style={S.promptBox}>{generatedPrompt}</div>
-                      <button style={{...S.oBtn(accent), marginBottom:"1rem"}} onClick={() => navigator.clipboard.writeText(generatedPrompt)}>Copy Prompt</button>
+                      <div style={{display:"flex", gap:"0.75rem", marginBottom:"1rem", flexWrap:"wrap"}}>
+                        <button style={{...S.btn("#10b981", autoGenLoading), minWidth:"160px"}}
+                          disabled={autoGenLoading}
+                          onClick={() => autoGenerateVersions(generatedPrompt, pendingType, pendingMeta)}>
+                          {autoGenLoading ? "⏳ Generating..." : "⚡ Generate Versions"}
+                        </button>
+                        <button style={S.oBtn(accent)} onClick={() => navigator.clipboard.writeText(generatedPrompt)}>Copy Prompt</button>
+                      </div>
+                      {autoGenError && <div style={{color:"#f87171", fontSize:"0.78rem", marginBottom:"0.75rem"}}>{autoGenError}</div>}
                       <PastePanel
                         label="Paste the combined JSON response (all sections + versions)."
                         S={S} text2={text2}
