@@ -2200,7 +2200,8 @@ function mathToOmml(raw) {
   const oSup = (base, exp) => `<m:sSup><m:e>${base}</m:e><m:sup>${exp}</m:sup></m:sSup>`;
   const oFrac = (n, d) => `<m:f><m:num>${n}</m:num><m:den>${d}</m:den></m:f>`;
   const oInt = (a, b) => `<m:nary><m:naryPr><m:chr m:val="\u222B"/><m:limLoc m:val="subSup"/></m:naryPr><m:sub>${oT(a)}</m:sub><m:sup>${oT(b)}</m:sup><m:e>${oT(" ")}</m:e></m:nary>`;
-  const oLim = (varTo) => `<m:func><m:funcPr/><m:fName><m:limLow><m:e><m:r><m:rPr><m:sty m:val="p"/></m:rPr><m:t>lim</m:t></m:r></m:e><m:lim>${oT(varTo)}</m:lim></m:limLow></m:fName><m:e>${oT(" ")}</m:e></m:func>`;
+  // lim with subscript: base="lim", sub="x→a" — built after renderSegment is defined
+  const oLim = (varTo) => `__LIM__${varTo}__ENDLIM__`;
 
   // Step 1: replace Greek letters and symbols
   let w = s
@@ -2331,7 +2332,11 @@ function mathToOmml(raw) {
     return out;
   }
 
-  const inner = renderSegment(w);
+  let inner = renderSegment(w);
+  // Resolve lim placeholders now that renderSegment is available
+  inner = inner.replace(/__LIM__(.*?)__ENDLIM__/g, (_, varTo) =>
+    `<m:limLow><m:e><m:r><m:rPr><m:sty m:val="p"/></m:rPr><m:t xml:space="preserve">lim</m:t></m:r></m:e><m:lim>${renderSegment(varTo)}</m:lim></m:limLow>`
+  );
   // Strip any leaked control characters that would break XML
   const clean = inner.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
   return `<m:oMath>${clean}</m:oMath>`;
