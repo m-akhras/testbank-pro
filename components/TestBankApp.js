@@ -1918,7 +1918,7 @@ function renderStatChartToSVG(chartConfig, width=480, height=300) {
 
     // x range — standard normal shows -3.8 to 3.8, uniform uses uMin/uMax with padding
     const xLo = isStdNorm ? -3.8
-      : distType === "uniform" ? (uMin - (uMax-uMin)*0.15)
+      : distType === "uniform" ? (uMin === 0 ? 0 : uMin - (uMax-uMin)*0.15)
       : distType === "exponential" ? 0
       : (cfg.a ?? mu - 4*sigma);
     const xHi = isStdNorm ? 3.8
