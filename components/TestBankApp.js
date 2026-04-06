@@ -3742,6 +3742,29 @@ export default function TestBankApp() {
     setTimeout(() => setToast(null), 2500);
   };
 
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generateError, setGenerateError] = useState("");
+
+  async function autoGenerate(prompt, onSuccess) {
+    setIsGenerating(true);
+    setGenerateError("");
+    try {
+      const res = await fetch("/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Generation failed");
+      onSuccess(data.result);
+    } catch(e) {
+      setGenerateError(e.message);
+      showToast(e.message, "error");
+    } finally {
+      setIsGenerating(false);
+    }
+  }
+
   const [qtiExamName, setQtiExamName] = useState("");
   const [showPrintPreview, setShowPrintPreview] = useState(false);
   const [printGraphCache, setPrintGraphCache] = useState({});
@@ -4591,22 +4614,46 @@ export default function TestBankApp() {
               </div>
             </div>
 
-            <button
-              style={S.btn(accent, !course || selectedSections.length === 0)}
-              disabled={!course || selectedSections.length === 0}
-              onClick={triggerGenerate}
-            >
-              ✦ Generate Prompt
-            </button>
+            <div style={{display:"flex", gap:"0.75rem", flexWrap:"wrap", alignItems:"center"}}>
+              <button
+                style={S.btn(accent, !course || selectedSections.length === 0 || isGenerating)}
+                disabled={!course || selectedSections.length === 0 || isGenerating}
+                onClick={async () => {
+                  triggerGenerate();
+                  const prompt = buildGeneratePrompt(course, selectedSections, sectionCounts, qType, diff, sectionConfig);
+                  await autoGenerate(prompt, (result) => {
+                    setPasteInput(result);
+                    // auto-trigger handlePaste
+                    setTimeout(() => {
+                      document.getElementById("auto-paste-trigger")?.click();
+                    }, 100);
+                  });
+                }}
+              >
+                {isGenerating ? "⏳ Generating..." : "✦ Generate Questions"}
+              </button>
+              <button
+                style={{...S.oBtn(text2), fontSize:"0.75rem"}}
+                disabled={!course || selectedSections.length === 0}
+                onClick={triggerGenerate}
+              >
+                Manual (copy-paste)
+              </button>
+            </div>
+
+            {generateError && (
+              <div style={{color:"#f87171", fontSize:"0.78rem", marginTop:"0.5rem"}}>{generateError}</div>
+            )}
 
             {pendingType === "generate" && generatedPrompt && (
               <>
                 <hr style={S.divider} />
-                <div style={{fontSize:"0.78rem", color:accent, fontWeight:"bold", marginBottom:"0.5rem"}}>📋 Copy this prompt and send it to Claude (or any AI):</div>
+                <div style={{fontSize:"0.78rem", color:accent, fontWeight:"bold", marginBottom:"0.5rem"}}>📋 Manual mode — copy prompt and paste response:</div>
                 <div style={S.promptBox}>{generatedPrompt}</div>
                 <button style={S.oBtn(accent)} onClick={() => navigator.clipboard.writeText(generatedPrompt)}>
                   Copy Prompt
                 </button>
+                <button id="auto-paste-trigger" style={{display:"none"}} onClick={handlePaste} />
                 <PastePanel
                   label="Paste the JSON array from Claude's response below."
                   S={S} text2={text2}
