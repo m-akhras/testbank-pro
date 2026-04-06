@@ -5478,10 +5478,37 @@ export default function TestBankApp() {
                               <button style={{...S.smBtn, color:"#f59e0b", border:"1px solid #f59e0b44"}}
                                 onClick={() => triggerReplace(activeVersion,qi,"numbers")}>↻ Replace</button>
                               <button style={{...S.smBtn, color:"#e879f9", border:"1px solid #e879f944"}}
-                                onClick={() => triggerReplace(activeVersion,qi,"function")}>↻ Diff. Function</button>
+                                onClick={() => triggerReplace(activeVersion,qi,"function")}>↻ Diff.</button>
+                              <button style={{...S.smBtn, color: inlineEditQId===`v${activeVersion}_${qi}` ? "#60a5fa" : "#a78bfa", border:"1px solid #a78bfa44"}}
+                                onClick={() => setInlineEditQId(inlineEditQId===`v${activeVersion}_${qi}` ? null : `v${activeVersion}_${qi}`)}>
+                                ✏️
+                              </button>
                             </div>
                           </div>
                           ); })()}
+                          {inlineEditQId === `v${activeVersion}_${qi}` && (
+                            <InlineEditor
+                              q={q}
+                              onSave={(updated) => {
+                                const updVers = versions.map((v,vi) =>
+                                  vi !== activeVersion ? v : { ...v, questions: v.questions.map((vq,vqi) => vqi !== qi ? vq : updated) }
+                                );
+                                setVersions(updVers);
+                                setClassSectionVersions(prev => {
+                                  const next = {...prev};
+                                  Object.keys(next).forEach(sec => {
+                                    next[sec] = next[sec].map((v,vi) =>
+                                      vi !== activeVersion ? v : { ...v, questions: v.questions.map((vq,vqi) => vqi !== qi ? vq : updated) }
+                                    );
+                                  });
+                                  return next;
+                                });
+                                setInlineEditQId(null);
+                                showToast("Question updated ✓");
+                              }}
+                              onClose={() => setInlineEditQId(null)}
+                            />
+                          )}
                           {q.type==="Branched" ? (
                             <>
                               <div style={{...S.qText,color:"#f43f5e99"}}>Given: <MathText>{q.stem}</MathText></div>
