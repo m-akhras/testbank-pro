@@ -1974,12 +1974,12 @@ function renderStatChartToSVG(chartConfig, width=480, height=300) {
       const py = yScale(pdf(val));
       g.append("line").attr("x1",px).attr("y1",yScale(0)).attr("x2",px).attr("y2",py)
         .attr("stroke",COL.red).attr("stroke-width",1.8).attr("stroke-dasharray","5,4");
+      const rounded = Math.round(val*100)/100;
+      boundaryVals.add(rounded); // always register — prevents tick labels from overlapping even when showNumbers toggle varies
       if (showNumbers) {
-        const rounded = Math.round(val*100)/100;
         g.append("text").attr("x",px).attr("y",iH+28)
           .attr("text-anchor","middle").attr("font-size",10).attr("font-weight","600")
           .attr("fill",COL.red).text(label || rounded);
-        boundaryVals.add(rounded);
       }
     };
 
@@ -2023,7 +2023,7 @@ function renderStatChartToSVG(chartConfig, width=480, height=300) {
       const tickStep = (xHi - xLo) / 8;
       ticks.forEach(t => {
         const rounded = Math.round(t*100)/100;
-        const nearBoundary = [...boundaryVals].some(bv => Math.abs(rounded - bv) < tickStep * 0.5);
+        const nearBoundary = [...boundaryVals].some(bv => bv === rounded || Math.abs(rounded - bv) < tickStep * 0.5);
         if (!nearBoundary) axisLabel(rounded, xScale(t), iH+16, "middle", 10);
       });
       // y-axis ticks
