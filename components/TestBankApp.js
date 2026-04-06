@@ -2551,23 +2551,21 @@ ${body}
 
   // ── Page number footer ──
   const footerXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:ftr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-  <w:p><w:pPr><w:jc w:val="center"/></w:pPr>
-    <w:r><w:rPr><w:sz w:val="18"/><w:color w:val="999999"/></w:rPr>
-      <w:fldChar w:fldCharType="begin"/></w:r>
-    <w:r><w:rPr><w:sz w:val="18"/><w:color w:val="999999"/></w:rPr>
-      <w:instrText xml:space="preserve"> PAGE </w:instrText></w:r>
-    <w:r><w:rPr><w:sz w:val="18"/><w:color w:val="999999"/></w:rPr>
-      <w:fldChar w:fldCharType="separate"/></w:r>
-    <w:r><w:rPr><w:sz w:val="18"/><w:color w:val="999999"/></w:rPr>
-      <w:t>1</w:t></w:r>
-    <w:r><w:rPr><w:sz w:val="18"/><w:color w:val="999999"/></w:rPr>
-      <w:fldChar w:fldCharType="end"/></w:r>
+<w:ftr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+       xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <w:p>
+    <w:pPr><w:jc w:val="center"/></w:pPr>
+    <w:r><w:rPr><w:sz w:val="18"/><w:color w:val="999999"/></w:rPr><w:fldChar w:fldCharType="begin"/></w:r>
+    <w:r><w:rPr><w:sz w:val="18"/><w:color w:val="999999"/></w:rPr><w:instrText xml:space="preserve"> PAGE </w:instrText></w:r>
+    <w:r><w:rPr><w:sz w:val="18"/><w:color w:val="999999"/></w:rPr><w:fldChar w:fldCharType="separate"/></w:r>
+    <w:r><w:rPr><w:sz w:val="18"/><w:color w:val="999999"/></w:rPr><w:t>1</w:t></w:r>
+    <w:r><w:rPr><w:sz w:val="18"/><w:color w:val="999999"/></w:rPr><w:fldChar w:fldCharType="end"/></w:r>
   </w:p>
 </w:ftr>`;
   zip.file("word/footer1.xml", footerXml);
-  relsXml = relsXml.replace("</Relationships>",
-    `  <Relationship Id="rFooter1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" Target="footer1.xml"/>\n</Relationships>`);
+  // footer relationship already added inside the loop — insert before </Relationships>
+  relsXml = relsXml.replace("\n</Relationships>",
+    '\n  <Relationship Id="rFooter1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" Target="footer1.xml"/>\n</Relationships>');
 
   // ── Answer key page ──
   let answerKeyBody = para("Answer Key", {bold:true, size:28, spacing:120});
@@ -5723,6 +5721,7 @@ export default function TestBankApp() {
           return ""; // graphs not ready yet — will re-render when cache updates
         };
 
+        const mH = (t) => mathToHTML(String(t||""));
         const printHTML = `
           <h2 style="font-size:16pt;margin-bottom:4pt;">${courseName} — ${titleLabel}</h2>
           <div style="font-size:10pt;color:#555;margin-bottom:20pt;">Name: _________________________ &nbsp;&nbsp; Date: _____________</div>
@@ -5732,20 +5731,20 @@ export default function TestBankApp() {
               <div style="margin-bottom:20pt;page-break-inside:avoid;">
                 <div style="font-weight:bold;margin-bottom:4pt;">Question ${qi+1}.</div>
                 ${graphImg}
-                <div style="margin-bottom:8pt;">Given: ${q.stem}</div>
+                <div style="margin-bottom:8pt;">Given: ${mH(q.stem)}</div>
                 ${(q.parts||[]).map((p,pi) => `
                   <div style="margin-left:20pt;margin-bottom:6pt;">
-                    (${String.fromCharCode(97+pi)}) ${p.question}
-                    ${p.choices ? p.choices.map((c,ci) => `<div style="margin-left:20pt;">${String.fromCharCode(65+ci)}. ${c}</div>`).join("") : ""}
+                    (${String.fromCharCode(97+pi)}) ${mH(p.question)}
+                    ${p.choices ? p.choices.map((c,ci) => `<div style="margin-left:20pt;">${String.fromCharCode(65+ci)}. ${mH(c)}</div>`).join("") : ""}
                   </div>`).join("")}
               </div>`;
             return `
               <div style="margin-bottom:20pt;page-break-inside:avoid;">
                 <div style="font-weight:bold;margin-bottom:4pt;">Question ${qi+1}.</div>
                 ${graphImg}
-                <div style="margin-bottom:8pt;">${q.question}</div>
+                <div style="margin-bottom:8pt;">${mH(q.question)}</div>
                 ${q.choices ? q.choices.map((c,ci) => `
-                  <div style="margin:3pt 0 3pt 24pt;">${String.fromCharCode(65+ci)}.&nbsp; ${c}</div>`).join("") : ""}
+                  <div style="margin:3pt 0 3pt 24pt;">${String.fromCharCode(65+ci)}.&nbsp; ${mH(c)}</div>`).join("") : ""}
                 ${!q.choices ? `<div style="border-bottom:1px solid #ccc;margin-top:40pt;"></div>` : ""}
               </div>
               <hr style="border:none;border-top:1px solid #eee;margin:0 0 16pt 0;" />`;
@@ -5762,6 +5761,7 @@ export default function TestBankApp() {
                 onClick={() => {
                   const win = window.open("","_blank");
                   win.document.write(`<!DOCTYPE html><html><head><title>${courseName} ${titleLabel}</title>
+                    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
                     <style>
                       body{font-family:"Times New Roman",serif;color:#000;background:#fff;margin:2cm;font-size:12pt;line-height:1.6;}
                       h2{font-size:16pt;margin-bottom:4pt;}
@@ -5769,8 +5769,13 @@ export default function TestBankApp() {
                       table{border-collapse:collapse;margin:8pt 0;}
                       th,td{border:1px solid #999;padding:4pt 10pt;text-align:center;}
                       th{background:#eee;font-weight:bold;}
+                      .katex{font-size:1em;}
                       @media print{body{margin:1.5cm;}}
-                    </style></head><body>${printHTML}</body></html>`);
+                    </style>
+                    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+                    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"
+                      onload="renderMathInElement(document.body,{delimiters:[{left:'\\(',right:'\\)',display:false},{left:'\\[',right:'\\]',display:true}]})"></script>
+                    </head><body>${printHTML}</body></html>`);
                   win.document.close();
                   setTimeout(() => win.print(), 400);
                 }}>🖨 Print</button>
