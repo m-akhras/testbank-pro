@@ -47,11 +47,19 @@ function toLatex(raw) {
   s = s.replace(/\bintegral\s+of\s+(.+?)\s+d([a-z])\b/gi,
     (_,f,v)=>`\\(\\int ${innerLatex(f)}\\,d${v}\\)`);
 
+  // != → ≠ before anything else
+  s = s.replace(/!=/g, '≠');
+  s = s.replace(/(?<![<>])<=(?![>=])/g, '≤');
+  s = s.replace(/(?<![<>])>=(?![<=])/g, '≥');
+
   // Limits
   s = s.replace(/\blim(?:it)?\s+as\s+\(([^)]+)\)\s*(?:->|→)\s*\(([^)]+)\)/gi,
     (_,v,a)=>`\\(\\lim_{(${v})\\to(${fix(a)})}\\)`);
-  s = s.replace(/\blim(?:it)?\s+as\s+([a-zA-Z,\s]+?)\s*(?:->|→)\s*([^\s,;.(]+)/gi,
+  s = s.replace(/\blim(?:it)?\s+as\s+([a-zA-Z,\s]+?)\s*(?:->|→|\\to)\s*([^\s,;.(]+)/gi,
     (_,v,a)=>`\\(\\lim_{${v.trim()}\\to ${fix(a)}}\\)`);
+  // Also handle plain "lim_{x->a}" not wrapped in \( \)
+  s = s.replace(/(?<!\\\()\blim_\{([^}]+)\}/gi,
+    (_,sub)=>`\\(\\lim_{${sub.replace(/->/g,'\\to')}}\\)`);
 
   // Derivatives
   s = s.replace(/\bd\/d([a-z])\s*\[([^\]]+)\]/g, (_,v,f)=>`\\(\\dfrac{d}{d${v}}\\left[${f}\\right]\\)`);
@@ -1152,8 +1160,17 @@ function mathToHTMLInline(s) {
     (_, a, b) => `&int;<sub>${a}</sub><sup>${b}</sup>`);
   r = r.replace(/\bintegral of\b/gi, '&int;');
 
-  // lim as x->a
-  r = r.replace(/lim as ([a-z])\s*->\s*([^\s,.(]+)/gi,
+  // inequality symbols
+  r = r.replace(/!=/g, '&ne;');
+  r = r.replace(/(?<![<>])<=(?![>])/g, '&le;');
+  r = r.replace(/(?<![<>])>=(?![<])/g, '&ge;');
+
+  // lim as x->a  /  \lim_{x->a}  /  lim_{x→a}
+  r = r.replace(/\\lim_\{([^}]+)\}/g,
+    (_, sub) => `lim<sub>${sub.replace(/\\to/g,'&rarr;').replace(/->/g,'&rarr;')}</sub>`);
+  r = r.replace(/\blim_\{([^}]+)\}/gi,
+    (_, sub) => `lim<sub>${sub.replace(/\\to/g,'&rarr;').replace(/->/g,'&rarr;')}</sub>`);
+  r = r.replace(/\blim(?:it)?\s*(?:as\s+)?([a-zA-Z])\s*(?:->|→|\\to)\s*([^\s,;.()]+)/gi,
     (_, v, a) => `lim<sub>${v}&rarr;${a}</sub>`);
 
   // exponents
@@ -2179,9 +2196,16 @@ function mathToOmml(raw) {
   const oSup = (base, exp) => `<m:sSup><m:e>${base}</m:e><m:sup>${exp}</m:sup></m:sSup>`;
   const oFrac = (n, d) => `<m:f><m:num>${n}</m:num><m:den>${d}</m:den></m:f>`;
   const oInt = (a, b) => `<m:nary><m:naryPr><m:chr m:val="\u222B"/><m:limLoc m:val="subSup"/></m:naryPr><m:sub>${oT(a)}</m:sub><m:sup>${oT(b)}</m:sup><m:e>${oT(" ")}</m:e></m:nary>`;
+  const oLim = (varTo) => `<m:func><m:funcPr/><m:fName><m:limLow><m:e><m:r><m:rPr><m:sty m:val="p"/></m:rPr><m:t>lim</m:t></m:r></m:e><m:lim>${oT(varTo)}</m:lim></m:limLow></m:fName><m:e>${oT(" ")}</m:e></m:func>`;
 
   // Step 1: replace Greek letters and symbols
   let w = s
+    // Math inequalities/relations — text to symbols
+    .replace(/!=/g, '≠')
+    .replace(/<=(?!=)/g, '≤')
+    .replace(/>=(?!=)/g, '≥')
+    .replace(/->/g, '→')
+    .replace(/\.\.\./g, '…')
     // Logical operators — text to symbols (Discrete Math)
     .replace(/\bNOT\s+([a-z])\b/g, '~$1')
     .replace(/\(NOT\s+([^)]+)\)/g, '(~$1)')
@@ -2257,6 +2281,14 @@ function mathToOmml(raw) {
     w = w.replace(/sqrt\(([^()]*)\)/g, (_,inner) => addToken({t:'sqrt', inner}));
   } while (w !== prev);
 
+  // lim as x->a  /  lim_{x->a}  /  lim x->a
+  w = w.replace(/\blim(?:it)?\s*(?:as\s+)?([a-zA-Z])\s*(?:->|→|\\to)\s*([^\s,;.()]+)/gi,
+    (_, v, a) => addToken({t:'lim', sub: v.trim() + '→' + a.trim()}));
+  w = w.replace(/\blim\s*_\{([^}]+)\}/gi,
+    (_, sub) => addToken({t:'lim', sub: sub.replace(/\\to/g,'→').replace(/->/g,'→')}));
+  w = w.replace(/\\lim_\{([^}]+)\}/g,
+    (_, sub) => addToken({t:'lim', sub: sub.replace(/\\to/g,'→').replace(/->/g,'→')}));
+
   // integral from a to b of
   w = w.replace(/integral from ([^\s]+) to ([^\s]+) of/gi,
     (_,a,b) => addToken({t:'int', a, b}));
@@ -2278,6 +2310,7 @@ function mathToOmml(raw) {
     if (tok.t === 'sup') return oSup(renderSegment(tok.base), renderSegment(tok.exp));
     if (tok.t === 'frac') return oFrac(renderSegment(tok.n), renderSegment(tok.d));
     if (tok.t === 'int') return oInt(tok.a, tok.b);
+    if (tok.t === 'lim') return oLim(tok.sub);
     return oT('?');
   }
 
