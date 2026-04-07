@@ -3636,8 +3636,6 @@ Reply with ONLY the JSON object, no markdown, no explanation.`;
     }
   }
 
-  const COLORS = ["#10b981","#8b5cf6","#f59e0b","#06b6d4","#f43f5e","#e879f9","#a855f7","#3b82f6","#f97316","#ec4899"];
-
   function startNew() {
     setForm({ name: "", color: "#6366f1", textbook: "", chapters: [] });
     setNewChapter({ ch: "", title: "", sections: "" });
