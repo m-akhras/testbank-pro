@@ -3813,7 +3813,7 @@ export default function TestBankApp() {
   const [generatedPrompt, setGeneratedPrompt] = useState("");
   const [autoGenLoading, setAutoGenLoading] = useState(false);
   const [autoGenError, setAutoGenError] = useState("");
-  const [user, setUser] = useState(undefined);
+  const [user, setUser] = useState(null);
 
   const isAdmin = user?.email === "mohammadalakhrass@yahoo.com";
   const [authLoading, setAuthLoading] = useState(true);
@@ -4431,7 +4431,7 @@ export default function TestBankApp() {
 
   const [confirmDelete, setConfirmDelete] = useState(null); // {id, label}
 
-  if (authLoading || user === undefined) return (
+  if (authLoading) return (
     <div style={{ minHeight: "100vh", background: "#0a0a1a", display: "flex", alignItems: "center", justifyContent: "center" }}>
       <div style={{ textAlign: "center" }}>
         <div style={{ fontSize: "1.4rem", fontWeight: "800", color: "#e8e8e0", marginBottom: "1.25rem", letterSpacing: "-0.5px" }}>
