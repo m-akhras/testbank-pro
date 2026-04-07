@@ -3575,6 +3575,50 @@ function SavedExamsScreen({ S, text2, text3, border, onLoad }) {
   const [exams, setExams] = useState([]);
   const [loading, setLoading] = useState(true);
   const [exportLog, setExportLog] = useState([]);
+  const [validating, setValidating] = useState({}); // examId → true/false
+  const [validationResults, setValidationResults] = useState({}); // examId → results
+
+  useEffect(() => {
+    Promise.all([loadExams(), loadExportHistory()]).then(([e, h]) => {
+      setExams(e); setExportLog(h); setLoading(false);
+    });
+  }, []);
+
+  function validateExam(exam) {
+    const examId = exam.id;
+    if (validating[examId]) {
+      // toggle off
+      setValidating(prev => ({ ...prev, [examId]: false }));
+      return;
+    }
+
+    const versions = exam.versions || [];
+    const results = {};
+
+    versions.forEach(v => {
+      const issues = [];
+      const qs = v.questions || [];
+      qs.forEach((q, qi) => {
+        if (q.type === "Branched") {
+          (q.parts || []).forEach((p, pi) => {
+            if (!p.answer && p.answer !== 0) issues.push({ qi, label: `Q${qi+1}(${String.fromCharCode(97+pi)})`, issue: "Missing answer" });
+          });
+          return;
+        }
+        if (!q.answer && q.answer !== 0) {
+          issues.push({ qi, label: `Q${qi+1}`, issue: "Missing answer" });
+        } else if (q.type === "Multiple Choice" && q.choices?.length) {
+          if (!q.choices.includes(q.answer)) {
+            issues.push({ qi, label: `Q${qi+1}`, issue: `Answer "${q.answer}" not in choices` });
+          }
+        }
+      });
+      results[v.label] = { total: qs.length, issues };
+    });
+
+    setValidationResults(prev => ({ ...prev, [examId]: results }));
+    setValidating(prev => ({ ...prev, [examId]: true }));
+  }
 
   useEffect(() => {
     Promise.all([loadExams(), loadExportHistory()]).then(([e, h]) => {
@@ -3630,6 +3674,14 @@ function SavedExamsScreen({ S, text2, text3, border, onLoad }) {
                 cursor:"pointer", fontWeight:"600"}}
                 onClick={() => onLoad && onLoad(exam)}>
                 ▶ Load into Versions tab
+              </button>
+              <button style={{marginTop:"0.4rem", marginLeft:"0.4rem", padding:"0.25rem 0.7rem", fontSize:"0.72rem",
+                background: validating[exam.id] ? "#1e3a5f" : "transparent",
+                color: validating[exam.id] ? "#60a5fa" : text3,
+                border:`1px solid ${validating[exam.id] ? "#1e3a5f" : "#334155"}`,
+                borderRadius:"4px", cursor:"pointer", fontWeight:"500"}}
+                onClick={() => validateExam(exam)}>
+                {validating[exam.id] ? "✓ Hide Validation" : "✓ Validate Answer Keys"}
               </button>
             </div>
             <div style={{display:"flex", gap:"0.5rem", flexWrap:"wrap", alignItems:"center"}}>
@@ -3703,6 +3755,43 @@ function SavedExamsScreen({ S, text2, text3, border, onLoad }) {
               </button>
             )}
           </div>
+
+          {/* Answer Key Validation Panel */}
+          {validating[exam.id] && validationResults[exam.id] && (
+            <div style={{marginTop:"0.75rem", borderTop:"1px solid #1e2d45", paddingTop:"0.75rem"}}>
+              <div style={{fontSize:"0.72rem", color:"#60a5fa", fontWeight:"600", marginBottom:"0.5rem"}}>
+                ✓ Answer Key Validation
+              </div>
+              <div style={{display:"flex", gap:"0.75rem", flexWrap:"wrap"}}>
+                {Object.entries(validationResults[exam.id]).map(([label, result]) => {
+                  const hasIssues = result.issues.length > 0;
+                  return (
+                    <div key={label} style={{
+                      background: hasIssues ? "#1a0a0a" : "#052e16",
+                      border:`1px solid ${hasIssues ? "#7f1d1d" : "#14532d"}`,
+                      borderRadius:"8px", padding:"0.65rem 0.85rem", minWidth:"140px"
+                    }}>
+                      <div style={{fontSize:"0.78rem", fontWeight:"600", color: hasIssues ? "#f87171" : "#4ade80", marginBottom:"0.35rem"}}>
+                        {hasIssues ? "⚠" : "✓"} Version {label}
+                      </div>
+                      <div style={{fontSize:"0.72rem", color: hasIssues ? "#f87171" : "#4ade80"}}>
+                        {hasIssues ? `${result.issues.length} issue${result.issues.length > 1 ? "s" : ""}` : `All ${result.total} answers valid`}
+                      </div>
+                      {hasIssues && (
+                        <div style={{marginTop:"0.4rem"}}>
+                          {result.issues.map((issue, i) => (
+                            <div key={i} style={{fontSize:"0.68rem", color:"#fca5a5", marginTop:"0.2rem"}}>
+                              • {issue.label}: {issue.issue}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
         );
       })}
