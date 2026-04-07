@@ -3990,15 +3990,19 @@ export default function TestBankApp() {
   const [user, setUser] = useState(null);
 
   const isAdmin = user?.email === "mohammadalakhrass@yahoo.com";
+  const [authLoading, setAuthLoading] = useState(true);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
+      setAuthLoading(false);
       if (!session) window.location.href = "/login";
     });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setUser(session?.user ?? null);
-      if (!session) window.location.href = "/login";
+      if (event === "SIGNED_OUT" || (!session && event !== "INITIAL_SESSION")) {
+        window.location.href = "/login";
+      }
     });
     return () => subscription.unsubscribe();
   }, []);
@@ -4634,6 +4638,18 @@ export default function TestBankApp() {
   );
 
   const [confirmDelete, setConfirmDelete] = useState(null); // {id, label}
+
+  if (authLoading) return (
+    <div style={{ minHeight:"100vh", background:"#0a0a1a", display:"flex", alignItems:"center", justifyContent:"center" }}>
+      <div style={{ textAlign:"center" }}>
+        <div style={{ fontSize:"1.4rem", fontWeight:"800", color:"#e8e8e0", marginBottom:"1.25rem", letterSpacing:"-0.5px" }}>
+          TestBank <span style={{ color:"#10b981" }}>Pro</span>
+        </div>
+        <div style={{ width:"28px", height:"28px", border:"2px solid #1e3a5f", borderTop:"2px solid #10b981", borderRadius:"50%", animation:"spin 0.8s linear infinite", margin:"0 auto" }} />
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    </div>
+  );
 
   return (
     <div style={S.app}>
