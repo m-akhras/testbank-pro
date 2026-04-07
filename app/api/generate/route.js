@@ -1,9 +1,10 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
+const RATE_LIMIT = 20; // calls per hour per user
+
 export async function POST(req) {
   try {
-    // Verify the user is authenticated
     const cookieStore = cookies();
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -17,10 +18,31 @@ export async function POST(req) {
       }
     );
 
+    // Verify auth
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+    const userId = session.user.id;
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+
+    // Check rate limit
+    const { count } = await supabase
+      .from("api_usage")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .gte("created_at", oneHourAgo);
+
+    if (count >= RATE_LIMIT) {
+      return Response.json(
+        { error: `Rate limit exceeded. Maximum ${RATE_LIMIT} generations per hour.` },
+        { status: 429 }
+      );
+    }
+
+    // Log this call
+    await supabase.from("api_usage").insert({ user_id: userId });
 
     const { prompt } = await req.json();
     if (!prompt) return Response.json({ error: "No prompt provided" }, { status: 400 });
