@@ -1,11 +1,6 @@
 "use client";
 import { useState, useEffect, useCallback, useRef } from "react";
-import { createBrowserClient } from "@supabase/ssr";
-
-const supabase = createBrowserClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
+import { supabase } from "../lib/supabase";
 
 // ─── KaTeX helpers ───────────────────────────────────────────────────────────
 // Helper: convert plain math expression to LaTeX WITHOUT \(...\) wrapper
@@ -3570,55 +3565,185 @@ function PastePanel({ label, S, text2, pasteInput, setPasteInput, pasteError, ha
   );
 }
 
+// ─── Custom Course Builder ────────────────────────────────────────────────────
+function CustomCourseBuilder({ customCourses, onSave, onDelete, text1, text2, text3, border, bg1, S }) {
+  const [expanded, setExpanded] = useState(false);
+  const [editing, setEditing] = useState(null); // null | course name | "new"
+  const [form, setForm] = useState({ name: "", color: "#6366f1", textbook: "", chapters: [] });
+  const [newChapter, setNewChapter] = useState({ ch: "", title: "", sections: "" });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const COLORS = ["#10b981","#8b5cf6","#f59e0b","#06b6d4","#f43f5e","#e879f9","#a855f7","#3b82f6","#f97316","#ec4899"];
+
+  function startNew() {
+    setForm({ name: "", color: "#6366f1", textbook: "", chapters: [] });
+    setNewChapter({ ch: "", title: "", sections: "" });
+    setEditing("new");
+    setError("");
+  }
+
+  function startEdit(name) {
+    const c = customCourses[name];
+    setForm({ name, color: c.color, textbook: c.textbook || "", chapters: c.chapters || [], id: c.id });
+    setNewChapter({ ch: "", title: "", sections: "" });
+    setEditing(name);
+    setError("");
+  }
+
+  function addChapter() {
+    if (!newChapter.ch || !newChapter.title) return;
+    const sections = newChapter.sections.split("\n").map(s => s.trim()).filter(Boolean);
+    setForm(prev => ({ ...prev, chapters: [...prev.chapters, { ch: newChapter.ch, title: newChapter.title, sections }] }));
+    setNewChapter({ ch: "", title: "", sections: "" });
+  }
+
+  function removeChapter(idx) {
+    setForm(prev => ({ ...prev, chapters: prev.chapters.filter((_, i) => i !== idx) }));
+  }
+
+  async function handleSave() {
+    if (!form.name.trim()) { setError("Course name is required."); return; }
+    setSaving(true);
+    await onSave(form);
+    setEditing(null);
+    setSaving(false);
+  }
+
+  const inp = (val, set, placeholder, width="100%", type="text") => (
+    <input type={type} value={val} onChange={e => set(e.target.value)} placeholder={placeholder}
+      style={{ width, padding:"0.5rem 0.7rem", background:"#1a1a2e", border:"1px solid #334155",
+        borderRadius:"6px", color:"#e8e8e0", fontSize:"0.82rem", outline:"none", boxSizing:"border-box" }} />
+  );
+
+  return (
+    <div style={{ marginBottom: "1.5rem" }}>
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"0.75rem" }}>
+        <button onClick={() => setExpanded(e => !e)}
+          style={{ background:"none", border:"none", cursor:"pointer", color:text2, fontSize:"0.82rem", display:"flex", alignItems:"center", gap:"6px" }}>
+          {expanded ? "▾" : "▸"} Custom Courses {Object.keys(customCourses).length > 0 && `(${Object.keys(customCourses).length})`}
+        </button>
+        {expanded && (
+          <button onClick={startNew}
+            style={{ background:"#10b981", color:"#fff", border:"none", borderRadius:"6px",
+              padding:"0.35rem 0.85rem", fontSize:"0.78rem", fontWeight:"600", cursor:"pointer" }}>
+            + New Course
+          </button>
+        )}
+      </div>
+
+      {expanded && (
+        <div>
+          {/* Existing custom courses */}
+          {Object.keys(customCourses).length > 0 && (
+            <div style={{ display:"flex", flexWrap:"wrap", gap:"0.5rem", marginBottom:"1rem" }}>
+              {Object.entries(customCourses).map(([name, c]) => (
+                <div key={name} style={{ display:"flex", alignItems:"center", gap:"6px", background:bg1,
+                  border:`1px solid ${border}`, borderRadius:"8px", padding:"0.4rem 0.75rem",
+                  borderLeft:`3px solid ${c.color}` }}>
+                  <span style={{ fontSize:"0.82rem", color:"#e8e8e0" }}>{name}</span>
+                  <button onClick={() => startEdit(name)}
+                    style={{ background:"none", border:"none", cursor:"pointer", color:text3, fontSize:"0.75rem" }}>✏</button>
+                  <button onClick={() => { if(confirm(`Delete "${name}"?`)) onDelete(name); }}
+                    style={{ background:"none", border:"none", cursor:"pointer", color:"#f87171", fontSize:"0.75rem" }}>✕</button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Editor */}
+          {editing && (
+            <div style={{ background:"#0a1628", border:"1px solid #1e3a5f", borderRadius:"10px", padding:"1.25rem" }}>
+              <div style={{ fontSize:"0.82rem", fontWeight:"600", color:"#60a5fa", marginBottom:"1rem" }}>
+                {editing === "new" ? "New Course" : `Editing: ${editing}`}
+              </div>
+
+              {/* Name + Textbook */}
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0.75rem", marginBottom:"0.75rem" }}>
+                <div>
+                  <div style={{ fontSize:"0.72rem", color:text3, marginBottom:"0.3rem" }}>Course Name *</div>
+                  {inp(form.name, v => setForm(p => ({...p, name:v})), "e.g. Linear Algebra")}
+                </div>
+                <div>
+                  <div style={{ fontSize:"0.72rem", color:text3, marginBottom:"0.3rem" }}>Textbook (optional)</div>
+                  {inp(form.textbook, v => setForm(p => ({...p, textbook:v})), "e.g. Gilbert Strang 5th Ed")}
+                </div>
+              </div>
+
+              {/* Color picker */}
+              <div style={{ marginBottom:"0.75rem" }}>
+                <div style={{ fontSize:"0.72rem", color:text3, marginBottom:"0.4rem" }}>Color</div>
+                <div style={{ display:"flex", gap:"8px", flexWrap:"wrap" }}>
+                  {COLORS.map(c => (
+                    <div key={c} onClick={() => setForm(p => ({...p, color:c}))}
+                      style={{ width:"24px", height:"24px", borderRadius:"50%", background:c, cursor:"pointer",
+                        border: form.color === c ? "2px solid #fff" : "2px solid transparent" }} />
+                  ))}
+                </div>
+              </div>
+
+              {/* Chapters */}
+              <div style={{ marginBottom:"0.75rem" }}>
+                <div style={{ fontSize:"0.72rem", color:text3, marginBottom:"0.4rem" }}>Chapters ({form.chapters.length})</div>
+                {form.chapters.map((ch, i) => (
+                  <div key={i} style={{ display:"flex", alignItems:"center", gap:"8px", marginBottom:"0.4rem",
+                    background:"#060d1a", borderRadius:"6px", padding:"0.4rem 0.7rem" }}>
+                    <span style={{ fontSize:"0.75rem", color:"#60a5fa", fontWeight:"600", minWidth:"20px" }}>{ch.ch}</span>
+                    <span style={{ fontSize:"0.78rem", color:"#e8e8e0", flex:1 }}>{ch.title}</span>
+                    <span style={{ fontSize:"0.68rem", color:text3 }}>{ch.sections.length} sections</span>
+                    <button onClick={() => removeChapter(i)}
+                      style={{ background:"none", border:"none", cursor:"pointer", color:"#f87171", fontSize:"0.8rem" }}>✕</button>
+                  </div>
+                ))}
+
+                {/* Add chapter */}
+                <div style={{ background:"#060d1a", border:"1px dashed #1e3a5f", borderRadius:"8px", padding:"0.85rem", marginTop:"0.5rem" }}>
+                  <div style={{ fontSize:"0.72rem", color:text3, marginBottom:"0.5rem" }}>Add Chapter</div>
+                  <div style={{ display:"grid", gridTemplateColumns:"80px 1fr", gap:"0.5rem", marginBottom:"0.5rem" }}>
+                    {inp(newChapter.ch, v => setNewChapter(p => ({...p, ch:v})), "Ch#", "100%")}
+                    {inp(newChapter.title, v => setNewChapter(p => ({...p, title:v})), "Chapter title")}
+                  </div>
+                  <textarea value={newChapter.sections} onChange={e => setNewChapter(p => ({...p, sections:e.target.value}))}
+                    placeholder={"One section per line:\n1.1 Introduction\n1.2 Key Concepts"}
+                    rows={3}
+                    style={{ width:"100%", padding:"0.5rem 0.7rem", background:"#1a1a2e", border:"1px solid #334155",
+                      borderRadius:"6px", color:"#e8e8e0", fontSize:"0.78rem", outline:"none",
+                      boxSizing:"border-box", resize:"vertical", fontFamily:"inherit" }} />
+                  <button onClick={addChapter}
+                    style={{ marginTop:"0.5rem", background:"#1e3a5f", color:"#60a5fa", border:"none",
+                      borderRadius:"6px", padding:"0.35rem 0.85rem", fontSize:"0.75rem", cursor:"pointer" }}>
+                    + Add Chapter
+                  </button>
+                </div>
+              </div>
+
+              {error && <div style={{ color:"#f87171", fontSize:"0.78rem", marginBottom:"0.75rem" }}>{error}</div>}
+
+              <div style={{ display:"flex", gap:"0.5rem" }}>
+                <button onClick={handleSave} disabled={saving}
+                  style={{ background:"#10b981", color:"#fff", border:"none", borderRadius:"6px",
+                    padding:"0.5rem 1.25rem", fontSize:"0.85rem", fontWeight:"600", cursor:"pointer" }}>
+                  {saving ? "Saving..." : "Save Course"}
+                </button>
+                <button onClick={() => setEditing(null)}
+                  style={{ background:"none", color:text2, border:"1px solid #334155", borderRadius:"6px",
+                    padding:"0.5rem 1rem", fontSize:"0.85rem", cursor:"pointer" }}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Saved Exams Screen ───────────────────────────────────────────────────────
 function SavedExamsScreen({ S, text2, text3, border, onLoad }) {
   const [exams, setExams] = useState([]);
   const [loading, setLoading] = useState(true);
   const [exportLog, setExportLog] = useState([]);
-  const [validating, setValidating] = useState({}); // examId → true/false
-  const [validationResults, setValidationResults] = useState({}); // examId → results
-
-  useEffect(() => {
-    Promise.all([loadExams(), loadExportHistory()]).then(([e, h]) => {
-      setExams(e); setExportLog(h); setLoading(false);
-    });
-  }, []);
-
-  function validateExam(exam) {
-    const examId = exam.id;
-    if (validating[examId]) {
-      // toggle off
-      setValidating(prev => ({ ...prev, [examId]: false }));
-      return;
-    }
-
-    const versions = exam.versions || [];
-    const results = {};
-
-    versions.forEach(v => {
-      const issues = [];
-      const qs = v.questions || [];
-      qs.forEach((q, qi) => {
-        if (q.type === "Branched") {
-          (q.parts || []).forEach((p, pi) => {
-            if (!p.answer && p.answer !== 0) issues.push({ qi, label: `Q${qi+1}(${String.fromCharCode(97+pi)})`, issue: "Missing answer" });
-          });
-          return;
-        }
-        if (!q.answer && q.answer !== 0) {
-          issues.push({ qi, label: `Q${qi+1}`, issue: "Missing answer" });
-        } else if (q.type === "Multiple Choice" && q.choices?.length) {
-          if (!q.choices.includes(q.answer)) {
-            issues.push({ qi, label: `Q${qi+1}`, issue: `Answer "${q.answer}" not in choices` });
-          }
-        }
-      });
-      results[v.label] = { total: qs.length, issues };
-    });
-
-    setValidationResults(prev => ({ ...prev, [examId]: results }));
-    setValidating(prev => ({ ...prev, [examId]: true }));
-  }
 
   useEffect(() => {
     Promise.all([loadExams(), loadExportHistory()]).then(([e, h]) => {
@@ -3674,14 +3799,6 @@ function SavedExamsScreen({ S, text2, text3, border, onLoad }) {
                 cursor:"pointer", fontWeight:"600"}}
                 onClick={() => onLoad && onLoad(exam)}>
                 ▶ Load into Versions tab
-              </button>
-              <button style={{marginTop:"0.4rem", marginLeft:"0.4rem", padding:"0.25rem 0.7rem", fontSize:"0.72rem",
-                background: validating[exam.id] ? "#1e3a5f" : "transparent",
-                color: validating[exam.id] ? "#60a5fa" : text3,
-                border:`1px solid ${validating[exam.id] ? "#1e3a5f" : "#334155"}`,
-                borderRadius:"4px", cursor:"pointer", fontWeight:"500"}}
-                onClick={() => validateExam(exam)}>
-                {validating[exam.id] ? "✓ Hide Validation" : "✓ Validate Answer Keys"}
               </button>
             </div>
             <div style={{display:"flex", gap:"0.5rem", flexWrap:"wrap", alignItems:"center"}}>
@@ -3755,43 +3872,6 @@ function SavedExamsScreen({ S, text2, text3, border, onLoad }) {
               </button>
             )}
           </div>
-
-          {/* Answer Key Validation Panel */}
-          {validating[exam.id] && validationResults[exam.id] && (
-            <div style={{marginTop:"0.75rem", borderTop:"1px solid #1e2d45", paddingTop:"0.75rem"}}>
-              <div style={{fontSize:"0.72rem", color:"#60a5fa", fontWeight:"600", marginBottom:"0.5rem"}}>
-                ✓ Answer Key Validation
-              </div>
-              <div style={{display:"flex", gap:"0.75rem", flexWrap:"wrap"}}>
-                {Object.entries(validationResults[exam.id]).map(([label, result]) => {
-                  const hasIssues = result.issues.length > 0;
-                  return (
-                    <div key={label} style={{
-                      background: hasIssues ? "#1a0a0a" : "#052e16",
-                      border:`1px solid ${hasIssues ? "#7f1d1d" : "#14532d"}`,
-                      borderRadius:"8px", padding:"0.65rem 0.85rem", minWidth:"140px"
-                    }}>
-                      <div style={{fontSize:"0.78rem", fontWeight:"600", color: hasIssues ? "#f87171" : "#4ade80", marginBottom:"0.35rem"}}>
-                        {hasIssues ? "⚠" : "✓"} Version {label}
-                      </div>
-                      <div style={{fontSize:"0.72rem", color: hasIssues ? "#f87171" : "#4ade80"}}>
-                        {hasIssues ? `${result.issues.length} issue${result.issues.length > 1 ? "s" : ""}` : `All ${result.total} answers valid`}
-                      </div>
-                      {hasIssues && (
-                        <div style={{marginTop:"0.4rem"}}>
-                          {result.issues.map((issue, i) => (
-                            <div key={i} style={{fontSize:"0.68rem", color:"#fca5a5", marginTop:"0.2rem"}}>
-                              • {issue.label}: {issue.issue}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
         </div>
         );
       })}
@@ -3910,20 +3990,15 @@ export default function TestBankApp() {
   const [user, setUser] = useState(null);
 
   const isAdmin = user?.email === "mohammadalakhrass@yahoo.com";
-  const [authLoading, setAuthLoading] = useState(true);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
-      setAuthLoading(false);
       if (!session) window.location.href = "/login";
     });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
-      if (event === "SIGNED_OUT" || (!session && event !== "INITIAL_SESSION")) {
-        window.location.href = "/login";
-      }
-      if (event === "TOKEN_REFRESHED") setUser(session?.user ?? null);
+      if (!session) window.location.href = "/login";
     });
     return () => subscription.unsubscribe();
   }, []);
@@ -3940,11 +4015,46 @@ export default function TestBankApp() {
   const [classSectionVersions, setClassSectionVersions] = useState({}); // {1: [...versions], 2: [...versions]}
   const [activeClassSection, setActiveClassSection] = useState(1);
 
-  const accent = course ? COURSES[course].color : "#10b981";
+  const [customCourses, setCustomCourses] = useState({});
+
+  const allCourses = { ...COURSES, ...customCourses };
+  const accent = course ? (allCourses[course]?.color || "#10b981") : "#10b981";
 
   useEffect(() => {
     loadBank().then(q => { setBank(q); setBankLoaded(true); });
+    loadCustomCourses();
   }, []);
+
+  async function loadCustomCourses() {
+    try {
+      const { data } = await supabase.from("custom_courses").select("*").order("created_at");
+      if (!data) return;
+      const map = {};
+      data.forEach(c => {
+        map[c.name] = { color: c.color, chapters: c.chapters || [], id: c.id, textbook: c.textbook };
+      });
+      setCustomCourses(map);
+    } catch(e) { console.error("loadCustomCourses error:", e); }
+  }
+
+  async function saveCustomCourse(courseData) {
+    const { data: { user } } = await supabase.auth.getUser();
+    const payload = { name: courseData.name, color: courseData.color, chapters: courseData.chapters, textbook: courseData.textbook || "", user_id: user.id };
+    if (courseData.id) {
+      await supabase.from("custom_courses").update(payload).eq("id", courseData.id);
+    } else {
+      await supabase.from("custom_courses").insert(payload);
+    }
+    await loadCustomCourses();
+  }
+
+  async function deleteCustomCourse(courseName) {
+    const c = customCourses[courseName];
+    if (!c?.id) return;
+    await supabase.from("custom_courses").delete().eq("id", c.id);
+    if (course === courseName) setCourse(null);
+    await loadCustomCourses();
+  }
 
   const persistBank = useCallback(async (newBank) => {
     setBank(newBank);
@@ -4174,7 +4284,7 @@ export default function TestBankApp() {
     }
   }
 
-  const chapters = course ? COURSES[course].chapters : [];
+  const chapters = course ? (allCourses[course]?.chapters || []) : [];
   const totalQ = selectedSections.reduce((a,s) => {
     const cfg = sectionConfig[s] || defaultSecCfg();
     return a + (cfg.Easy.count||0) + (cfg.Medium.count||0) + (cfg.Hard.count||0);
@@ -4525,18 +4635,6 @@ export default function TestBankApp() {
 
   const [confirmDelete, setConfirmDelete] = useState(null); // {id, label}
 
-  if (authLoading) return (
-    <div style={{ minHeight: "100vh", background: "#0a0a1a", display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <div style={{ textAlign: "center" }}>
-        <div style={{ fontSize: "1.4rem", fontWeight: "800", color: "#e8e8e0", marginBottom: "1.25rem", letterSpacing: "-0.5px" }}>
-          TestBank <span style={{ color: "#10b981" }}>Pro</span>
-        </div>
-        <div style={{ width: "28px", height: "28px", border: "2px solid #1e3a5f", borderTop: "2px solid #10b981", borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto" }} />
-        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-      </div>
-    </div>
-  );
-
   return (
     <div style={S.app}>
       <Sidebar />
@@ -4652,7 +4750,7 @@ export default function TestBankApp() {
               <button style={{...S.oBtn(accent), fontSize:"0.72rem", padding:"0.3rem 0.75rem"}} onClick={() => setScreen("generate")}>+ Generate Questions</button>
             </div>
             <div style={{display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))", gap:"0.75rem", marginBottom:"1.5rem"}}>
-              {Object.entries(COURSES).map(([name, { color, chapters }]) => {
+              {Object.entries(allCourses).map(([name, { color, chapters }]) => {
                 const qCount = bank.filter(q => q.course === name).length;
                 return (
                   <div key={name}
@@ -4669,6 +4767,14 @@ export default function TestBankApp() {
                 );
               })}
             </div>
+
+            {/* Custom Course Builder */}
+            <CustomCourseBuilder
+              customCourses={customCourses}
+              onSave={saveCustomCourse}
+              onDelete={deleteCustomCourse}
+              text1={text1} text2={text2} text3={text3} border={border} bg1={bg1} S={S}
+            />
 
             {/* Recent questions */}
             {bank.length > 0 && (
@@ -4716,7 +4822,7 @@ export default function TestBankApp() {
             <div style={S.card}>
               <div style={S.lbl}>Course</div>
               <div style={{display:"flex", gap:"0.5rem", flexWrap:"wrap", marginTop:"0.5rem"}}>
-                {Object.entries(COURSES).map(([name, { color }]) => (
+                {Object.entries(allCourses).map(([name, { color }]) => (
                   <button key={name}
                     style={S.courseChip(color, course===name)}
                     onClick={() => { setCourse(name); setSelectedSections([]); setSectionCounts({}); setSectionConfig({}); }}>
@@ -5004,7 +5110,7 @@ export default function TestBankApp() {
             </div>
             <div style={{display:"flex", gap:"0.75rem", marginBottom:"1.25rem", flexWrap:"wrap"}}>
               <select style={{...S.sel, width:"155px"}} value={filterCourse} onChange={e => { setFilterCourse(e.target.value); setFilterSection("All"); }}>
-                <option>All</option>{Object.keys(COURSES).map(c => <option key={c}>{c}</option>)}
+                <option>All</option>{Object.keys(allCourses).map(c => <option key={c}>{c}</option>)}
               </select>
               {filterCourse !== "All" && (
                 <select style={{...S.sel, width:"220px"}} value={filterSection} onChange={e => setFilterSection(e.target.value)}>
