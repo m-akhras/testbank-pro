@@ -3829,9 +3829,7 @@ export default function TestBankApp() {
       if (event === "SIGNED_OUT" || (!session && event !== "INITIAL_SESSION")) {
         window.location.href = "/login";
       }
-      if (event === "TOKEN_REFRESHED") {
-        setUser(session?.user ?? null);
-      }
+      if (event === "TOKEN_REFRESHED") setUser(session?.user ?? null);
     });
     return () => subscription.unsubscribe();
   }, []);
@@ -4436,10 +4434,10 @@ export default function TestBankApp() {
   if (authLoading) return (
     <div style={{ minHeight: "100vh", background: "#0a0a1a", display: "flex", alignItems: "center", justifyContent: "center" }}>
       <div style={{ textAlign: "center" }}>
-        <div style={{ fontSize: "1.4rem", fontWeight: "800", color: "#e8e8e0", marginBottom: "1rem" }}>
+        <div style={{ fontSize: "1.4rem", fontWeight: "800", color: "#e8e8e0", marginBottom: "1.25rem", letterSpacing: "-0.5px" }}>
           TestBank <span style={{ color: "#10b981" }}>Pro</span>
         </div>
-        <div style={{ width: "32px", height: "32px", border: "2px solid #1e3a5f", borderTop: "2px solid #10b981", borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto" }} />
+        <div style={{ width: "28px", height: "28px", border: "2px solid #1e3a5f", borderTop: "2px solid #10b981", borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto" }} />
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
     </div>
