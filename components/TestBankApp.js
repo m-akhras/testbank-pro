@@ -3813,6 +3813,21 @@ export default function TestBankApp() {
   const [generatedPrompt, setGeneratedPrompt] = useState("");
   const [autoGenLoading, setAutoGenLoading] = useState(false);
   const [autoGenError, setAutoGenError] = useState("");
+  const [user, setUser] = useState(null);
+
+  const isAdmin = user?.email === "mohammadalakhrass@yahoo.com";
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+      if (!session) window.location.href = "/login";
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+      if (!session) window.location.href = "/login";
+    });
+    return () => subscription.unsubscribe();
+  }, []);
   const [versionsViewMode, setVersionsViewMode] = useState("single"); // "single" | "compare"
   const [compareSection, setCompareSection] = useState("All");
   const [selectedQIndices, setSelectedQIndices] = useState([]);
@@ -4306,7 +4321,7 @@ export default function TestBankApp() {
       { id:"home", icon:"⊟", label:"Dashboard" },
     ]},
     { label: "Question Bank", items: [
-      { id:"generate", icon:"✦", label:"Generate" },
+      ...(isAdmin ? [{ id:"generate", icon:"✦", label:"Generate" }] : []),
       { id:"review",   icon:"◎", label:"Review", badge: lastGenerated.length || null, alert: lastGenerated.length > 0 },
       { id:"bank",     icon:"▦", label:"Browse & Edit", badge: bank.length || null },
     ]},
@@ -4388,9 +4403,23 @@ export default function TestBankApp() {
       )}
 
       {/* Footer */}
-      <div style={{padding:"0.55rem 1rem", borderTop:"1px solid #0f1e3a", display:"flex", justifyContent:"space-between", alignItems:"center"}}>
-        <span style={{fontSize:"0.57rem", color:"#1e3660"}}>TestBank Pro</span>
-        <span style={{fontSize:"0.57rem", color:"#1e3660", background:"#0f1e3a", padding:"0.1rem 0.4rem", borderRadius:"4px", fontWeight:"600"}}>v55</span>
+      <div style={{padding:"0.55rem 1rem", borderTop:"1px solid #0f1e3a"}}>
+        {user && (
+          <div style={{marginBottom:"0.4rem"}}>
+            <div style={{fontSize:"0.6rem", color:"#1e3660", marginBottom:"0.15rem", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
+              {user.email}
+            </div>
+            <button
+              onClick={() => supabase.auth.signOut()}
+              style={{fontSize:"0.62rem", color:"#475569", background:"none", border:"none", cursor:"pointer", padding:0, textDecoration:"underline"}}>
+              Sign out
+            </button>
+          </div>
+        )}
+        <div style={{display:"flex", justifyContent:"space-between", alignItems:"center"}}>
+          <span style={{fontSize:"0.57rem", color:"#1e3660"}}>TestBank Pro</span>
+          <span style={{fontSize:"0.57rem", color:"#1e3660", background:"#0f1e3a", padding:"0.1rem 0.4rem", borderRadius:"4px", fontWeight:"600"}}>v55</span>
+        </div>
       </div>
     </aside>
   );
@@ -4692,9 +4721,9 @@ export default function TestBankApp() {
                 <hr style={S.divider} />
                 <div style={{fontSize:"0.78rem", color:accent, fontWeight:"bold", marginBottom:"0.5rem"}}>📋 Manual mode — copy prompt and paste response:</div>
                 <div style={S.promptBox}>{generatedPrompt}</div>
-                <button style={S.oBtn(accent)} onClick={() => navigator.clipboard.writeText(generatedPrompt)}>
+                {isAdmin && <button style={S.oBtn(accent)} onClick={() => navigator.clipboard.writeText(generatedPrompt)}>
                   Copy Prompt
-                </button>
+                </button>}
                 <button id="auto-paste-trigger" style={{display:"none"}} onClick={handlePaste} />
                 <PastePanel
                   label="Paste the JSON array from Claude's response below."
@@ -5029,8 +5058,8 @@ export default function TestBankApp() {
                       <button style={{...S.ghostBtn(text3), fontSize:"0.68rem"}} onClick={() => { setPendingType(null); setPasteInput(""); setGeneratedPrompt(""); }}>Cancel</button>
                     </div>
                     <div style={S.promptBox}>{generatedPrompt}</div>
-                    <button style={{...S.oBtn("#f59e0b"), fontSize:"0.72rem", padding:"0.3rem 0.7rem", marginBottom:"0.5rem"}}
-                      onClick={() => navigator.clipboard.writeText(generatedPrompt)}>Copy Prompt</button>
+                    {isAdmin && <button style={{...S.oBtn("#f59e0b"), fontSize:"0.72rem", padding:"0.3rem 0.7rem", marginBottom:"0.5rem"}}
+                      onClick={() => navigator.clipboard.writeText(generatedPrompt)}>Copy Prompt</button>}
                     <PastePanel
                       label="Paste the replacement question JSON here."
                       S={S} text2={text2}
@@ -5128,9 +5157,9 @@ export default function TestBankApp() {
                         onClick={() => autoGenerateVersions(generatedPrompt, pendingType, pendingMeta)}>
                         {autoGenLoading ? "⏳ Generating..." : "⚡ Generate Versions"}
                       </button>
-                      <button style={S.oBtn(accent)} onClick={() => navigator.clipboard.writeText(generatedPrompt)}>
+                      {isAdmin && <button style={S.oBtn(accent)} onClick={() => navigator.clipboard.writeText(generatedPrompt)}>
                         Copy Prompt
-                      </button>
+                      </button>}
                     </div>
                     {autoGenError && <div style={{color:"#f87171", fontSize:"0.78rem", marginBottom:"0.75rem"}}>{autoGenError}</div>}
                     <PastePanel
@@ -5360,7 +5389,7 @@ export default function TestBankApp() {
                           onClick={() => autoGenerateVersions(generatedPrompt, pendingType, pendingMeta)}>
                           {autoGenLoading ? "⏳ Generating..." : "⚡ Generate Versions"}
                         </button>
-                        <button style={S.oBtn(accent)} onClick={() => navigator.clipboard.writeText(generatedPrompt)}>Copy Prompt</button>
+                        {isAdmin && <button style={S.oBtn(accent)} onClick={() => navigator.clipboard.writeText(generatedPrompt)}>Copy Prompt</button>}
                       </div>
                       {autoGenError && <div style={{color:"#f87171", fontSize:"0.78rem", marginBottom:"0.75rem"}}>{autoGenError}</div>}
                       <PastePanel
@@ -5384,7 +5413,7 @@ export default function TestBankApp() {
                           onClick={() => autoGenerateVersions(generatedPrompt, pendingType, pendingMeta)}>
                           {autoGenLoading ? "⏳ Generating..." : "⚡ Generate Versions"}
                         </button>
-                        <button style={S.oBtn(accent)} onClick={() => navigator.clipboard.writeText(generatedPrompt)}>Copy Prompt</button>
+                        {isAdmin && <button style={S.oBtn(accent)} onClick={() => navigator.clipboard.writeText(generatedPrompt)}>Copy Prompt</button>}
                       </div>
                       {autoGenError && <div style={{color:"#f87171", fontSize:"0.78rem", marginBottom:"0.75rem"}}>{autoGenError}</div>}
                       <PastePanel
@@ -5658,7 +5687,7 @@ export default function TestBankApp() {
                             <>
                               <div style={{fontSize:"0.75rem", color:"#f59e0b", fontWeight:"bold", margin:"0.75rem 0 0.4rem"}}>📋 Copy this replacement prompt:</div>
                               <div style={S.promptBox}>{generatedPrompt}</div>
-                              <button style={S.oBtn("#f59e0b")} onClick={() => navigator.clipboard.writeText(generatedPrompt)}>Copy Prompt</button>
+                              {isAdmin && <button style={S.oBtn("#f59e0b")} onClick={() => navigator.clipboard.writeText(generatedPrompt)}>Copy Prompt</button>}
                               <PastePanel
                                 label="Paste the replacement question JSON here."
                                 S={S} text2={text2}
