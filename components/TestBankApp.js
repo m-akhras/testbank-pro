@@ -1,11 +1,6 @@
 "use client";
 import { useState, useEffect, useCallback, useRef } from "react";
-import { createBrowserClient } from "@supabase/ssr";
-
-const supabase = createBrowserClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
+import { supabase } from "../lib/supabase";
 
 // ─── KaTeX helpers ───────────────────────────────────────────────────────────
 // Helper: convert plain math expression to LaTeX WITHOUT \(...\) wrapper
@@ -3821,15 +3816,22 @@ export default function TestBankApp() {
   const [user, setUser] = useState(null);
 
   const isAdmin = user?.email === "mohammadalakhrass@yahoo.com";
+  const [authLoading, setAuthLoading] = useState(true);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
+      setAuthLoading(false);
       if (!session) window.location.href = "/login";
     });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setUser(session?.user ?? null);
-      if (!session) window.location.href = "/login";
+      if (event === "SIGNED_OUT" || (!session && event !== "INITIAL_SESSION")) {
+        window.location.href = "/login";
+      }
+      if (event === "TOKEN_REFRESHED") {
+        setUser(session?.user ?? null);
+      }
     });
     return () => subscription.unsubscribe();
   }, []);
@@ -4430,6 +4432,18 @@ export default function TestBankApp() {
   );
 
   const [confirmDelete, setConfirmDelete] = useState(null); // {id, label}
+
+  if (authLoading) return (
+    <div style={{ minHeight: "100vh", background: "#0a0a1a", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ textAlign: "center" }}>
+        <div style={{ fontSize: "1.4rem", fontWeight: "800", color: "#e8e8e0", marginBottom: "1rem" }}>
+          TestBank <span style={{ color: "#10b981" }}>Pro</span>
+        </div>
+        <div style={{ width: "32px", height: "32px", border: "2px solid #1e3a5f", borderTop: "2px solid #10b981", borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto" }} />
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    </div>
+  );
 
   return (
     <div style={S.app}>
