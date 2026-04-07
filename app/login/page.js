@@ -51,7 +51,7 @@ export default function LoginPage() {
         }
       }
 
-      window.location.href = "/";
+      window.location.href = "/app";
     } catch (err) {
       setError(err.message || "Login failed. Please try again.");
       setLoading(false);
