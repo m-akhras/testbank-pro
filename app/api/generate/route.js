@@ -1,5 +1,27 @@
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
+
 export async function POST(req) {
   try {
+    // Verify the user is authenticated
+    const cookieStore = cookies();
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+      {
+        cookies: {
+          get(name) { return cookieStore.get(name)?.value; },
+          set() {},
+          remove() {},
+        },
+      }
+    );
+
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      return Response.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { prompt } = await req.json();
     if (!prompt) return Response.json({ error: "No prompt provided" }, { status: 400 });
 
