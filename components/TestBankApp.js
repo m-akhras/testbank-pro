@@ -2321,20 +2321,32 @@ function mathToOmml(raw) {
   w = w.replace(/integral from ([^\s]+) to ([^\s]+) of/gi,
     (_,a,b) => addToken({t:'int', a, b}));
 
-  // Auto-scaling delimiters: {expr}, (expr containing frac/sup), [expr containing frac/sup]
-  // Process after fractions so delimiters wrap already-tokenized fractions
-  // We'll handle this in renderSegment by detecting brackets around tokens
+  // (expr)/(b) fraction — horizontal bar (MUST come before delimiter processing)
+  w = w.replace(/\(([^()]+)\)\/\(([^()]+)\)/g,
+    (_,n,d) => addToken({t:'frac', n, d}));
 
-  // {expr} — curly braces (auto-scale)
+  // (a)/[b] or TOKEN/[b] fraction — square bracket denominator
+  w = w.replace(/(\([^()]+\)|\x01\d+\x01)\/\[([^\[\]]*(?:\x01\d+\x01[^\[\]]*)*)\]/g,
+    (_,n,d) => addToken({t:'frac', n: n.replace(/^\(|\)$/g,''), d}));
+
+  // simple/[b] fraction
+  w = w.replace(/([a-zA-Z0-9]+)\/\[([^\[\]]+)\]/g,
+    (_,n,d) => addToken({t:'frac', n, d}));
+
+  // [a]/[b] fraction
+  w = w.replace(/\[([^\[\]]+)\]\/\[([^\[\]]+)\]/g,
+    (_,n,d) => addToken({t:'frac', n, d}));
+
+  // number/number
+  w = w.replace(/\b([0-9]+)\/([0-9]+)\b/g,
+    (_,n,d) => addToken({t:'frac', n, d}));
+
+  // Auto-scaling delimiters: {expr} — curly braces (AFTER fractions)
   let prevD;
   do {
     prevD = w;
     w = w.replace(/\{([^{}]*)\}/g, (_, inner) => addToken({t:'delim', beg:'{', end:'}', inner}));
   } while (w !== prevD);
-
-  // (expr)/(b) fraction — horizontal bar (must come BEFORE plain paren delimiter)
-  w = w.replace(/\(([^()]+)\)\/\(([^()]+)\)/g,
-    (_,n,d) => addToken({t:'frac', n, d}));
 
   // (a)/[b] or TOKEN/[b] fraction — square bracket denominator
   w = w.replace(/(\([^()]+\)|\x01\d+\x01)\/\[([^\[\]]*(?:\x01\d+\x01[^\[\]]*)*)\]/g,
