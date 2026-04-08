@@ -4122,6 +4122,7 @@ export default function TestBankApp() {
   const [course, setCourse] = useState(null);
   const [selectedSections, setSelectedSections] = useState([]);
   const [sectionCounts, setSectionCounts] = useState({});
+  const [generateConfirm, setGenerateConfirm] = useState(false);
   const [sectionConfig, setSectionConfig] = useState({});
   const [qType, setQType] = useState("Multiple Choice");
   const [diff, setDiff] = useState("Mixed");
@@ -5141,30 +5142,41 @@ export default function TestBankApp() {
             </div>
 
             <div style={{display:"flex", gap:"0.75rem", flexWrap:"wrap", alignItems:"center"}}>
-              <button
-                style={S.btn(accent, !course || selectedSections.length === 0 || isGenerating)}
-                disabled={!course || selectedSections.length === 0 || isGenerating}
-                onClick={async () => {
-                  triggerGenerate();
-                  const prompt = buildGeneratePrompt(course, selectedSections, sectionCounts, qType, diff, sectionConfig);
-                  await autoGenerate(prompt, (result) => {
-                    setPasteInput(result);
-                    // auto-trigger handlePaste
-                    setTimeout(() => {
-                      document.getElementById("auto-paste-trigger")?.click();
-                    }, 100);
-                  });
-                }}
-              >
-                {isGenerating ? "⏳ Generating..." : "✦ Generate Questions"}
-              </button>
-              <button
-                style={{...S.oBtn(text2), fontSize:"0.75rem"}}
-                disabled={!course || selectedSections.length === 0}
-                onClick={triggerGenerate}
-              >
-                Manual (copy-paste)
-              </button>
+              {generateConfirm ? (
+                <div style={{display:"flex", alignItems:"center", gap:"0.75rem", background:"#0a1628",
+                  border:"1px solid #1e3a5f", borderRadius:"8px", padding:"0.6rem 1rem"}}>
+                  <span style={{fontSize:"0.85rem", color:"#e8e8e0"}}>
+                    Generate {selectedSections.reduce((a,s) => a+(sectionCounts[s]||3), 0)} questions?
+                  </span>
+                  <button style={S.btn(accent, false)} onClick={async () => {
+                    setGenerateConfirm(false);
+                    triggerGenerate();
+                    const prompt = buildGeneratePrompt(course, selectedSections, sectionCounts, qType, diff, sectionConfig);
+                    await autoGenerate(prompt, (result) => {
+                      setPasteInput(result);
+                      setTimeout(() => { document.getElementById("auto-paste-trigger")?.click(); }, 100);
+                    });
+                  }}>Yes</button>
+                  <button style={S.oBtn(text2)} onClick={() => setGenerateConfirm(false)}>Cancel</button>
+                </div>
+              ) : (
+                <>
+                  <button
+                    style={S.btn(accent, !course || selectedSections.length === 0 || isGenerating)}
+                    disabled={!course || selectedSections.length === 0 || isGenerating}
+                    onClick={() => setGenerateConfirm(true)}
+                  >
+                    {isGenerating ? "⏳ Generating..." : "✦ Generate Questions"}
+                  </button>
+                  <button
+                    style={{...S.oBtn(text2), fontSize:"0.75rem"}}
+                    disabled={!course || selectedSections.length === 0}
+                    onClick={triggerGenerate}
+                  >
+                    Manual (copy-paste)
+                  </button>
+                </>
+              )}
             </div>
 
             {generateError && (
