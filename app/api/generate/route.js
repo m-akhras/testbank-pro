@@ -1,7 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
-const RATE_LIMIT = 20; // calls per hour per user
+const RATE_LIMIT = 20;
 
 export async function POST(req) {
   try {
@@ -18,16 +18,11 @@ export async function POST(req) {
       }
     );
 
-    // Verify auth
     const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
-      return Response.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    if (!session) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
     const userId = session.user.id;
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-
-    // Check rate limit
     const { count } = await supabase
       .from("api_usage")
       .select("*", { count: "exact", head: true })
@@ -35,17 +30,27 @@ export async function POST(req) {
       .gte("created_at", oneHourAgo);
 
     if (count >= RATE_LIMIT) {
-      return Response.json(
-        { error: `Rate limit exceeded. Maximum ${RATE_LIMIT} generations per hour.` },
-        { status: 429 }
-      );
+      return Response.json({ error: `Rate limit exceeded. Maximum ${RATE_LIMIT} generations per hour.` }, { status: 429 });
     }
 
-    // Log this call
     await supabase.from("api_usage").insert({ user_id: userId });
 
-    const { prompt } = await req.json();
+    const { prompt, file } = await req.json();
     if (!prompt) return Response.json({ error: "No prompt provided" }, { status: 400 });
+
+    // Build message content — support PDF file input
+    let messageContent;
+    if (file?.base64 && file?.mediaType) {
+      messageContent = [
+        {
+          type: "document",
+          source: { type: "base64", media_type: file.mediaType, data: file.base64 },
+        },
+        { type: "text", text: prompt },
+      ];
+    } else {
+      messageContent = prompt;
+    }
 
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -57,7 +62,7 @@ export async function POST(req) {
       body: JSON.stringify({
         model: "claude-opus-4-5",
         max_tokens: 4096,
-        messages: [{ role: "user", content: prompt }],
+        messages: [{ role: "user", content: messageContent }],
       }),
     });
 

@@ -3573,7 +3573,7 @@ function PastePanel({ label, S, text2, pasteInput, setPasteInput, pasteError, ha
 // ─── Custom Course Builder ────────────────────────────────────────────────────
 function CustomCourseBuilder({ customCourses, onSave, onDelete, text1, text2, text3, border, bg1, S, isAdmin }) {
   const [expanded, setExpanded] = useState(false);
-  const [editing, setEditing] = useState(null); // null | course name | "new"
+  const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({ name: "", color: "#6366f1", textbook: "", chapters: [] });
   const [newChapter, setNewChapter] = useState({ ch: "", title: "", sections: "" });
   const [saving, setSaving] = useState(false);
@@ -3581,33 +3581,118 @@ function CustomCourseBuilder({ customCourses, onSave, onDelete, text1, text2, te
   const [syllabusText, setSyllabusText] = useState("");
   const [syllabusLoading, setSyllabusLoading] = useState(false);
   const [showSyllabus, setShowSyllabus] = useState(false);
+  const [syllabusMode, setSyllabusMode] = useState("paste"); // "paste" | "file"
+  const [fileName, setFileName] = useState("");
+  const [fileRef2, setFileRef2] = useState(null); // base64 data
+  const fileRef = useRef(null);
 
   const COLORS = ["#10b981","#8b5cf6","#f59e0b","#06b6d4","#f43f5e","#e879f9","#a855f7","#3b82f6","#f97316","#ec4899"];
+  const MAX_FILE_SIZE = 500 * 1024; // 500KB
+
+  async function handleFileUpload(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    setError("");
+    if (file.size > MAX_FILE_SIZE) {
+      setError(`File too large. Maximum size is 500KB (your file: ${Math.round(file.size/1024)}KB).`);
+      return;
+    }
+    setFileName(file.name);
+    const ext = file.name.split(".").pop().toLowerCase();
+
+    if (ext === "pdf") {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const base64 = ev.target.result.split(",")[1];
+        setFileRef2({ type: "pdf", base64, mediaType: "application/pdf" });
+      };
+      reader.readAsDataURL(file);
+    } else if (ext === "docx") {
+      if (!window.mammoth) {
+        const script = document.createElement("script");
+        script.src = "https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js";
+        await new Promise((res, rej) => { script.onload = res; script.onerror = rej; document.head.appendChild(script); });
+      }
+      const reader = new FileReader();
+      reader.onload = async (ev) => {
+        try {
+          const result = await window.mammoth.extractRawText({ arrayBuffer: ev.target.result });
+          setSyllabusText(result.value);
+          setSyllabusMode("paste");
+          setFileName("");
+        } catch(e) { setError("Could not read Word file: " + e.message); }
+      };
+      reader.readAsArrayBuffer(file);
+    } else {
+      setError("Only PDF and Word (.docx) files are supported.");
+    }
+  }
+
+  async function importFromFile({ type, base64, mediaType }) {
+    setSyllabusLoading(true);
+    setError("");
+    try {
+      const prompt = `You are a course structure extractor. Extract the course name, all textbooks/books mentioned, and all chapters with their sections from this syllabus.
+
+Return ONLY a valid JSON object:
+{
+  "name": "Course Name",
+  "textbook": "All textbooks mentioned, comma-separated, or empty string",
+  "chapters": [
+    { "ch": "1", "title": "Chapter Title", "sections": ["1.1 Section Name", "1.2 Section Name"] }
+  ]
+}
+
+Reply with ONLY the JSON, no markdown, no explanation.`;
+
+      const res = await fetch("/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt, file: { type, base64, mediaType } }),
+      });
+      if (!res.ok) throw new Error("API error " + res.status);
+      const data = await res.json();
+      const text = data.content?.[0]?.text || "";
+      const match = text.match(/\{[\s\S]*\}/);
+      if (!match) throw new Error("Could not parse AI response");
+      const parsed = JSON.parse(match[0]);
+      setForm(prev => ({
+        ...prev,
+        name: parsed.name || prev.name,
+        textbook: parsed.textbook || prev.textbook,
+        chapters: parsed.chapters || [],
+      }));
+      setShowSyllabus(false);
+      setFileName("");
+      setSyllabusText("");
+      setEditing(prev => prev || "new");
+    } catch(e) {
+      setError("Import failed: " + (e.message || "Unknown error"));
+    } finally {
+      setSyllabusLoading(false);
+    }
+  }
 
   async function importFromSyllabus() {
     if (!syllabusText.trim()) return;
     setSyllabusLoading(true);
     setError("");
     try {
-      const prompt = `You are a course structure extractor. Given the following syllabus text, extract the course name, textbook (if mentioned), and all chapters with their sections.
+      const prompt = `You are a course structure extractor. Extract the course name, all textbooks/books mentioned, and all chapters with their sections from this syllabus.
 
-Return ONLY a valid JSON object with this exact structure:
+Return ONLY a valid JSON object:
 {
   "name": "Course Name",
-  "textbook": "Textbook title and edition or empty string",
+  "textbook": "All textbooks mentioned, comma-separated, or empty string",
   "chapters": [
-    {
-      "ch": "1",
-      "title": "Chapter Title",
-      "sections": ["1.1 Section Name", "1.2 Section Name"]
-    }
+    { "ch": "1", "title": "Chapter Title", "sections": ["1.1 Section Name", "1.2 Section Name"] }
   ]
 }
 
 Syllabus:
 ${syllabusText}
 
-Reply with ONLY the JSON object, no markdown, no explanation.`;
+Reply with ONLY the JSON, no markdown, no explanation.`;
 
       const res = await fetch("/api/generate", {
         method: "POST",
@@ -3618,7 +3703,7 @@ Reply with ONLY the JSON object, no markdown, no explanation.`;
       const data = await res.json();
       const text = data.content?.[0]?.text || "";
       const match = text.match(/\{[\s\S]*\}/);
-      if (!match) throw new Error("Could not parse response");
+      if (!match) throw new Error("Could not parse AI response");
       const parsed = JSON.parse(match[0]);
       setForm(prev => ({
         ...prev,
@@ -3630,7 +3715,7 @@ Reply with ONLY the JSON object, no markdown, no explanation.`;
       setSyllabusText("");
       setEditing(prev => prev || "new");
     } catch(e) {
-      setError("Failed to import syllabus: " + (e.message || "Unknown error"));
+      setError("Import failed: " + (e.message || "Unknown error"));
     } finally {
       setSyllabusLoading(false);
     }
@@ -3728,21 +3813,66 @@ Reply with ONLY the JSON object, no markdown, no explanation.`;
                 </button>
                 {showSyllabus && (
                   <div style={{ background:"#060d1a", border:"1px solid #1e3a5f", borderRadius:"8px", padding:"0.85rem" }}>
-                    <div style={{ fontSize:"0.72rem", color:text3, marginBottom:"0.4rem" }}>
-                      Paste your syllabus text — AI will extract the course name, textbook, chapters and sections automatically.
+                    {/* Mode tabs */}
+                    <div style={{ display:"flex", gap:"0.5rem", marginBottom:"0.75rem" }}>
+                      {["file", "paste"].map(mode => (
+                        <button key={mode} onClick={() => setSyllabusMode(mode)}
+                          style={{ background: syllabusMode === mode ? "#1e3a5f" : "transparent",
+                            color: syllabusMode === mode ? "#60a5fa" : text3,
+                            border:`1px solid ${syllabusMode === mode ? "#1e3a5f" : "#334155"}`,
+                            borderRadius:"6px", padding:"0.3rem 0.75rem", fontSize:"0.75rem", cursor:"pointer" }}>
+                          {mode === "file" ? "📎 Upload File" : "📋 Paste Text"}
+                        </button>
+                      ))}
                     </div>
-                    <textarea value={syllabusText} onChange={e => setSyllabusText(e.target.value)}
-                      placeholder="Paste syllabus here..."
-                      rows={6}
-                      style={{ width:"100%", padding:"0.5rem 0.7rem", background:"#1a1a2e", border:"1px solid #334155",
-                        borderRadius:"6px", color:"#e8e8e0", fontSize:"0.78rem", outline:"none",
-                        boxSizing:"border-box", resize:"vertical", fontFamily:"inherit", marginBottom:"0.5rem" }} />
-                    <button onClick={importFromSyllabus} disabled={syllabusLoading || !syllabusText.trim()}
-                      style={{ background: syllabusLoading ? "#064e3b" : "#10b981", color:"#fff", border:"none",
-                        borderRadius:"6px", padding:"0.5rem 1.25rem", fontSize:"0.82rem", fontWeight:"600",
-                        cursor: syllabusLoading ? "not-allowed" : "pointer" }}>
-                      {syllabusLoading ? "⏳ Importing..." : "⚡ Import"}
-                    </button>
+
+                    {syllabusMode === "file" ? (
+                      <div>
+                        <div style={{ fontSize:"0.72rem", color:text3, marginBottom:"0.4rem" }}>
+                          Upload PDF or Word (.docx) — max 500KB
+                        </div>
+                        <input ref={fileRef} type="file" accept=".pdf,.docx"
+                          onChange={handleFileUpload}
+                          style={{ display:"none" }} />
+                        <button onClick={() => fileRef.current?.click()}
+                          style={{ background:"#1e3a5f", color:"#60a5fa", border:"1px solid #1e3a5f",
+                            borderRadius:"6px", padding:"0.5rem 1rem", fontSize:"0.82rem", cursor:"pointer" }}>
+                          {fileName ? `📄 ${fileName}` : "Choose File"}
+                        </button>
+                        {fileName && !syllabusLoading && (
+                          <div style={{ fontSize:"0.72rem", color:"#4ade80", marginTop:"0.4rem" }}>
+                            ✓ File ready — click Import to extract
+                          </div>
+                        )}
+                        {fileName && (
+                          <button onClick={() => fileRef2 && importFromFile(fileRef2)}
+                            disabled={syllabusLoading || !fileRef2}
+                            style={{ marginTop:"0.5rem", display:"block", background: syllabusLoading ? "#064e3b" : "#10b981",
+                              color:"#fff", border:"none", borderRadius:"6px", padding:"0.5rem 1.25rem",
+                              fontSize:"0.82rem", fontWeight:"600", cursor: syllabusLoading ? "not-allowed" : "pointer" }}>
+                            {syllabusLoading ? "⏳ Importing..." : "⚡ Import"}
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      <div>
+                        <div style={{ fontSize:"0.72rem", color:text3, marginBottom:"0.4rem" }}>
+                          Paste your syllabus — AI extracts course name, textbooks, chapters and sections.
+                        </div>
+                        <textarea value={syllabusText} onChange={e => setSyllabusText(e.target.value)}
+                          placeholder="Paste syllabus text here..."
+                          rows={6}
+                          style={{ width:"100%", padding:"0.5rem 0.7rem", background:"#1a1a2e", border:"1px solid #334155",
+                            borderRadius:"6px", color:"#e8e8e0", fontSize:"0.78rem", outline:"none",
+                            boxSizing:"border-box", resize:"vertical", fontFamily:"inherit", marginBottom:"0.5rem" }} />
+                        <button onClick={importFromSyllabus} disabled={syllabusLoading || !syllabusText.trim()}
+                          style={{ background: syllabusLoading ? "#064e3b" : "#10b981", color:"#fff", border:"none",
+                            borderRadius:"6px", padding:"0.5rem 1.25rem", fontSize:"0.82rem", fontWeight:"600",
+                            cursor: syllabusLoading ? "not-allowed" : "pointer" }}>
+                          {syllabusLoading ? "⏳ Importing..." : "⚡ Import"}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
