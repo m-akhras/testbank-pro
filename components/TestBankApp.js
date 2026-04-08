@@ -2324,6 +2324,18 @@ function mathToOmml(raw) {
   w = w.replace(/\(([^()]+)\)\/\(([^()]+)\)/g,
     (_,n,d) => addToken({t:'frac', n, d}));
 
+  // (a)/[b] or TOKEN/[b] fraction — square bracket denominator
+  w = w.replace(/(\([^()]+\)|\x01\d+\x01)\/\[([^\[\]]*(?:\x01\d+\x01[^\[\]]*)*)\]/g,
+    (_,n,d) => addToken({t:'frac', n: n.replace(/^\(|\)$/g,''), d}));
+
+  // simple/[b] fraction
+  w = w.replace(/([a-zA-Z0-9]+)\/\[([^\[\]]+)\]/g,
+    (_,n,d) => addToken({t:'frac', n, d}));
+
+  // [a]/[b] fraction
+  w = w.replace(/\[([^\[\]]+)\]\/\[([^\[\]]+)\]/g,
+    (_,n,d) => addToken({t:'frac', n, d}));
+
   // number/number
   w = w.replace(/\b([0-9]+)\/([0-9]+)\b/g,
     (_,n,d) => addToken({t:'frac', n, d}));
@@ -3408,7 +3420,7 @@ CRITICAL — LOGICAL NOTATION (always use these symbols, never spell out AND/OR/
     ? "You are a college professor writing a test bank for Discrete Mathematics based on Susanna Epp's Discrete Mathematics with Applications. Follow the exact question style and structure from the book — change values but not structure."
     : "You are a college math professor writing a test bank from Stewart Calculus Early Transcendentals 9th Edition.";
 
-  return `TESTBANK_GENERATE_REQUEST\nCourse: ${course}\nType: ${qType}\nTotal questions: ${totalQ}\n\nSections, counts, and difficulty/graph config:\n${breakdown}\n\nIMPORTANT: Follow the exact count and difficulty per section strictly.\n\nType instructions: ${typeInstructions[qType]}\n${tableInstructions}${graphInstructions || ''}\n${courseText}\nUse plain-text math: x^2, sqrt(x), fractions, summations.\nBe rigorous, numerically specific, university-level.\nEach question must have a 'section' field with the exact section name.\nEach question must have a 'difficulty' field.\n\nReply with ONLY a valid JSON array, no markdown fences, no explanation:\n[${shape}, ...]`;
+  return `TESTBANK_GENERATE_REQUEST\nCourse: ${course}\nType: ${qType}\nTotal questions: ${totalQ}\n\nSections, counts, and difficulty/graph config:\n${breakdown}\n\nIMPORTANT: Follow the exact count and difficulty per section strictly.\n\nType instructions: ${typeInstructions[qType]}\n${tableInstructions}${graphInstructions || ''}\n${courseText}\nUse plain-text math: x^2, sqrt(x), summations. For fractions ALWAYS use (numerator)/(denominator) with parentheses around both — never use square brackets like [denominator].\nBe rigorous, numerically specific, university-level.\nEach question must have a 'section' field with the exact section name.\nEach question must have a 'difficulty' field.\n\nReply with ONLY a valid JSON array, no markdown fences, no explanation:\n[${shape}, ...]`;
 }
 
 function buildVersionPrompt(selectedQuestions, mutationType, versionLabel) {
