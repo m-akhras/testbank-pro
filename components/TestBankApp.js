@@ -2348,6 +2348,17 @@ function mathToOmml(raw) {
     w = w.replace(/\{([^{}]*)\}/g, (_, inner) => addToken({t:'delim', beg:'{', end:'}', inner}));
   } while (w !== prevD);
 
+  // Auto-scaling parentheses — only when content contains a fraction token
+  let prevP;
+  do {
+    prevP = w;
+    w = w.replace(/\(([^()]*\x01\d+\x01[^()]*)\)/g, (_, inner) => {
+      const hasFrac = inner.split(/\x01(\d+)\x01/).some((_, i) => i % 2 === 1 && tokens[parseInt(inner.split(/\x01(\d+)\x01/)[i])]?.t === 'frac');
+      if (hasFrac) return addToken({t:'delim', beg:'(', end:')', inner});
+      return `(${inner})`;
+    });
+  } while (w !== prevP);
+
   // (a)/[b] or TOKEN/[b] fraction — square bracket denominator
   w = w.replace(/(\([^()]+\)|\x01\d+\x01)\/\[([^\[\]]*(?:\x01\d+\x01[^\[\]]*)*)\]/g,
     (_,n,d) => addToken({t:'frac', n: n.replace(/^\(|\)$/g,''), d}));
