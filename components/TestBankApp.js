@@ -2349,13 +2349,21 @@ function mathToOmml(raw) {
   } while (w !== prevD);
 
   // Auto-scaling parentheses — only when content contains a fraction token
+  // Exception: standalone numeric fractions (1/2) don't need parentheses
   let prevP;
   do {
     prevP = w;
     w = w.replace(/\(([^()]*\x01\d+\x01[^()]*)\)/g, (_, inner) => {
-      const hasFrac = inner.split(/\x01(\d+)\x01/).some((_, i) => i % 2 === 1 && tokens[parseInt(inner.split(/\x01(\d+)\x01/)[i])]?.t === 'frac');
-      if (hasFrac) return addToken({t:'delim', beg:'(', end:')', inner});
-      return `(${inner})`;
+      const parts = inner.split(/\x01(\d+)\x01/);
+      const tokenIndices = [];
+      parts.forEach((p, i) => { if (i % 2 === 1) tokenIndices.push(parseInt(p)); });
+      const hasFrac = tokenIndices.some(i => tokens[i]?.t === 'frac');
+      if (!hasFrac) return `(${inner})`;
+      // Standalone numeric fraction: only a frac token, nothing else
+      const isStandalone = parts.every((p, i) => i % 2 === 0 ? p.trim() === '' : true)
+        && tokenIndices.length === 1 && tokens[tokenIndices[0]]?.t === 'frac';
+      if (isStandalone) return `\x01${tokenIndices[0]}\x01`; // just the fraction, no parens
+      return addToken({t:'delim', beg:'(', end:')', inner});
     });
   } while (w !== prevP);
 
