@@ -4213,6 +4213,7 @@ export default function TestBankApp() {
   const [filterYear, setFilterYear] = useState("All");
   const [filterMonth, setFilterMonth] = useState("All");
   const [filterDay, setFilterDay] = useState("All");
+  const [filterTime, setFilterTime] = useState("All");
   const [bankSelectMode, setBankSelectMode] = useState(false);
   const [bankSelected, setBankSelected] = useState(new Set());
   const [graphEditorQId, setGraphEditorQId] = useState(null); // which question has graph editor open
@@ -4612,6 +4613,7 @@ export default function TestBankApp() {
         if (String(d.getFullYear()) !== filterYear) return false;
         if (filterMonth !== "All" && String(d.getMonth()) !== filterMonth) return false;
         if (filterDay !== "All" && String(d.getDate()) !== filterDay) return false;
+        if (filterTime !== "All" && d.toLocaleTimeString("en-US", {hour:"2-digit", minute:"2-digit"}) !== filterTime) return false;
         return true;
       })();
   });
@@ -4622,13 +4624,19 @@ export default function TestBankApp() {
   const availableMonths = filterYear === "All" ? [] : [...new Set(
     bank.filter(q => String(new Date(q.createdAt).getFullYear()) === filterYear)
       .map(q => String(new Date(q.createdAt).getMonth()))
-  )].sort((a,b) => a-b);
+  )].sort((a,b) => b-a);
   const availableDays = (filterYear === "All" || filterMonth === "All") ? [] : [...new Set(
     bank.filter(q => {
       const d = new Date(q.createdAt);
       return String(d.getFullYear()) === filterYear && String(d.getMonth()) === filterMonth;
     }).map(q => String(new Date(q.createdAt).getDate()))
-  )].sort((a,b) => a-b);
+  )].sort((a,b) => b-a);
+  const availableTimes = (filterYear === "All" || filterMonth === "All" || filterDay === "All") ? [] : [...new Set(
+    bank.filter(q => {
+      const d = new Date(q.createdAt);
+      return String(d.getFullYear()) === filterYear && String(d.getMonth()) === filterMonth && String(d.getDate()) === filterDay;
+    }).map(q => new Date(q.createdAt).toLocaleTimeString("en-US", {hour:"2-digit", minute:"2-digit"}))
+  )].sort((a,b) => new Date(`1970/01/01 ${b}`) - new Date(`1970/01/01 ${a}`));
   const courseColors = { "Calculus 1":"#10b981","Calculus 2":"#8b5cf6","Calculus 3":"#f59e0b","Quantitative Methods I":"#06b6d4","Quantitative Methods II":"#f43f5e","Precalculus":"#e879f9","Discrete Mathematics":"#a855f7" };
 
   // ── Design tokens ────────────────────────────────────────────────────────────
@@ -5459,20 +5467,26 @@ export default function TestBankApp() {
               <select style={{...S.sel, width:"130px"}} value={filterDiff} onChange={e => setFilterDiff(e.target.value)}>
                 <option>All</option>{DIFFICULTIES.map(d => <option key={d}>{d}</option>)}
               </select>
-              <select style={{...S.sel, width:"175px"}} value={filterYear} onChange={e => { setFilterYear(e.target.value); setFilterMonth("All"); setFilterDay("All"); }}>
+              <select style={{...S.sel, width:"175px"}} value={filterYear} onChange={e => { setFilterYear(e.target.value); setFilterMonth("All"); setFilterDay("All"); setFilterTime("All"); }}>
                 <option value="All">All Years</option>
                 {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
               </select>
               {filterYear !== "All" && (
-                <select style={{...S.sel, width:"145px"}} value={filterMonth} onChange={e => { setFilterMonth(e.target.value); setFilterDay("All"); }}>
+                <select style={{...S.sel, width:"145px"}} value={filterMonth} onChange={e => { setFilterMonth(e.target.value); setFilterDay("All"); setFilterTime("All"); }}>
                   <option value="All">All Months</option>
                   {availableMonths.map(m => <option key={m} value={m}>{MONTHS[parseInt(m)]}</option>)}
                 </select>
               )}
               {filterYear !== "All" && filterMonth !== "All" && (
-                <select style={{...S.sel, width:"120px"}} value={filterDay} onChange={e => setFilterDay(e.target.value)}>
+                <select style={{...S.sel, width:"120px"}} value={filterDay} onChange={e => { setFilterDay(e.target.value); setFilterTime("All"); }}>
                   <option value="All">All Days</option>
                   {availableDays.map(d => <option key={d} value={d}>Day {d}</option>)}
+                </select>
+              )}
+              {filterYear !== "All" && filterMonth !== "All" && filterDay !== "All" && (
+                <select style={{...S.sel, width:"130px"}} value={filterTime} onChange={e => setFilterTime(e.target.value)}>
+                  <option value="All">All Times</option>
+                  {availableTimes.map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
               )}
               <span style={{fontSize:"0.78rem", color:text2, alignSelf:"center"}}>{filteredBank.length} matching</span>
