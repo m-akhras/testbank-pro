@@ -2220,6 +2220,7 @@ function mathToOmml(raw) {
   const oSup = (base, exp) => `<m:sSup><m:e>${base}</m:e><m:sup>${exp}</m:sup></m:sSup>`;
   const oFrac = (n, d) => `<m:f><m:num>${n}</m:num><m:den>${d}</m:den></m:f>`;
   const oInt = (a, b) => `<m:nary><m:naryPr><m:chr m:val="\u222B"/><m:limLoc m:val="subSup"/></m:naryPr><m:sub>${oT(a)}</m:sub><m:sup>${oT(b)}</m:sup><m:e>${oT(" ")}</m:e></m:nary>`;
+  const oDelim = (begChr, endChr, inner) => `<m:d><m:dPr><m:begChr m:val="${begChr}"/><m:endChr m:val="${endChr}"/><m:grow/></m:dPr><m:e>${inner}</m:e></m:d>`;
   // lim with subscript: base="lim", sub="x→a" — built after renderSegment is defined
   const oLim = (varTo) => `__LIM__${varTo}__ENDLIM__`;
 
@@ -2320,7 +2321,18 @@ function mathToOmml(raw) {
   w = w.replace(/integral from ([^\s]+) to ([^\s]+) of/gi,
     (_,a,b) => addToken({t:'int', a, b}));
 
-  // (a)/(b) fraction — horizontal bar
+  // Auto-scaling delimiters: {expr}, (expr containing frac/sup), [expr containing frac/sup]
+  // Process after fractions so delimiters wrap already-tokenized fractions
+  // We'll handle this in renderSegment by detecting brackets around tokens
+
+  // {expr} — curly braces (auto-scale)
+  let prevD;
+  do {
+    prevD = w;
+    w = w.replace(/\{([^{}]*)\}/g, (_, inner) => addToken({t:'delim', beg:'{', end:'}', inner}));
+  } while (w !== prevD);
+
+  // (expr)/(b) fraction — horizontal bar (must come BEFORE plain paren delimiter)
   w = w.replace(/\(([^()]+)\)\/\(([^()]+)\)/g,
     (_,n,d) => addToken({t:'frac', n, d}));
 
@@ -2348,6 +2360,7 @@ function mathToOmml(raw) {
     if (tok.t === 'sqrt') return oSqrt(renderSegment(tok.inner));
     if (tok.t === 'sup') return oSup(renderSegment(tok.base), renderSegment(tok.exp));
     if (tok.t === 'frac') return oFrac(renderSegment(tok.n), renderSegment(tok.d));
+    if (tok.t === 'delim') return oDelim(tok.beg, tok.end, renderSegment(tok.inner));
     if (tok.t === 'int') return oInt(tok.a, tok.b);
     if (tok.t === 'lim') return oLim(tok.sub);
     return oT('?');
