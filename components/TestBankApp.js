@@ -2325,6 +2325,18 @@ function mathToOmml(raw) {
   w = w.replace(/\(([^()]+)\)\/\(([^()]+)\)/g,
     (_,n,d) => addToken({t:'frac', n, d}));
 
+  // number/(expr) or letter/(expr) — e.g. 1/(s+3), A/(s+1)
+  w = w.replace(/\b([a-zA-Z0-9]+)\/\(([^()]+)\)/g,
+    (_,n,d) => addToken({t:'frac', n, d}));
+
+  // TOKEN/(expr) — tokenized numerator over parenthesized denominator
+  w = w.replace(/(\x01\d+\x01)\/\(([^()]+)\)/g,
+    (_,n,d) => addToken({t:'frac', n, d}));
+
+  // (expr)/number — parenthesized numerator over number
+  w = w.replace(/\(([^()]+)\)\/([0-9]+)\b/g,
+    (_,n,d) => addToken({t:'frac', n, d}));
+
   // (a)/[b] or TOKEN/[b] fraction — square bracket denominator
   w = w.replace(/(\([^()]+\)|\x01\d+\x01)\/\[([^\[\]]*(?:\x01\d+\x01[^\[\]]*)*)\]/g,
     (_,n,d) => addToken({t:'frac', n: n.replace(/^\(|\)$/g,''), d}));
