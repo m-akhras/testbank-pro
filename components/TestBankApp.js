@@ -4033,6 +4033,9 @@ function SavedExamsScreen({ S, text2, text3, border, onLoad }) {
   const [exams, setExams] = useState([]);
   const [loading, setLoading] = useState(true);
   const [exportLog, setExportLog] = useState([]);
+  const [gradesData, setGradesData] = useState({}); // examId → [{question, avg, count}]
+  const [showGrades, setShowGrades] = useState({}); // examId → bool
+  const gradesFileRefs = {};
 
   useEffect(() => {
     Promise.all([loadExams(), loadExportHistory()]).then(([e, h]) => {
@@ -4050,6 +4053,62 @@ function SavedExamsScreen({ S, text2, text3, border, onLoad }) {
       if (error) throw error;
       return data;
     } catch { return []; }
+  }
+
+  function parseCanvasGrades(csvText, exam) {
+    // Parse CSV — Canvas format: first row = headers, first col = student name, second = ID, rest = question scores
+    const lines = csvText.trim().split("\n").map(l => l.split(",").map(c => c.trim().replace(/^"|"$/g, "")));
+    if (lines.length < 2) return null;
+    const headers = lines[0];
+
+    // Find question columns — skip student name, ID, section, group cols
+    // Canvas format typically: Student, ID, SIS User ID, SIS Login ID, Section, question_1, question_2...
+    const skipCols = new Set();
+    headers.forEach((h, i) => {
+      const lower = h.toLowerCase();
+      if (lower.includes("student") || lower.includes(" id") || lower === "id" ||
+          lower.includes("sis") || lower.includes("login") || lower.includes("section") ||
+          lower.includes("group") || lower.includes("score") || lower.includes("total") ||
+          lower.includes("percent") || lower.includes("grade") || lower === "") {
+        skipCols.add(i);
+      }
+    });
+
+    const questionCols = headers
+      .map((h, i) => ({ h, i }))
+      .filter(({ i }) => !skipCols.has(i));
+
+    if (questionCols.length === 0) return null;
+
+    // Calculate average score per question column (strip student identity)
+    const results = questionCols.map(({ h, i }) => {
+      const scores = lines.slice(1)
+        .map(row => parseFloat(row[i]))
+        .filter(v => !isNaN(v));
+      const avg = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : null;
+      // Try to find max points from header e.g. "Q1 (2 pts)" or from data
+      const maxMatch = h.match(/\((\d+(?:\.\d+)?)\s*pts?\)/i);
+      const max = maxMatch ? parseFloat(maxMatch[1]) : Math.max(...scores, 1);
+      return { label: h, avg, max, count: scores.length, pct: avg !== null ? Math.round((avg / max) * 100) : null };
+    }).filter(r => r.avg !== null).sort((a, b) => a.pct - b.pct);
+
+    return results;
+  }
+
+  function handleGradesUpload(e, exam) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const results = parseCanvasGrades(ev.target.result, exam);
+      if (!results || results.length === 0) {
+        alert("Could not parse grades. Make sure this is a Canvas grades CSV.");
+        return;
+      }
+      setGradesData(prev => ({ ...prev, [exam.id]: results }));
+      setShowGrades(prev => ({ ...prev, [exam.id]: true }));
+    };
+    reader.readAsText(file);
   }
 
   if (loading) return <div style={{color:text2, padding:"2rem"}}>Loading saved exams…</div>;
@@ -4161,6 +4220,63 @@ function SavedExamsScreen({ S, text2, text3, border, onLoad }) {
               </button>
             )}
           </div>
+
+          {/* Grades Import */}
+          <div style={{marginTop:"0.75rem", borderTop:"1px solid #1e2d45", paddingTop:"0.75rem", display:"flex", gap:"0.5rem", alignItems:"center", flexWrap:"wrap"}}>
+            <input
+              type="file" accept=".csv"
+              style={{display:"none"}}
+              id={`grades-${exam.id}`}
+              onChange={e => handleGradesUpload(e, exam)}
+            />
+            <button style={{...S.oBtn("#06b6d4"), fontSize:"0.72rem"}}
+              onClick={() => document.getElementById(`grades-${exam.id}`)?.click()}>
+              📊 Import Canvas Grades
+            </button>
+            {gradesData[exam.id] && (
+              <button style={{fontSize:"0.72rem", background:"none", border:"none", cursor:"pointer",
+                color: showGrades[exam.id] ? "#06b6d4" : text3}}
+                onClick={() => setShowGrades(prev => ({...prev, [exam.id]: !prev[exam.id]}))}>
+                {showGrades[exam.id] ? "Hide Results" : "Show Results"}
+              </button>
+            )}
+          </div>
+
+          {/* Grades Results Panel */}
+          {showGrades[exam.id] && gradesData[exam.id] && (
+            <div style={{marginTop:"0.75rem", background:"#060d18", border:"1px solid #1e3a5f", borderRadius:"10px", padding:"1rem"}}>
+              <div style={{fontSize:"0.78rem", color:"#06b6d4", fontWeight:"600", marginBottom:"0.75rem"}}>
+                📊 Question Performance — sorted by lowest score
+                <span style={{fontSize:"0.68rem", color:text3, fontWeight:"400", marginLeft:"0.5rem"}}>
+                  (no student data stored)
+                </span>
+              </div>
+              {gradesData[exam.id].map((r, i) => (
+                <div key={i} style={{display:"flex", alignItems:"center", gap:"0.75rem", marginBottom:"0.4rem",
+                  padding:"0.4rem 0.6rem", borderRadius:"6px",
+                  background: r.pct < 50 ? "#1a0a0a" : r.pct < 70 ? "#1a1200" : "#0a1200"}}>
+                  <div style={{flex:1, fontSize:"0.78rem", color:"#e8e8e0", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}
+                    title={r.label}>{r.label}</div>
+                  <div style={{flexShrink:0, width:"180px"}}>
+                    <div style={{height:"6px", borderRadius:"3px", background:"#1e3a5f", overflow:"hidden"}}>
+                      <div style={{height:"100%", width:`${r.pct}%`, borderRadius:"3px",
+                        background: r.pct < 50 ? "#f87171" : r.pct < 70 ? "#f59e0b" : "#4ade80"}} />
+                    </div>
+                  </div>
+                  <div style={{flexShrink:0, fontSize:"0.75rem", fontWeight:"600", minWidth:"45px", textAlign:"right",
+                    color: r.pct < 50 ? "#f87171" : r.pct < 70 ? "#f59e0b" : "#4ade80"}}>
+                    {r.pct}%
+                  </div>
+                  <div style={{flexShrink:0, fontSize:"0.68rem", color:text3, minWidth:"55px"}}>
+                    {r.avg?.toFixed(1)}/{r.max} pts
+                  </div>
+                </div>
+              ))}
+              <div style={{fontSize:"0.68rem", color:text3, marginTop:"0.5rem"}}>
+                Based on {gradesData[exam.id][0]?.count || 0} student submissions · Red = below 50% · Yellow = 50–70% · Green = above 70%
+              </div>
+            </div>
+          )}
         </div>
         );
       })}
