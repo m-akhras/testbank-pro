@@ -2442,6 +2442,60 @@ function makeDocxImageXml(base64png, widthEmu=4800000, heightEmu=2800000) {
 <GRAPH_REL_PLACEHOLDER rid="${rid}" b64="${b64}"/>`;
 }
 
+async function buildAnswerKey(versions, course) {
+  const JSZip = window.JSZip;
+  if (!JSZip) { alert("JSZip not loaded"); return null; }
+
+  const titleStyle = `<w:pPr><w:spacing w:after="120"/></w:pPr>`;
+  const bold = (t) => `<w:r><w:rPr><w:b/><w:sz w:val="24"/></w:rPr><w:t xml:space="preserve">${t}</w:t></w:r>`;
+  const normal = (t) => `<w:r><w:rPr><w:sz w:val="20"/></w:rPr><w:t xml:space="preserve">${String(t??"")}  </w:t></w:r>`;
+  const para = (...runs) => `<w:p>${titleStyle}${runs.join("")}</w:p>`;
+
+  let body = "";
+
+  for (const v of versions) {
+    const cs = v.questions[0]?.classSection;
+    const heading = cs
+      ? `${course} — Section ${cs} Version ${v.label} — Answer Key`
+      : `${course} — Version ${v.label} — Answer Key`;
+    body += para(bold(heading));
+    body += para(bold("Q#"), bold("    Answer"), bold("                        Type"), bold("            Difficulty"));
+    body += `<w:p><w:pPr><w:spacing w:after="60"/></w:pPr><w:r><w:rPr><w:sz w:val="18"/></w:rPr><w:t>${"─".repeat(70)}</w:t></w:r></w:p>`;
+
+    v.questions.forEach((q, qi) => {
+      const num = String(qi + 1).padEnd(4);
+      const ans = q.type === "Branched"
+        ? (q.parts||[]).map((p,pi) => `(${String.fromCharCode(97+pi)}) ${p.answer||"—"}`).join("  ")
+        : (q.answer || "—");
+      const type = (q.type||"").padEnd(20);
+      const diff = q.difficulty || "—";
+      // For MC, also show the letter
+      let displayAns = ans;
+      if (q.type === "Multiple Choice" && q.choices && q.answer) {
+        const idx = q.choices.indexOf(q.answer);
+        if (idx >= 0) displayAns = `${String.fromCharCode(65+idx)}. ${q.answer}`;
+      }
+      body += para(normal(`Q${num}`), normal(displayAns.padEnd(40)), normal(type), normal(diff));
+    });
+
+    body += `<w:p><w:pPr><w:spacing w:after="200"/></w:pPr></w:p>`;
+  }
+
+  const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:wpc="http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas"
+  xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+  xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+  xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math">
+<w:body>${body}<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1080" w:right="1080" w:bottom="1080" w:left="1080"/></w:sectPr></w:body></w:document>`;
+
+  const zip = new JSZip();
+  zip.file("[Content_Types].xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>`);
+  zip.file("_rels/.rels", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>`);
+  zip.file("word/_rels/document.xml.rels", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>`);
+  zip.file("word/document.xml", documentXml);
+  return await zip.generateAsync({type:"blob", mimeType:"application/vnd.openxmlformats-officedocument.wordprocessingml.document"});
+}
+
 async function buildDocx(questions, course, vLabel, classSection=null, startNum=1) {
   _docxImgCounter = 0; // reset per export
   // We build the docx XML manually for full math support
@@ -4301,8 +4355,10 @@ function SavedExamsScreen({ S, text2, text3, border, onLoad }) {
 // ─── Main App ─────────────────────────────────────────────────────────────────
 export default function TestBankApp() {
   const [screen, setScreen] = useState("home");
+  const [exportHighlight, setExportHighlight] = useState(false);
   const [bank, setBank] = useState([]);
   const [bankLoaded, setBankLoaded] = useState(false);
+  const [savedExams, setSavedExams] = useState([]);
   const [course, setCourse] = useState(null);
   const [selectedSections, setSelectedSections] = useState([]);
   const [sectionCounts, setSectionCounts] = useState({});
@@ -4321,10 +4377,12 @@ export default function TestBankApp() {
   const [versions, setVersions] = useState([]);
   const [activeVersion, setActiveVersion] = useState(0);
   const [bankSearch, setBankSearch] = useState("");
+  const [bankCompact, setBankCompact] = useState(false);
   const [filterCourse, setFilterCourse] = useState("All");
   const [filterType, setFilterType] = useState("All");
   const [filterDiff, setFilterDiff] = useState("All");
   const [filterSection, setFilterSection] = useState("All");
+  const [filterIssuesOnly, setFilterIssuesOnly] = useState(false);
   const [filterDate, setFilterDate] = useState("All");
   const [filterYear, setFilterYear] = useState("All");
   const [filterMonth, setFilterMonth] = useState("All");
@@ -4437,6 +4495,7 @@ export default function TestBankApp() {
   useEffect(() => {
     loadBank().then(q => { setBank(q); setBankLoaded(true); });
     loadCustomCourses();
+    loadExams().then(e => setSavedExams(e));
   }, []);
 
   async function loadCustomCourses() {
@@ -4734,6 +4793,7 @@ export default function TestBankApp() {
       (filterType === "All" || q.type === filterType) &&
       (filterDiff === "All" || q.difficulty === filterDiff) &&
       (filterSection === "All" || q.section === filterSection) &&
+      (!filterIssuesOnly || validateQuestion(q).length > 0) &&
       (() => {
         if (filterYear === "All") return true;
         const d = new Date(q.createdAt);
@@ -4973,6 +5033,17 @@ export default function TestBankApp() {
   // ── Sidebar nav groups ───────────────────────────────────────────────────────
   const bankIssueCount = bank.filter(q => validateQuestion(q).length > 0).length;
 
+  // Map originalId → count of saved exams that include that question
+  const usedInExams = {};
+  savedExams.forEach(exam => {
+    const versions = exam.versions || [];
+    const seen = new Set();
+    versions.forEach(v => (v.questions||[]).forEach(q => {
+      const key = q.originalId || q.id;
+      if (key && !seen.has(key)) { seen.add(key); usedInExams[key] = (usedInExams[key]||0) + 1; }
+    }));
+  });
+
   const navGroups = [
     { label: null, items: [
       { id:"home", icon:"⊟", label:"Dashboard" },
@@ -5016,7 +5087,7 @@ export default function TestBankApp() {
         </div>
       )}
       {bankIssueCount > 0 && (
-        <div onClick={() => setScreen("bank")} style={{
+        <div onClick={() => { setFilterIssuesOnly(true); setScreen("bank"); }} style={{
           margin:"0.4rem 0.6rem 0", padding:"0.5rem 0.7rem",
           background:"#f8717114", border:"1px solid #f8717140",
           borderRadius:"8px", cursor:"pointer",
@@ -5159,13 +5230,16 @@ export default function TestBankApp() {
                   { step:"1", label:"Generate", sub:"Create with AI", sc:"generate", color:"#10b981" },
                   { step:"2", label:"Review", sub:"Check & save", sc:"review", color:"#f59e0b", badge: lastGenerated.length || 0 },
                   { step:"3", label:"Build Exam", sub:"Select & version", sc:"versions", color:"#8b5cf6" },
-                  { step:"4", label:"Export", sub:"Word · QTI · Print", sc:"versions", color:"#185FA5" },
+                  { step:"4", label:"Export", sub:"Word · QTI · Print", sc:"export", color:"#185FA5" },
                 ].map((s, i) => (
                   <div key={i} style={{display:"flex", alignItems:"center", flex:1}}>
-                    <div onClick={() => setScreen(s.sc)} style={{
+                    <div onClick={() => {
+                      if (s.sc === "export") { setScreen("versions"); setExportHighlight(true); setTimeout(() => setExportHighlight(false), 2500); }
+                      else setScreen(s.sc);
+                    }} style={{
                       flex:1, padding:"1rem 0.75rem", borderRadius:"10px", cursor:"pointer", textAlign:"center",
-                      background: screen===s.sc ? s.color+"18" : "#0d1530",
-                      border:"1px solid "+(screen===s.sc ? s.color+"50" : "#0f1e3a"),
+                      background: (s.sc === "export" ? exportHighlight : screen===s.sc) ? s.color+"18" : "#0d1530",
+                      border:"1px solid "+((s.sc === "export" ? exportHighlight : screen===s.sc) ? s.color+"50" : "#0f1e3a"),
                       transition:"all 0.15s"
                     }}>
                       <div style={{display:"flex", alignItems:"center", justifyContent:"center", gap:"0.4rem", marginBottom:"0.4rem"}}>
@@ -5193,7 +5267,7 @@ export default function TestBankApp() {
               {[
                 { label:"Questions in Bank", value:bank.length, color:"#10b981", icon:"▦", action:() => setScreen("bank") },
                 { label:"Pending Review",    value:lastGenerated.length || 0, color:"#f59e0b", icon:"◎", action:() => setScreen("review") },
-                { label:"Issues Found",      value:bankIssueCount, color:bankIssueCount>0?"#f87171":"#10b981", icon:bankIssueCount>0?"⚠":"✓", action:() => setScreen("bank") },
+                { label:"Issues Found",      value:bankIssueCount, color:bankIssueCount>0?"#f87171":"#10b981", icon:bankIssueCount>0?"⚠":"✓", action:() => { setFilterIssuesOnly(bankIssueCount > 0); setScreen("bank"); } },
               ].map((s,i) => (
                 <div key={i} onClick={s.action} style={{...S.statCard(s.color), cursor:"pointer"}}>
                   <div style={S.statAccent(s.color)}/>
@@ -5459,9 +5533,6 @@ export default function TestBankApp() {
                 <div style={{fontSize:"0.68rem", color:text3, marginTop:"0.4rem"}}>These questions were still saved — review and delete if needed.</div>
               </div>
             )}
-            {lastGenerated.length === 0 && (
-              <div style={{...S.card, textAlign:"center", color:text3, padding:"3rem"}}>No questions generated yet. Go to Generate.</div>
-            )}
             {lastGenerated.map((q, qi) => (
               <div key={q.id || qi} style={S.qCard}>
                 {(() => { const issues = validateQuestion(q); return (
@@ -5517,6 +5588,9 @@ export default function TestBankApp() {
                 <p style={S.sub}>{bank.length} questions saved{bankIssueCount > 0 ? ` · ⚠️ ${bankIssueCount} with issues` : " · ✓ all valid"}.</p>
               </div>
               <div style={{display:"flex", gap:"0.5rem", flexShrink:0}}>
+                <button style={{...S.ghostBtn(bankCompact ? accent : text3), fontSize:"0.75rem"}} onClick={() => setBankCompact(p => !p)}>
+                  {bankCompact ? "≡ Compact" : "☰ Compact"}
+                </button>
                 <button style={{...S.oBtn(text2), fontSize:"0.75rem"}} onClick={() => setScreen("generate")}>+ Generate More</button>
                 <button style={{...S.btn("#8b5cf6", false), fontSize:"0.75rem"}} onClick={() => setScreen("versions")}>Build Exam →</button>
               </div>
@@ -5560,12 +5634,6 @@ export default function TestBankApp() {
                     const ids = new Set(filteredBank.map(q => q.id));
                     setBankSelected(ids);
                   }}>Select all {filteredBank.length} shown</button>
-                  {filterYear !== "All" && (
-                    <button style={S.ghostBtn(text2)} onClick={() => {
-                      const ids = new Set(filteredBank.map(q => q.id));
-                      setBankSelected(ids);
-                    }}>Select all {filteredBank.length} from filter</button>
-                  )}
                 </>
               )}
             </div>
@@ -5617,6 +5685,13 @@ export default function TestBankApp() {
                 </select>
               )}
               <span style={{fontSize:"0.78rem", color:text2, alignSelf:"center"}}>{filteredBank.length} matching</span>
+              {bankIssueCount > 0 && (
+                <button
+                  style={{...S.ghostBtn(filterIssuesOnly ? "#f87171" : text3), alignSelf:"center", border: filterIssuesOnly ? "1px solid #f8717144" : "1px solid "+border}}
+                  onClick={() => setFilterIssuesOnly(p => !p)}>
+                  {filterIssuesOnly ? "⚠ Issues only ✕" : `⚠ Show ${bankIssueCount} with issues`}
+                </button>
+              )}
             </div>
 
             {!bankLoaded && <div style={{color:text2}}>Loading from database…</div>}
@@ -5639,7 +5714,38 @@ export default function TestBankApp() {
               </div>
             )}
 
-            {filteredBank.map(q => {
+            {bankCompact ? (
+              <div style={{border:"1px solid "+border, borderRadius:"10px", overflow:"hidden"}}>
+                {filteredBank.map((q, qi) => {
+                  const inExam = selectedForExam.includes(q.id);
+                  const used = usedInExams[q.id] || 0;
+                  const issues = validateQuestion(q);
+                  return (
+                    <div key={q.id} style={{
+                      display:"flex", alignItems:"center", gap:"0.6rem",
+                      padding:"0.45rem 0.75rem",
+                      borderBottom: qi < filteredBank.length-1 ? "1px solid "+border+"55" : "none",
+                      background: inExam ? accent+"08" : qi%2===0 ? "transparent" : "#ffffff04",
+                    }}>
+                      <span style={{...S.diffTag(q.difficulty||""), flexShrink:0, fontSize:"0.58rem", padding:"0.05rem 0.3rem"}}>{(q.difficulty||"?")[0]}</span>
+                      <span style={{fontSize:"0.68rem", color:text3, flexShrink:0, minWidth:"80px", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>{(q.section||"").split(" ").slice(0,3).join(" ")}</span>
+                      <span style={{flex:1, fontSize:"0.8rem", color:text1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
+                        {q.type==="Branched" ? q.stem : q.question}
+                      </span>
+                      {used > 0 && <span style={{fontSize:"0.62rem", color:"#06b6d4", flexShrink:0}}>📋×{used}</span>}
+                      {issues.length > 0 && <span style={{fontSize:"0.62rem", color:"#f87171", flexShrink:0}}>⚠</span>}
+                      <button style={{...S.smBtn, flexShrink:0, color:inExam?accent:text3, border:"1px solid "+(inExam?accent+"44":border)}}
+                        onClick={() => setSelectedForExam(p => p.includes(q.id) ? p.filter(id=>id!==q.id) : [...p,q.id])}>
+                        {inExam?"✓":"+"}</button>
+                      <button style={{...S.smBtn, flexShrink:0, color:"#a78bfa", border:"1px solid #a78bfa33"}}
+                        onClick={() => { setInlineEditQId(inlineEditQId===q.id?null:q.id); setGraphEditorQId(null); }}>✏</button>
+                      <button style={{...S.smBtn, flexShrink:0, color:"#f87171", border:"1px solid #f8717133"}}
+                        onClick={() => setConfirmDelete({id:q.id, label:(q.question||q.stem||"").slice(0,60)})}>✕</button>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : filteredBank.map(q => {
               const inExam = selectedForExam.includes(q.id);
               return (
               <div key={q.id} style={{...S.qCard, borderColor: inExam ? accent+"66" : undefined}}>
@@ -5648,6 +5754,12 @@ export default function TestBankApp() {
                   <span style={S.tag()}>{q.type}</span>
                   <span style={S.tag()}>{q.section}</span>
                   <span style={S.tag()}>{q.difficulty}</span>
+                  {usedInExams[q.id] > 0 && (
+                    <span title={`Used in ${usedInExams[q.id]} saved exam${usedInExams[q.id]>1?"s":""}`}
+                      style={{...S.tag(), background:"#06b6d415", color:"#06b6d4", border:"1px solid #06b6d433"}}>
+                      📋 ×{usedInExams[q.id]}
+                    </span>
+                  )}
                   {bankSelectMode && (
                     <input type="checkbox" checked={bankSelected.has(q.id)}
                       onChange={e => { const s = new Set(bankSelected); e.target.checked ? s.add(q.id) : s.delete(q.id); setBankSelected(s); }}
@@ -5807,6 +5919,7 @@ export default function TestBankApp() {
               </div>
               );
             })}
+            {/* end bankCompact ternary */}
 
             {selectedForExam.length > 0 && (
               <div style={{...S.card, borderColor:accent+"44", marginTop:"1.5rem"}}>
@@ -5997,7 +6110,7 @@ export default function TestBankApp() {
                   <button key={sec}
                     style={S.vTab(activeClassSection===Number(sec), Number(sec)===1?"#10b981":"#8b5cf6")}
                     onClick={() => { setActiveClassSection(Number(sec)); setVersions(classSectionVersions[sec]); setActiveVersion(0); }}>
-                    Section {sec} {Number(sec)===1?"(numbers)":"(function)"}
+                    Section {sec}
                   </button>
                 ))}
               </div>
@@ -6207,6 +6320,8 @@ export default function TestBankApp() {
                           </div>
                         ) : null;
                       })()}
+                      <div id="export-panel" ref={el => { if (el && exportHighlight) el.scrollIntoView({behavior:"smooth", block:"start"}); }}
+                        style={{transition:"outline 0.3s", outline: exportHighlight ? "2px solid #185FA555" : "none", borderRadius:"8px", padding: exportHighlight ? "0.5rem" : "0"}}>
                       <div style={{display:"flex", gap:"0.75rem", marginBottom:"1.25rem", flexWrap:"wrap"}}>
                         <button style={S.btn("#10b981",false)} onClick={async () => {
                           const cs = v.questions[0]?.classSection || null;
@@ -6228,6 +6343,14 @@ export default function TestBankApp() {
                             }
                           }}>⬇ All Sections Word</button>
                         )}
+                        <button style={S.oBtn("#f43f5e")} onClick={async () => {
+                          const allVers = Object.keys(classSectionVersions).length > 1
+                            ? Object.values(classSectionVersions).flat()
+                            : versions;
+                          const course = allVers[0]?.questions[0]?.course || "Exam";
+                          const blob = await buildAnswerKey(allVers, course);
+                          if (blob) dlBlob(blob, `${course.replace(/\s+/g,"_")}_Answer_Key.docx`);
+                        }}>🔑 Answer Key (.docx)</button>
                       </div>
 
                       {/* Canvas QTI Export Panel */}
@@ -6317,6 +6440,7 @@ export default function TestBankApp() {
                           </div>
                         </div>
                       )}
+                      </div>{/* end export-panel wrapper */}
 
                       {v.questions.map((q,qi) => (
                         <div key={q.id||qi} style={S.qCard}>
@@ -6545,6 +6669,7 @@ export default function TestBankApp() {
               setExamSaved(true);
               setSaveExamName(exam.name);
               setCourse(vers[0]?.questions?.[0]?.course || null);
+              setSelectedForExam([]);
               setScreen("versions");
             }}
           />
