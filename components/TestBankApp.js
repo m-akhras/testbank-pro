@@ -4539,8 +4539,19 @@ export default function TestBankApp() {
       const parsed = JSON.parse(match[0]);
       if (!Array.isArray(parsed)) throw new Error("Expected a JSON array.");
 
+      // Sanitize API response — guard against null/missing fields from AI
+      const sanitize = (q) => ({
+        ...q,
+        type:       q.type       || "Multiple Choice",
+        difficulty: q.difficulty || "Medium",
+        question:   q.question   || "",
+        answer:     q.answer     || "",
+        choices:    (q.choices   || []).map(c => c ?? ""),
+      });
+      const sanitized = parsed.map(sanitize);
+
       if (pendingType === "generate") {
-        const tagged = parsed.map(q => ({ ...q, id: uid(), course: pendingMeta.course, createdAt: Date.now() }));
+        const tagged = sanitized.map(q => ({ ...q, id: uid(), course: pendingMeta.course, createdAt: Date.now() }));
         // Check for duplicates within same section
         const warnings = [];
         tagged.forEach((newQ, i) => {
@@ -4557,7 +4568,7 @@ export default function TestBankApp() {
         setScreen("review");
       } else if (pendingType === "version") {
         const { selected, label, allVersions, remaining, mutationType: mt } = pendingMeta;
-        const versioned = parsed.map((q,i) => ({
+        const versioned = sanitized.map((q,i) => ({
           ...q,
           id: uid(),
           originalId: selected[i]?.id,
@@ -4716,7 +4727,7 @@ export default function TestBankApp() {
       (q.stem||"").toLowerCase().includes(searchLower) ||
       (q.answer||"").toLowerCase().includes(searchLower) ||
       (q.section||"").toLowerCase().includes(searchLower) ||
-      (q.choices||[]).some(c => c.toLowerCase().includes(searchLower))
+      (q.choices||[]).some(c => c != null && String(c).toLowerCase().includes(searchLower))
     );
     return matchesSearch &&
       (filterCourse === "All" || q.course === filterCourse) &&
@@ -5949,14 +5960,14 @@ export default function TestBankApp() {
                           <div style={{marginTop:"0.75rem", borderTop:"1px solid "+border, paddingTop:"0.75rem"}}>
                             {batch.questions.map((q, qi) => (
                               <div key={q.id} style={{padding:"0.4rem 0", borderBottom: qi < batch.questions.length-1 ? "1px solid "+border+"44" : "none", display:"flex", gap:"0.5rem", alignItems:"flex-start"}}>
-                                <span style={{...S.diffTag(q.difficulty), flexShrink:0, marginTop:"0.1rem"}}>{q.difficulty[0]}</span>
+                                <span style={{...S.diffTag(q.difficulty), flexShrink:0, marginTop:"0.1rem"}}>{(q.difficulty||"?")[0]}</span>
                                 <div style={{flex:1, minWidth:0}}>
                                   <div style={{fontSize:"0.75rem", color:text2, marginBottom:"0.1rem"}}>{q.section}</div>
                                   <div style={{fontSize:"0.82rem", color:text1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
                                     {q.type==="Branched" ? q.stem : q.question}
                                   </div>
                                 </div>
-                                <span style={{...S.tag(), flexShrink:0}}>{q.type.split(" ")[0]}</span>
+                                <span style={{...S.tag(), flexShrink:0}}>{(q.type||"").split(" ")[0]}</span>
                               </div>
                             ))}
                           </div>
@@ -6037,7 +6048,7 @@ export default function TestBankApp() {
                     <div style={{display:"flex", flexDirection:"column", gap:"0.3rem", marginBottom:"1rem"}}>
                       {selected.map((q,i) => (
                         <div key={q.id} style={{display:"flex", alignItems:"center", gap:"0.5rem", padding:"0.35rem 0", borderBottom: i < selected.length-1 ? "1px solid "+border+"44" : "none"}}>
-                          <span style={S.diffTag(q.difficulty)}>{q.difficulty[0]}</span>
+                          <span style={S.diffTag(q.difficulty||"")}>{(q.difficulty||"?")[0]}</span>
                           <span style={{...S.tag(courseColors[q.course]), flexShrink:0}}>{(q.section||"").split(" ").slice(0,2).join(" ")}</span>
                           <span style={{fontSize:"0.8rem", color:text2, flex:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
                             {q.type==="Branched" ? q.stem : q.question}
