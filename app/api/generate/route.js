@@ -61,7 +61,7 @@ export async function POST(req) {
       },
       body: JSON.stringify({
         model: "claude-opus-4-5",
-        max_tokens: 4096,
+        max_tokens: 16000,
         messages: [{ role: "user", content: messageContent }],
       }),
     });
@@ -72,6 +72,12 @@ export async function POST(req) {
     }
 
     const data = await res.json();
+
+    // Warn if response was cut off due to token limit
+    if (data.stop_reason === "max_tokens") {
+      return Response.json({ ...data, warning: "Response was truncated — try fewer questions per generation." });
+    }
+
     return Response.json(data);
   } catch (e) {
     return Response.json({ error: e.message }, { status: 500 });

@@ -4628,9 +4628,9 @@ export default function TestBankApp() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Generation failed");
-      // data.result may be undefined if API route returns content differently
       const result = data.result || data.content?.[0]?.text || data.text || "";
       if (!result) throw new Error("Empty response from API. Try again.");
+      if (data.warning) showToast(data.warning, "error");
       onSuccess(result);
     } catch(e) {
       setGenerateError(e.message);
@@ -4946,6 +4946,8 @@ export default function TestBankApp() {
       if (!res.ok) throw new Error(`API error: ${res.status}`);
       const data = await res.json();
       const text = data.content?.[0]?.text || data.text || "";
+      if (!text) throw new Error("Empty response from API. Try again or use Copy Prompt.");
+      if (data.warning) showToast(data.warning, "error");
       setPasteInput(text);
       setPendingType(pendingTypeVal);
       setPendingMeta(pendingMetaVal);
