@@ -798,6 +798,8 @@ function InlineEditor({ q, onSave, onClose }) {
             {inp(p.question, (v) => { const np=[...parts]; np[pi]={...np[pi],question:v}; setParts(np); }, "Question text...", 2)}
             <div style={{fontSize:"0.65rem", color:"#4a6fa5", margin:"0.3rem 0 0.2rem"}}>Answer</div>
             {inp(p.answer, (v) => { const np=[...parts]; np[pi]={...np[pi],answer:v}; setParts(np); }, "Answer...")}
+            <div style={{fontSize:"0.65rem", color:"#4a6fa5", margin:"0.3rem 0 0.2rem"}}>Solution steps (math lines only, one per line)</div>
+            {inp(p.explanation||"", (v) => { const np=[...parts]; np[pi]={...np[pi],explanation:v}; setParts(np); }, "= (10)/(s^3) - (6)/(s^2) + (4)/(s)", 3)}
           </div>
         ))}
       </>) : (<>
@@ -833,8 +835,18 @@ function InlineEditor({ q, onSave, onClose }) {
         </>)}
       </>)}
 
-      {lbl("Explanation (optional)")}
-      {inp(explanation, setExplanation, "Step-by-step explanation...", 2)}
+      {lbl("Solution Steps (answer key)")}
+      {q.type === "Free Response" || q.type === "Short Answer" ? (
+        <div style={{marginBottom:"0.35rem"}}>
+          <div style={{fontSize:"0.63rem", color:"#3a5a8a", marginBottom:"0.3rem", lineHeight:1.5}}>
+            One math line per line — no prose. Prose lines (starting with "Use", "Thus", "Let", etc.) are auto-filtered out.
+            <span style={{color:"#10b981", marginLeft:"0.4rem"}}>Example: = (10)/(s^3) - (6)/(s^2) + (4)/(s)</span>
+          </div>
+          {inp(explanation, setExplanation, "= ...\n= ...", 5)}
+        </div>
+      ) : (
+        inp(explanation, setExplanation, "Step-by-step explanation...", 2)
+      )}
 
       <div style={{display:"flex", gap:"0.5rem", marginTop:"0.85rem"}}>
         <button onClick={handleSave} disabled={saving}
@@ -5778,6 +5790,26 @@ export default function TestBankApp() {
                 <button style={{...S.ghostBtn(bankCompact ? accent : text3), fontSize:"0.75rem"}} onClick={() => setBankCompact(p => !p)}>
                   {bankCompact ? "≡ Compact" : "☰ Compact"}
                 </button>
+                {isAdmin && (
+                  <button style={{...S.ghostBtn("#f59e0b"), fontSize:"0.75rem"}} onClick={async () => {
+                    const frQs = bank.filter(q => (q.type === "Free Response" || q.type === "Short Answer") && q.explanation);
+                    if (!frQs.length) { showToast("No Free Response explanations to clean."); return; }
+                    if (!window.confirm(`Clean prose from explanations of ${frQs.length} Free Response questions? This rewrites their explanation field in Supabase.`)) return;
+                    let cleaned = 0;
+                    for (const q of frQs) {
+                      const original = q.explanation;
+                      const lines = mathStepsOnly(original);
+                      const newExpl = lines.join("\n");
+                      if (newExpl !== original) {
+                        const updated = { ...q, explanation: newExpl };
+                        await saveQuestion(updated);
+                        setBank(prev => prev.map(bq => bq.id === q.id ? updated : bq));
+                        cleaned++;
+                      }
+                    }
+                    showToast(`Cleaned ${cleaned} explanation${cleaned !== 1 ? "s" : ""} ✓`);
+                  }}>🧹 Clean Explanations</button>
+                )}
                 <button style={{...S.oBtn(text2), fontSize:"0.75rem"}} onClick={() => setScreen("generate")}>+ Generate More</button>
                 <button style={{...S.btn("#8b5cf6", false), fontSize:"0.75rem"}} onClick={() => setScreen("versions")}>Build Exam →</button>
               </div>
