@@ -1121,8 +1121,14 @@ function mathToHTMLInline(s) {
   let r = String(s ?? "");
 
   // ── Script operators: L{f(t)}, F{f(t)}, Z{f(t)} — Laplace, Fourier, Z-transform ──
-  r = r.replace(/\b([LFZ])\^\{-1\}\{([^{}]+)\}/g, (_, op, inner) => `<i>${op}</i><sup>-1</sup>{${inner}}`);
-  r = r.replace(/\b([LFZ])\{([^{}]+)\}/g, (_, op, inner) => `<i>${op}</i>{${inner}}`);
+  r = r.replace(/\b([LFZ])\^\{-1\}\{([^{}]+)\}/g, (_, op, inner) => {
+    const rendered = inner.replace(/([a-zA-Z0-9])\^(-?[0-9]+)/g, (__, b, e) => `${b}<sup>${e}</sup>`);
+    return `<i>${op}</i><sup>-1</sup>{${rendered}}`;
+  });
+  r = r.replace(/\b([LFZ])\{([^{}]+)\}/g, (_, op, inner) => {
+    const rendered = inner.replace(/([a-zA-Z0-9])\^(-?[0-9]+)/g, (__, b, e) => `${b}<sup>${e}</sup>`);
+    return `<i>${op}</i>{${rendered}}`;
+  });
 
   // ── Logical operators (text → symbol, for Discrete Math) ──
   // Must do before other replacements to avoid partial matches
@@ -2270,11 +2276,11 @@ function mathToOmml(raw) {
 
   // Script operators: L{expr}, F{expr}, Z{expr} — Laplace, Fourier, Z-transform
   // Must be handled BEFORE fn(x) and {expr} passes
-  w = w.replace(/\b([LFZ])\{([^{}]+)\}/g,
-    (_, op, inner) => addToken({t:'text', val: `${op}{${inner}}`}));
-  // Also handle L^{-1}{expr} — inverse Laplace
+  // Also handle L^{-1}{expr} — inverse Laplace (must come first)
   w = w.replace(/\b([LFZ])\^\{(-1)\}\{([^{}]+)\}/g,
-    (_, op, exp, inner) => addToken({t:'text', val: `${op}⁻¹{${inner}}`}));
+    (_, op, exp, inner) => addToken({t:'script', op, sup:"-1", inner}));
+  w = w.replace(/\b([LFZ])\{([^{}]+)\}/g,
+    (_, op, inner) => addToken({t:'script', op, sup:null, inner}));
 
   // Stash fn(x) calls like f(x), g'(y), sin(x) — BEFORE exponent processing
   // so (f'(x))^2 becomes (TOKEN)^2 which exponent handler can match
@@ -2412,6 +2418,17 @@ function mathToOmml(raw) {
     const tok = tokens[idx];
     if (!tok) return oT('?');
     if (tok.t === 'text') return oT(tok.val);
+    if (tok.t === 'script') {
+      // L{inner} or L^{-1}{inner} — render inner through full pipeline
+      const innerOmml = mathToOmml(tok.inner);
+      // Extract the inner m:oMath content
+      const innerContent = innerOmml.replace(/^<m:oMath>|<\/m:oMath>$/g, '');
+      const opRun = oT(tok.op);
+      const supRun = tok.sup ? oSup(oT(tok.op), oT(tok.sup)) : opRun;
+      const lbrace = oT('{');
+      const rbrace = oT('}');
+      return (tok.sup ? oSup(oT(tok.op), oT(tok.sup)) : oT(tok.op)) + lbrace + innerContent + rbrace;
+    }
     if (tok.t === 'sqrt') return oSqrt(renderSegment(tok.inner));
     if (tok.t === 'sup') return oSup(renderSegment(tok.base), renderSegment(tok.exp));
     if (tok.t === 'frac') return oFrac(renderSegment(tok.n), renderSegment(tok.d));
@@ -2524,9 +2541,8 @@ async function buildAnswerKey(versions, course) {
           body += mathPara(`(${String.fromCharCode(97+pi)})  Answer:  ${p.answer}`, {size:21, color:"1a7a4a", indent:560, spacing:30});
           if (p.explanation) {
             const steps = p.explanation.split(/\n/).map(s=>s.trim()).filter(Boolean);
-            steps.forEach((step, si) => {
-              const label = /^step\s*\d+/i.test(step) ? "" : `Step ${si+1}: `;
-              body += mathPara(`${label}${step}`, {size:19, color:"444444", indent:840, spacing:25});
+            steps.forEach((step) => {
+              body += mathPara(step, {size:19, color:"444444", indent:840, spacing:25});
             });
           }
         });
@@ -2534,9 +2550,8 @@ async function buildAnswerKey(versions, course) {
         if (q.answer) body += mathPara(`Answer:  ${q.answer}`, {size:21, color:"1a7a4a", indent:560, spacing:30});
         if (q.explanation) {
           const steps = q.explanation.split(/\n/).map(s=>s.trim()).filter(Boolean);
-          steps.forEach((step, si) => {
-            const label = /^step\s*\d+/i.test(step) ? "" : `Step ${si+1}: `;
-            body += mathPara(`${label}${step}`, {size:19, color:"444444", indent:840, spacing:25});
+          steps.forEach((step) => {
+            body += mathPara(step, {size:19, color:"444444", indent:840, spacing:25});
           });
         }
       } else if (isMC && q.choices && q.answer) {
@@ -2815,18 +2830,16 @@ ${body}
         if (!p.answer) return;
         answerKeyBody += mathPara(`(${String.fromCharCode(97+pi)})  Answer:  ${p.answer}`, {indent:560, size:21, color:"1a7a4a", spacing:30});
         if (p.explanation) {
-          p.explanation.split(/\n/).map(s=>s.trim()).filter(Boolean).forEach((step, si) => {
-            const label = /^step\s*\d+/i.test(step) ? "" : `Step ${si+1}: `;
-            answerKeyBody += mathPara(`${label}${step}`, {indent:840, size:18, color:"555555", spacing:25});
+          p.explanation.split(/\n/).map(s=>s.trim()).filter(Boolean).forEach((step) => {
+            answerKeyBody += mathPara(step, {indent:840, size:18, color:"555555", spacing:25});
           });
         }
       });
     } else if (isFR) {
       if (q.answer) answerKeyBody += mathPara(`Answer:  ${q.answer}`, {indent:560, size:21, color:"1a7a4a", spacing:30});
       if (q.explanation) {
-        q.explanation.split(/\n/).map(s=>s.trim()).filter(Boolean).forEach((step, si) => {
-          const label = /^step\s*\d+/i.test(step) ? "" : `Step ${si+1}: `;
-          answerKeyBody += mathPara(`${label}${step}`, {indent:840, size:18, color:"444444", spacing:25});
+        q.explanation.split(/\n/).map(s=>s.trim()).filter(Boolean).forEach((step) => {
+          answerKeyBody += mathPara(step, {indent:840, size:18, color:"444444", spacing:25});
         });
       }
     } else if (isMC && q.choices && q.answer) {
