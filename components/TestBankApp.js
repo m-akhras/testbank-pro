@@ -2458,11 +2458,34 @@ async function buildAnswerKey(versions, course) {
   const JSZip = window.JSZip;
   if (!JSZip) { alert("JSZip not loaded"); return null; }
 
-  const titleStyle = `<w:pPr><w:spacing w:after="120"/></w:pPr>`;
-  const bold = (t) => `<w:r><w:rPr><w:b/><w:sz w:val="24"/></w:rPr><w:t xml:space="preserve">${t}</w:t></w:r>`;
-  const normal = (t) => `<w:r><w:rPr><w:sz w:val="20"/></w:rPr><w:t xml:space="preserve">${String(t??"")}  </w:t></w:r>`;
-  const para = (...runs) => `<w:p>${titleStyle}${runs.join("")}</w:p>`;
+  const ns = `xmlns:wpc="http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"`;
 
+  // Plain text paragraph
+  function plainPara(text, opts={}) {
+    const {bold=false, size=22, color="000000", indent=0, spacing=120} = opts;
+    const rpr = `<w:rPr>${bold?'<w:b/>':''}<w:sz w:val="${size}"/><w:color w:val="${color}"/></w:rPr>`;
+    const ppr = `<w:pPr><w:spacing w:after="${spacing}"/>${indent?`<w:ind w:left="${indent}"/>`:''}</w:pPr>`;
+    const safe = String(text??'').replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+    return `<w:p>${ppr}<w:r>${rpr}<w:t xml:space="preserve">${safe}</w:t></w:r></w:p>`;
+  }
+
+  // Math paragraph using OMML
+  function mathPara(text, opts={}) {
+    const {size=22, color="000000", indent=0, spacing=120} = opts;
+    const ppr = `<w:pPr><w:spacing w:after="${spacing}"/>${indent?`<w:ind w:left="${indent}"/>`:''}</w:pPr>`;
+    try {
+      const omml = mathToOmml(String(text??''));
+      const rpr = `<m:rPr><m:sz m:val="${size}"/></m:rPr>`;
+      const colorRun = color !== "000000"
+        ? `<w:r><w:rPr><w:color w:val="${color}"/><w:sz w:val="${size}"/></w:rPr><w:t> </w:t></w:r>`
+        : '';
+      return `<w:p>${ppr}${colorRun}<m:oMathPara><m:oMathParaPr><m:jc m:val="left"/></m:oMathParaPr>${omml}</m:oMathPara></w:p>`;
+    } catch(e) {
+      return plainPara(text, opts);
+    }
+  }
+
+  const mcTypes = ["Multiple Choice","True/False","Fill in the Blank"];
   let body = "";
 
   for (const v of versions) {
@@ -2470,58 +2493,69 @@ async function buildAnswerKey(versions, course) {
     const heading = cs
       ? `${course} — Section ${cs} Version ${v.label} — Answer Key`
       : `${course} — Version ${v.label} — Answer Key`;
-    body += para(bold(heading));
-    body += para(bold("Q#"), bold("    Answer"), bold("                        Type"), bold("            Difficulty"));
-    body += `<w:p><w:pPr><w:spacing w:after="60"/></w:pPr><w:r><w:rPr><w:sz w:val="18"/></w:rPr><w:t>${"─".repeat(70)}</w:t></w:r></w:p>`;
+
+    body += plainPara(heading, {bold:true, size:28, spacing:200});
 
     v.questions.forEach((q, qi) => {
-      const num = String(qi + 1).padEnd(4);
-      const type = (q.type||"").padEnd(20);
-      const diff = q.difficulty || "—";
+      const num = qi + 1;
       const isFR = q.type === "Free Response" || q.type === "Short Answer";
       const isBranched = q.type === "Branched";
-      const mcTypes = ["Multiple Choice","True/False","Fill in the Blank"];
+      const isMC = q.type === "Multiple Choice" || q.type === "True/False";
 
+      // ── Question header: Q1. [Section] — Type — Difficulty ──
+      const sectionLabel = q.section ? `[${q.section}]` : "";
+      const meta = `${sectionLabel}  ${q.type||""}  —  ${q.difficulty||""}`;
+      body += plainPara(`Q${num}.  ${meta}`, {bold:true, size:22, color:"1a3a6a", spacing:40});
+
+      // ── Question text ──
       if (isBranched) {
-        body += para(bold(`Q${num}`), normal(`[${type.trim()}]`), normal(`  ${diff}`));
-        (q.parts||[]).forEach((p,pi) => {
-          if (p.answer) body += para(normal(`    (${String.fromCharCode(97+pi)}) ${p.answer}`));
+        body += mathPara(q.stem || "", {size:20, color:"333333", indent:280, spacing:40});
+        (q.parts||[]).forEach((p, pi) => {
+          body += mathPara(`(${String.fromCharCode(97+pi)})  ${p.question||""}`, {size:20, color:"333333", indent:560, spacing:30});
+        });
+      } else {
+        body += mathPara(q.question || "", {size:20, color:"333333", indent:280, spacing:40});
+      }
+
+      // ── Answer ──
+      if (isBranched) {
+        (q.parts||[]).forEach((p, pi) => {
+          if (!p.answer) return;
+          body += mathPara(`(${String.fromCharCode(97+pi)})  Answer:  ${p.answer}`, {size:21, color:"1a7a4a", indent:560, spacing:30});
           if (p.explanation) {
-            const steps = p.explanation.split(/\n|(?<=\.)\s+(?=[A-Z0-9])/);
-            steps.filter(Boolean).forEach((step, si) => {
-              body += para(normal(`       Step ${si+1}: ${step.trim()}`));
+            const steps = p.explanation.split(/\n/).map(s=>s.trim()).filter(Boolean);
+            steps.forEach((step, si) => {
+              const label = /^step\s*\d+/i.test(step) ? "" : `Step ${si+1}: `;
+              body += mathPara(`${label}${step}`, {size:19, color:"444444", indent:840, spacing:25});
             });
           }
         });
       } else if (isFR) {
-        body += para(bold(`Q${num}`), normal(`[${type.trim()}]`), normal(`  ${diff}`));
-        if (q.answer) body += para(normal(`    Answer: ${q.answer}`));
+        if (q.answer) body += mathPara(`Answer:  ${q.answer}`, {size:21, color:"1a7a4a", indent:560, spacing:30});
         if (q.explanation) {
-          const steps = q.explanation.split(/\n|(?<=\.)\s+(?=[A-Z0-9Step])/);
-          steps.map(s => s.trim()).filter(Boolean).forEach((step, si) => {
+          const steps = q.explanation.split(/\n/).map(s=>s.trim()).filter(Boolean);
+          steps.forEach((step, si) => {
             const label = /^step\s*\d+/i.test(step) ? "" : `Step ${si+1}: `;
-            body += para(normal(`       ${label}${step}`));
+            body += mathPara(`${label}${step}`, {size:19, color:"444444", indent:840, spacing:25});
           });
         }
-      } else {
-        // MC, T/F etc — show letter + answer on one line
-        let displayAns = q.answer || "—";
-        if ((q.type === "Multiple Choice" || q.type === "True/False") && q.choices && q.answer) {
-          const idx = q.choices.indexOf(q.answer);
-          if (idx >= 0) displayAns = `${String.fromCharCode(65+idx)}. ${q.answer}`;
-        }
-        body += para(normal(`Q${num}`), normal(displayAns.padEnd(40)), normal(type), normal(diff));
+      } else if (isMC && q.choices && q.answer) {
+        const idx = q.choices.indexOf(q.answer);
+        const letter = idx >= 0 ? String.fromCharCode(65+idx) : "";
+        body += mathPara(`Answer:  ${letter ? letter+".  " : ""}${q.answer}`, {size:21, color:"1a4a8a", indent:560, spacing:30});
+      } else if (q.answer) {
+        body += mathPara(`Answer:  ${q.answer}`, {size:21, color:"1a7a4a", indent:560, spacing:30});
       }
+
+      // Divider between questions
+      body += `<w:p><w:pPr><w:spacing w:after="60"/><w:pBdr><w:bottom w:val="single" w:sz="4" w:space="1" w:color="dddddd"/></w:pBdr></w:pPr></w:p>`;
     });
 
-    body += `<w:p><w:pPr><w:spacing w:after="200"/></w:pPr></w:p>`;
+    body += `<w:p><w:pPr><w:spacing w:after="400"/></w:pPr></w:p>`;
   }
 
   const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:document xmlns:wpc="http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas"
-  xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
-  xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
-  xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math">
+<w:document ${ns}>
 <w:body>${body}<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1080" w:right="1080" w:bottom="1080" w:left="1080"/></w:sectPr></w:body></w:document>`;
 
   const zip = new JSZip();
@@ -2753,34 +2787,57 @@ ${body}
   answerKeyBody += para(titleLabel, {size:20, color:"555555", spacing:200});
   const mcTypes = ["Multiple Choice","True/False","Fill in the Blank"];
   const isFreeResponse = (q) => q.type === "Free Response" || q.type === "Short Answer";
+  const divider = `<w:p><w:pPr><w:spacing w:after="60"/><w:pBdr><w:bottom w:val="single" w:sz="4" w:space="1" w:color="dddddd"/></w:pBdr></w:pPr></w:p>`;
+
   questions.forEach((q, i) => {
-    if (q.type === "Branched") {
-      answerKeyBody += para(`${i+1}.`, {bold:true, size:22, spacing:40});
-      (q.parts||[]).forEach((p,pi) => {
-        if (p.answer) answerKeyBody += mathPara(`  (${String.fromCharCode(97+pi)}) ${p.answer}`, {indent:360, size:20, color:"1a7a4a", spacing:40});
+    const num = i + 1;
+    const isMC = q.type === "Multiple Choice" || q.type === "True/False";
+    const isBranched = q.type === "Branched";
+    const isFR = isFreeResponse(q);
+
+    // Q header: number + section + type + difficulty
+    const meta = `${q.section ? "["+q.section+"]  " : ""}${q.type||""}  —  ${q.difficulty||""}`;
+    answerKeyBody += para(`Q${num}.  ${meta}`, {bold:true, size:22, color:"1a3a6a", spacing:40});
+
+    // Question text
+    if (isBranched) {
+      answerKeyBody += mathPara(q.stem||"", {indent:280, size:20, color:"333333", spacing:35});
+      (q.parts||[]).forEach((p, pi) => {
+        answerKeyBody += mathPara(`(${String.fromCharCode(97+pi)})  ${p.question||""}`, {indent:560, size:20, color:"333333", spacing:30});
+      });
+    } else {
+      answerKeyBody += mathPara(q.question||"", {indent:280, size:20, color:"333333", spacing:35});
+    }
+
+    // Answer(s)
+    if (isBranched) {
+      (q.parts||[]).forEach((p, pi) => {
+        if (!p.answer) return;
+        answerKeyBody += mathPara(`(${String.fromCharCode(97+pi)})  Answer:  ${p.answer}`, {indent:560, size:21, color:"1a7a4a", spacing:30});
         if (p.explanation) {
-          const steps = p.explanation.split(/\n|(?<=\.)\s+(?=[A-Z0-9])/);
-          steps.filter(Boolean).forEach((step, si) => {
-            answerKeyBody += mathPara(`     Step ${si+1}: ${step.trim()}`, {indent:720, size:18, color:"555555", spacing:30});
+          p.explanation.split(/\n/).map(s=>s.trim()).filter(Boolean).forEach((step, si) => {
+            const label = /^step\s*\d+/i.test(step) ? "" : `Step ${si+1}: `;
+            answerKeyBody += mathPara(`${label}${step}`, {indent:840, size:18, color:"555555", spacing:25});
           });
         }
       });
-    } else if (isFreeResponse(q)) {
-      // Free Response: show answer + full step-by-step explanation
-      answerKeyBody += para(`${i+1}.`, {bold:true, size:22, spacing:40});
-      if (q.answer) answerKeyBody += mathPara(`  Answer: ${q.answer}`, {indent:360, size:20, color:"1a7a4a", spacing:40});
+    } else if (isFR) {
+      if (q.answer) answerKeyBody += mathPara(`Answer:  ${q.answer}`, {indent:560, size:21, color:"1a7a4a", spacing:30});
       if (q.explanation) {
-        const steps = q.explanation.split(/\n|(?<=\.)\s+(?=[A-Z0-9Step])/);
-        const cleaned = steps.map(s => s.trim()).filter(Boolean);
-        cleaned.forEach((step, si) => {
-          // If explanation already has "Step N:" labels, keep them; otherwise add them
+        q.explanation.split(/\n/).map(s=>s.trim()).filter(Boolean).forEach((step, si) => {
           const label = /^step\s*\d+/i.test(step) ? "" : `Step ${si+1}: `;
-          answerKeyBody += mathPara(`     ${label}${step}`, {indent:720, size:18, color:"444444", spacing:35});
+          answerKeyBody += mathPara(`${label}${step}`, {indent:840, size:18, color:"444444", spacing:25});
         });
       }
+    } else if (isMC && q.choices && q.answer) {
+      const idx = q.choices.indexOf(q.answer);
+      const letter = idx >= 0 ? String.fromCharCode(65+idx) : "";
+      answerKeyBody += mathPara(`Answer:  ${letter ? letter+".  " : ""}${q.answer}`, {indent:560, size:21, color:"1a4a8a", spacing:35});
     } else if (q.answer) {
-      answerKeyBody += mathPara(`${i+1}.  ${q.answer}`, {size:22, color: mcTypes.includes(q.type) ? "1a4a8a" : "1a7a4a", spacing:60});
+      answerKeyBody += mathPara(`Answer:  ${q.answer}`, {indent:560, size:21, color:"1a7a4a", spacing:35});
     }
+
+    answerKeyBody += divider;
   });
 
   // page break before answer key
