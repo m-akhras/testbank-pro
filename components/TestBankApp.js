@@ -2343,8 +2343,20 @@ function mathToOmml(raw) {
   w = w.replace(/\(([^()]+)\)\/\(([^()]+)\)/g,
     (_,n,d) => addToken({t:'frac', n, d}));
 
+  // TOKEN/TOKEN — both numerator and denominator already tokenized (e.g. (10)/(s^3) after sup pass)
+  w = w.replace(/(\x01\d+\x01)\/(\x01\d+\x01)/g,
+    (_,n,d) => addToken({t:'frac', n, d}));
+
+  // (expr)/TOKEN — parenthesized numerator over tokenized denominator
+  w = w.replace(/\(([^()]+)\)\/(\x01\d+\x01)/g,
+    (_,n,d) => addToken({t:'frac', n, d}));
+
   // number/(expr) or letter/(expr) — e.g. 1/(s+3), A/(s+1)
   w = w.replace(/\b([a-zA-Z0-9]+)\/\(([^()]+)\)/g,
+    (_,n,d) => addToken({t:'frac', n, d}));
+
+  // number/TOKEN or letter/TOKEN — e.g. 4/s^3 after s^3 is tokenized
+  w = w.replace(/\b([a-zA-Z0-9]+)\/(\x01\d+\x01)/g,
     (_,n,d) => addToken({t:'frac', n, d}));
 
   // TOKEN/(expr) — tokenized numerator over parenthesized denominator
@@ -3542,7 +3554,13 @@ The expressions in graphConfig must EXACTLY match the functions mentioned in the
   const typeInstructions = {
     "Multiple Choice": "4 choices as plain strings. answer = exact text of correct choice.",
     "True/False": 'choices = ["True","False"]. answer = "True" or "False".',
-    "Free Response": "answer = complete worked answer.",
+    "Free Response": `answer = final answer only (math expression, no prose).
+explanation = solution steps as newline-separated math lines ONLY — no English prose, no words like "use", "thus", "we get", "therefore", "applying", "note", "let", "since".
+Each line must be a pure math equation or expression, e.g.:
+  L{5t^2 - 6t + 4} = 5*(2/s^3) - 6*(1/s^2) + 4*(1/s)
+  = (10)/(s^3) - (6)/(s^2) + (4)/(s)
+For fractions: ALWAYS write as (numerator)/(denominator) — e.g. (10)/(s^3), (1)/((s-3)^2).
+Never write: "Use linearity", "Thus", "Differentiating", "With a = 3" — equations only.`,
     "Fill in the Blank": "question has blank shown as ___. answer = the missing word or expression.",
     "Formula": "Include variables array [{name,min,max,precision}] with sensible ranges. Include answerFormula as math expression using variable names. Question text uses [varname] placeholders.",
     "Branched": "Include stem (shared given info), parts array [{question,answer,explanation}]. Decide number of parts (2-4) based on topic. All parts share the same stem.",
@@ -3665,7 +3683,7 @@ CRITICAL — LOGICAL NOTATION (always use these symbols, never spell out AND/OR/
     ? "You are a college professor writing a test bank for Discrete Mathematics based on Susanna Epp's Discrete Mathematics with Applications. Follow the exact question style and structure from the book — change values but not structure."
     : "You are a college math professor writing a test bank from Stewart Calculus Early Transcendentals 9th Edition.";
 
-  return `TESTBANK_GENERATE_REQUEST\nCourse: ${course}\nType: ${qType}\nTotal questions: ${totalQ}\n\nSections, counts, and difficulty/graph config:\n${breakdown}\n\nIMPORTANT: Follow the exact count and difficulty per section strictly.\n\nType instructions: ${typeInstructions[qType]}\n${tableInstructions}${graphInstructions || ''}\n${courseText}\nUse plain-text math: x^2, sqrt(x), summations. For fractions ALWAYS use (numerator)/(denominator) with parentheses around both — never use square brackets like [denominator].\nBe rigorous, numerically specific, university-level.\nEach question must have a 'section' field with the exact section name.\nEach question must have a 'difficulty' field.\n\nReply with ONLY a valid JSON array, no markdown fences, no explanation:\n[${shape}, ...]`;
+  return `TESTBANK_GENERATE_REQUEST\nCourse: ${course}\nType: ${qType}\nTotal questions: ${totalQ}\n\nSections, counts, and difficulty/graph config:\n${breakdown}\n\nIMPORTANT: Follow the exact count and difficulty per section strictly.\n\nType instructions: ${typeInstructions[qType]}\n${tableInstructions}${graphInstructions || ''}\n${courseText}\nMATH NOTATION RULES (critical — follow exactly):\n- Exponents: x^2, s^3, (s-3)^2, t^2\n- Fractions: ALWAYS (numerator)/(denominator) — e.g. (10)/(s^3), (1)/((s-3)^2), (8s)/((s^2+4)^2)\n- Never omit parentheses around numerator or denominator\n- Nested denominator: (1)/((s-a)^2) — double parens for compound denominators\n- Never use square brackets: NOT [denominator] — always (denominator)\n- L{f(t)} notation for Laplace, e.g. L{t^2}, L{e^(at)}, L^{-1}{F(s)}\nBe rigorous, numerically specific, university-level.\nEach question must have a 'section' field with the exact section name.\nEach question must have a 'difficulty' field.\n\nReply with ONLY a valid JSON array, no markdown fences, no explanation:\n[${shape}, ...]`;
 }
 
 function buildVersionPrompt(selectedQuestions, mutationType, versionLabel) {
