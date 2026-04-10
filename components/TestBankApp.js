@@ -1120,6 +1120,10 @@ function mathToHTML(s) {
 function mathToHTMLInline(s) {
   let r = String(s ?? "");
 
+  // ── Script operators: L{f(t)}, F{f(t)}, Z{f(t)} — Laplace, Fourier, Z-transform ──
+  r = r.replace(/\b([LFZ])\^\{-1\}\{([^{}]+)\}/g, (_, op, inner) => `<i>${op}</i><sup>-1</sup>{${inner}}`);
+  r = r.replace(/\b([LFZ])\{([^{}]+)\}/g, (_, op, inner) => `<i>${op}</i>{${inner}}`);
+
   // ── Logical operators (text → symbol, for Discrete Math) ──
   // Must do before other replacements to avoid partial matches
   r = r.replace(/\bNOT\s+([a-z])\b/g, '~$1');
@@ -2264,6 +2268,14 @@ function mathToOmml(raw) {
   // * → · (before tokenizing)
   w = w.replace(/\s*\*\s*/g, '·');
 
+  // Script operators: L{expr}, F{expr}, Z{expr} — Laplace, Fourier, Z-transform
+  // Must be handled BEFORE fn(x) and {expr} passes
+  w = w.replace(/\b([LFZ])\{([^{}]+)\}/g,
+    (_, op, inner) => addToken({t:'text', val: `${op}{${inner}}`}));
+  // Also handle L^{-1}{expr} — inverse Laplace
+  w = w.replace(/\b([LFZ])\^\{(-1)\}\{([^{}]+)\}/g,
+    (_, op, exp, inner) => addToken({t:'text', val: `${op}⁻¹{${inner}}`}));
+
   // Stash fn(x) calls like f(x), g'(y), sin(x) — BEFORE exponent processing
   // so (f'(x))^2 becomes (TOKEN)^2 which exponent handler can match
   let prevFn;
@@ -2464,18 +2476,42 @@ async function buildAnswerKey(versions, course) {
 
     v.questions.forEach((q, qi) => {
       const num = String(qi + 1).padEnd(4);
-      const ans = q.type === "Branched"
-        ? (q.parts||[]).map((p,pi) => `(${String.fromCharCode(97+pi)}) ${p.answer||"—"}`).join("  ")
-        : (q.answer || "—");
       const type = (q.type||"").padEnd(20);
       const diff = q.difficulty || "—";
-      // For MC, also show the letter
-      let displayAns = ans;
-      if (q.type === "Multiple Choice" && q.choices && q.answer) {
-        const idx = q.choices.indexOf(q.answer);
-        if (idx >= 0) displayAns = `${String.fromCharCode(65+idx)}. ${q.answer}`;
+      const isFR = q.type === "Free Response" || q.type === "Short Answer";
+      const isBranched = q.type === "Branched";
+      const mcTypes = ["Multiple Choice","True/False","Fill in the Blank"];
+
+      if (isBranched) {
+        body += para(bold(`Q${num}`), normal(`[${type.trim()}]`), normal(`  ${diff}`));
+        (q.parts||[]).forEach((p,pi) => {
+          if (p.answer) body += para(normal(`    (${String.fromCharCode(97+pi)}) ${p.answer}`));
+          if (p.explanation) {
+            const steps = p.explanation.split(/\n|(?<=\.)\s+(?=[A-Z0-9])/);
+            steps.filter(Boolean).forEach((step, si) => {
+              body += para(normal(`       Step ${si+1}: ${step.trim()}`));
+            });
+          }
+        });
+      } else if (isFR) {
+        body += para(bold(`Q${num}`), normal(`[${type.trim()}]`), normal(`  ${diff}`));
+        if (q.answer) body += para(normal(`    Answer: ${q.answer}`));
+        if (q.explanation) {
+          const steps = q.explanation.split(/\n|(?<=\.)\s+(?=[A-Z0-9Step])/);
+          steps.map(s => s.trim()).filter(Boolean).forEach((step, si) => {
+            const label = /^step\s*\d+/i.test(step) ? "" : `Step ${si+1}: `;
+            body += para(normal(`       ${label}${step}`));
+          });
+        }
+      } else {
+        // MC, T/F etc — show letter + answer on one line
+        let displayAns = q.answer || "—";
+        if ((q.type === "Multiple Choice" || q.type === "True/False") && q.choices && q.answer) {
+          const idx = q.choices.indexOf(q.answer);
+          if (idx >= 0) displayAns = `${String.fromCharCode(65+idx)}. ${q.answer}`;
+        }
+        body += para(normal(`Q${num}`), normal(displayAns.padEnd(40)), normal(type), normal(diff));
       }
-      body += para(normal(`Q${num}`), normal(displayAns.padEnd(40)), normal(type), normal(diff));
     });
 
     body += `<w:p><w:pPr><w:spacing w:after="200"/></w:pPr></w:p>`;
@@ -2716,12 +2752,32 @@ ${body}
   let answerKeyBody = para("Answer Key", {bold:true, size:28, spacing:120});
   answerKeyBody += para(titleLabel, {size:20, color:"555555", spacing:200});
   const mcTypes = ["Multiple Choice","True/False","Fill in the Blank"];
+  const isFreeResponse = (q) => q.type === "Free Response" || q.type === "Short Answer";
   questions.forEach((q, i) => {
     if (q.type === "Branched") {
       answerKeyBody += para(`${i+1}.`, {bold:true, size:22, spacing:40});
       (q.parts||[]).forEach((p,pi) => {
         if (p.answer) answerKeyBody += mathPara(`  (${String.fromCharCode(97+pi)}) ${p.answer}`, {indent:360, size:20, color:"1a7a4a", spacing:40});
+        if (p.explanation) {
+          const steps = p.explanation.split(/\n|(?<=\.)\s+(?=[A-Z0-9])/);
+          steps.filter(Boolean).forEach((step, si) => {
+            answerKeyBody += mathPara(`     Step ${si+1}: ${step.trim()}`, {indent:720, size:18, color:"555555", spacing:30});
+          });
+        }
       });
+    } else if (isFreeResponse(q)) {
+      // Free Response: show answer + full step-by-step explanation
+      answerKeyBody += para(`${i+1}.`, {bold:true, size:22, spacing:40});
+      if (q.answer) answerKeyBody += mathPara(`  Answer: ${q.answer}`, {indent:360, size:20, color:"1a7a4a", spacing:40});
+      if (q.explanation) {
+        const steps = q.explanation.split(/\n|(?<=\.)\s+(?=[A-Z0-9Step])/);
+        const cleaned = steps.map(s => s.trim()).filter(Boolean);
+        cleaned.forEach((step, si) => {
+          // If explanation already has "Step N:" labels, keep them; otherwise add them
+          const label = /^step\s*\d+/i.test(step) ? "" : `Step ${si+1}: `;
+          answerKeyBody += mathPara(`     ${label}${step}`, {indent:720, size:18, color:"444444", spacing:35});
+        });
+      }
     } else if (q.answer) {
       answerKeyBody += mathPara(`${i+1}.  ${q.answer}`, {size:22, color: mcTypes.includes(q.type) ? "1a4a8a" : "1a7a4a", spacing:60});
     }
@@ -3369,7 +3425,13 @@ function buildGeneratePrompt(course, selectedSections, sectionCounts, qType, dif
         const c = sectionConfig[s] || { Easy:{count:1,graphType:"normal"}, Medium:{count:1,graphType:"normal"}, Hard:{count:1,graphType:"normal"} };
         const lines = ["Easy","Medium","Hard"]
           .filter(d => (c[d].count||0) > 0)
-          .map(d => `  ${d}: ${c[d].count} question(s) [graphType: ${c[d].graphType}]`);
+          .map(d => {
+            const gt = c[d].graphType;
+            const tableNote = gt === "table" || gt === "mix"
+              ? ` [tableRows: ${c[d].tableRows||4}, tableCols: ${c[d].tableCols||2}]`
+              : "";
+            return `  ${d}: ${c[d].count} question(s) [graphType: ${gt}${tableNote}]`;
+          });
         return `${s}:\n${lines.join("\n")}`;
       }).join("\n")
     : selectedSections.map(s => {
@@ -3433,13 +3495,16 @@ Mix these formats naturally across questions. Choose based on what fits the cont
    * Contingency tables → Bayes Theorem
    * Payoff/decision tables → Decision Analysis
    * Regression output tables → Regression sections
-   Table format (pipe tables only):
-   | X | P(X) |
-   |---|------|
-   | 0 | 0.10 |
-   | 1 | 0.35 |
-   | 2 | 0.40 |
-   | 3 | 0.15 |
+   Table format (pipe tables only). Use the exact tableRows and tableCols specified in the section breakdown above.
+   tableRows = number of DATA rows (not counting the header or separator). tableCols = number of columns.
+   Example for tableRows:4, tableCols:3 — a probability table with 3 columns and 4 data rows:
+   | X | P(X) | Cumulative P |
+   |---|------|--------------|
+   | 0 | 0.10 | 0.10 |
+   | 1 | 0.25 | 0.35 |
+   | 2 | 0.40 | 0.75 |
+   | 3 | 0.25 | 1.00 |
+   NEVER default to a 2-column, 4-row table when a larger size is specified. Always match tableRows and tableCols exactly.
 
 3. CHART (when graphType is "graph" or "mix"): Include hasGraph:true and graphConfig.
    Choose chart type based on content:
@@ -4745,7 +4810,7 @@ export default function TestBankApp() {
     setPendingType("replace"); setPendingMeta({ vIdx, qIdx }); setPasteInput(""); setPasteError("");
   }
 
-  function defaultSecCfg() { return { Easy:{count:1,graphType:"normal"}, Medium:{count:1,graphType:"normal"}, Hard:{count:1,graphType:"normal"} }; }
+  function defaultSecCfg() { return { Easy:{count:1,graphType:"normal",tableRows:4,tableCols:2}, Medium:{count:1,graphType:"normal",tableRows:5,tableCols:3}, Hard:{count:1,graphType:"normal",tableRows:6,tableCols:3} }; }
 
   function getSectionConfig(sec) { return sectionConfig[sec] || defaultSecCfg(); }
   function setSectionDiff(sec, difficulty, field, value) {
@@ -5412,6 +5477,18 @@ export default function TestBankApp() {
                                             {gt==="normal"?"Text":gt==="graph"?"Graph":gt==="table"?"Table":"Mix"}
                                           </button>
                                         ))}
+                                        {(cfg[d].graphType === "table" || cfg[d].graphType === "mix") && (course === "Quantitative Methods I" || course === "Quantitative Methods II") && (
+                                          <span style={{display:"flex", alignItems:"center", gap:"0.25rem", marginLeft:"0.25rem"}}>
+                                            <span style={{fontSize:"0.6rem", color:text3}}>rows</span>
+                                            <input type="number" min={2} max={20} value={cfg[d].tableRows||4}
+                                              onChange={e => setSectionDiff(sec, d, "tableRows", Math.max(2, Math.min(20, Number(e.target.value)||4)))}
+                                              style={{width:"34px", ...S.input, padding:"0.1rem 0.25rem", fontSize:"0.68rem", textAlign:"center"}} />
+                                            <span style={{fontSize:"0.6rem", color:text3}}>cols</span>
+                                            <input type="number" min={2} max={8} value={cfg[d].tableCols||2}
+                                              onChange={e => setSectionDiff(sec, d, "tableCols", Math.max(2, Math.min(8, Number(e.target.value)||2)))}
+                                              style={{width:"34px", ...S.input, padding:"0.1rem 0.25rem", fontSize:"0.68rem", textAlign:"center"}} />
+                                          </span>
+                                        )}
                                       </div>
                                     ))}
                                   </div>
