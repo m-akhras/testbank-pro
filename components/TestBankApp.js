@@ -2438,6 +2438,20 @@ function mathToOmml(raw) {
     });
   } while (w !== prevP);
 
+  // Second pass: auto-scale outer parens wrapping delim/sup tokens (handles nested like ((s-1)(s^2+4)))
+  let prevP2;
+  do {
+    prevP2 = w;
+    w = w.replace(/\(([^()]*\x01\d+\x01[^()]*)\)/g, (_, inner) => {
+      const parts = inner.split(/\x01(\d+)\x01/);
+      const tokenIndices = [];
+      parts.forEach((p, i) => { if (i % 2 === 1) tokenIndices.push(parseInt(p)); });
+      const hasScalable = tokenIndices.some(i => tokens[i] && ['frac','delim','sup','sqrt'].includes(tokens[i].t));
+      if (!hasScalable) return `(${inner})`;
+      return addToken({t:'delim', beg:'(', end:')', inner});
+    });
+  } while (w !== prevP2);
+
   // (a)/[b] or TOKEN/[b] fraction — square bracket denominator
   w = w.replace(/(\([^()]+\)|\x01\d+\x01)\/\[([^\[\]]*(?:\x01\d+\x01[^\[\]]*)*)\]/g,
     (_,n,d) => addToken({t:'frac', n: n.replace(/^\(|\)$/g,''), d}));
@@ -2708,7 +2722,9 @@ async function buildDocx(questions, course, vLabel, classSection=null, startNum=
 
   function mathPara(text, opts={}) {
     const {indent=0} = opts;
-    const ppr = indent ? `<w:pPr><w:ind w:left="${indent}"/><w:spacing w:after="80"/></w:pPr>` : `<w:pPr><w:spacing w:after="80"/></w:pPr>`;
+    const ppr = indent
+      ? `<w:pPr><w:keepLines/><w:ind w:left="${indent}"/><w:spacing w:after="80"/></w:pPr>`
+      : `<w:pPr><w:keepLines/><w:spacing w:after="80"/></w:pPr>`;
 
     // Normalize inline tables, then check for pipe tables
     const normalized = isPipeTable(String(text)) ? normalizePipeTable(String(text)) : String(text);
@@ -4844,7 +4860,7 @@ export default function TestBankApp() {
         for (const q of tagged) await saveQuestion(q);
         setBank(prev => [...tagged, ...prev]);
         setPendingType(null); setPasteInput(""); setPendingMeta(null);
-        setScreen("review");
+        setScreen("bank");
       } else if (pendingType === "version") {
         const { selected, label, allVersions, remaining, mutationType: mt } = pendingMeta;
         const versioned = sanitized.map((q,i) => ({
