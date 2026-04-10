@@ -7,6 +7,19 @@ const supabase = createBrowserClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
+// ── Theme tokens — Warm Ivory & Forest Green (module-level so all components can use them) ──
+const bg0   = "#F2EDE4";
+const bg1   = "#FDFAF5";
+const bg2   = "#F7F2E9";
+const bg3   = "#EDE8DE";
+const border = "#D9D0C0";
+const text1  = "#1C1A16";
+const text2  = "#6B6355";
+const text3  = "#A89E8E";
+const green1 = "#2D6A4F";
+const green2 = "#1B4332";
+const green3 = "#52B788";
+
 // ─── KaTeX helpers ───────────────────────────────────────────────────────────
 // Helper: convert plain math expression to LaTeX WITHOUT \(...\) wrapper
 function innerLatex(expr) {
@@ -857,7 +870,7 @@ function InlineEditor({ q, onSave, onClose }) {
         </button>
         <button onClick={onClose}
           style={{padding:"0.35rem 0.8rem", background:"transparent", color:text2,
-            border:"1px solid "+border, borderRadius:"6px", fontSize:"0.78rem", cursor:"pointer"}}>
+            border:"1px solid #D9D0C0", borderRadius:"6px", fontSize:"0.78rem", cursor:"pointer"}}>
           Cancel
         </button>
       </div>
@@ -2666,7 +2679,7 @@ async function buildDocx(questions, course, vLabel, classSection=null, startNum=
         return `<w:tc>
           <w:tcPr>
             <w:tcW w:w="${colWidth}" w:type="dxa"/>
-            <w:tcBorders>${border}</w:tcBorders>
+            <w:tcBorders>${"#D9D0C0"}</w:tcBorders>
             ${shading}
             <w:tcMar><w:top w:w="60" w:type="dxa"/><w:left w:w="120" w:type="dxa"/><w:bottom w:w="60" w:type="dxa"/><w:right w:w="120" w:type="dxa"/></w:tcMar>
           </w:tcPr>
@@ -2684,7 +2697,7 @@ async function buildDocx(questions, course, vLabel, classSection=null, startNum=
     return `<w:tbl>
       <w:tblPr>
         <w:tblW w:w="${numCols * colWidth}" w:type="dxa"/>
-        <w:tblBorders>${border.repeat ? border : border}</w:tblBorders>
+        <w:tblBorders>${"#D9D0C0".repeat ? border : border}</w:tblBorders>
         <w:tblLook w:val="04A0"/>
       </w:tblPr>
       <w:tblGrid>${Array.from({length:numCols},()=>`<w:gridCol w:w="${colWidth}"/>`).join("")}</w:tblGrid>
@@ -3406,7 +3419,7 @@ async function buildDocxCompare(versions, course) {
               const cellText = (row[ci]||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
               const shading = isHeader ? `<w:shd w:val="clear" w:color="auto" w:fill="2D2D5A"/>` : ci===0 ? `<w:shd w:val="clear" w:color="auto" w:fill="1A1A3A"/>` : "";
               const textColor = isHeader ? "A0A0CC" : ci===0 ? "C0C0E0" : "D0D0CC";
-              return `<w:tc><w:tcPr><w:tcW w:w="${colWidth}" w:type="dxa"/><w:tcBorders>${border}</w:tcBorders>${shading}<w:tcMar><w:top w:w="60" w:type="dxa"/><w:left w:w="120" w:type="dxa"/><w:bottom w:w="60" w:type="dxa"/><w:right w:w="120" w:type="dxa"/></w:tcMar></w:tcPr><w:p><w:pPr><w:jc w:val="center"/><w:spacing w:after="0"/></w:pPr><w:r><w:rPr>${isHeader?'<w:b/>':''}<w:sz w:val="20"/><w:color w:val="${textColor}"/></w:rPr><w:t xml:space="preserve">${cellText}</w:t></w:r></w:p></w:tc>`;
+              return `<w:tc><w:tcPr><w:tcW w:w="${colWidth}" w:type="dxa"/><w:tcBorders>${"#D9D0C0"}</w:tcBorders>${shading}<w:tcMar><w:top w:w="60" w:type="dxa"/><w:left w:w="120" w:type="dxa"/><w:bottom w:w="60" w:type="dxa"/><w:right w:w="120" w:type="dxa"/></w:tcMar></w:tcPr><w:p><w:pPr><w:jc w:val="center"/><w:spacing w:after="0"/></w:pPr><w:r><w:rPr>${isHeader?'<w:b/>':''}<w:sz w:val="20"/><w:color w:val="${textColor}"/></w:rPr><w:t xml:space="preserve">${cellText}</w:t></w:r></w:p></w:tc>`;
             }).join("");
             return `<w:tr>${isHeader?'<w:trPr><w:tblHeader/></w:trPr>':''}${cells}</w:tr>`;
           }).join("");
@@ -3884,7 +3897,7 @@ function PastePanel({ label, S, text2, pasteInput, setPasteInput, pasteError, ha
         <button id="auto-submit-paste" style={S.btn("#10b981", !pasteInput.trim())} disabled={!pasteInput.trim()} onClick={handlePaste}>
           ✓ Submit Response
         </button>
-        <button style={S.oBtn(text2)} onClick={onCancel}>Cancel</button>
+        <button style={S.oBtn("#6B6355")} onClick={onCancel}>Cancel</button>
       </div>
     </div>
   );
@@ -4104,7 +4117,7 @@ Reply with ONLY the JSON, no markdown, no explanation.`;
             <div style={{ display:"flex", flexWrap:"wrap", gap:"0.5rem", marginBottom:"1rem" }}>
               {Object.entries(customCourses).map(([name, c]) => (
                 <div key={name} style={{ display:"flex", alignItems:"center", gap:"6px", background:bg1,
-                  border:`1px solid ${border}`, borderRadius:"8px", padding:"0.4rem 0.75rem",
+                  border:`1px solid ${"#D9D0C0"}`, borderRadius:"8px", padding:"0.4rem 0.75rem",
                   borderLeft:`3px solid ${c.color}` }}>
                   <span style={{ fontSize:"0.82rem", color:text1 }}>{name}</span>
                   <button onClick={() => startEdit(name)}
@@ -4281,7 +4294,7 @@ Reply with ONLY the JSON, no markdown, no explanation.`;
 }
 
 // ─── Saved Exams Screen ───────────────────────────────────────────────────────
-function SavedExamsScreen({ S, text2, text3, border, onLoad }) {
+function SavedExamsScreen({ S, text1, text2, text3, border, onLoad }) {
   const [exams, setExams] = useState([]);
   const [loading, setLoading] = useState(true);
   const [exportLog, setExportLog] = useState([]);
@@ -4538,7 +4551,7 @@ function SavedExamsScreen({ S, text2, text3, border, onLoad }) {
           <h2 style={{fontSize:"1.1rem", fontWeight:"normal", margin:"2rem 0 0.75rem", color:text1}}>Export History</h2>
           <div style={S.card}>
             {exportLog.map((log, i) => (
-              <div key={i} style={{display:"flex", justifyContent:"space-between", padding:"0.4rem 0", borderBottom: i < exportLog.length-1 ? `1px solid ${border}` : "none", fontSize:"0.78rem"}}>
+              <div key={i} style={{display:"flex", justifyContent:"space-between", padding:"0.4rem 0", borderBottom: i < exportLog.length-1 ? `1px solid ${"#D9D0C0"}` : "none", fontSize:"0.78rem"}}>
                 <span style={{color:text1}}>{log.exam_name} — V{log.version_label}</span>
                 <span style={{color:text3}}>{log.format} · {new Date(log.exported_at).toLocaleDateString()}</span>
               </div>
@@ -5024,20 +5037,9 @@ export default function TestBankApp() {
   )].sort((a,b) => new Date(`1970/01/01 ${b}`) - new Date(`1970/01/01 ${a}`));
   const courseColors = { "Calculus 1":"#10b981","Calculus 2":"#8b5cf6","Calculus 3":"#f59e0b","Quantitative Methods I":"#06b6d4","Quantitative Methods II":"#f43f5e","Precalculus":"#e879f9","Discrete Mathematics":"#a855f7" };
 
-  // ── Design tokens — Warm Ivory & Forest Green ────────────────────────────────
-  const bg0   = "#F2EDE4";   // page bg — warm parchment
-  const bg1   = "#FDFAF5";   // card bg — cream white
-  const bg2   = "#F7F2E9";   // elevated / input bg
-  const bg3   = "#EDE8DE";   // hover / subtle
-  const border = "#D9D0C0";
-  const text1  = "#1C1A16";  // near-black warm
-  const text2  = "#6B6355";  // warm mid
-  const text3  = "#A89E8E";  // warm muted
+  // ── Design tokens — defined at module level above ────────────────────────────
 
   // Forest green primary, amber secondary
-  const green1 = "#2D6A4F";  // primary action
-  const green2 = "#1B4332";  // dark variant
-  const green3 = "#52B788";  // light accent
   const amber1 = "#92400E";  // warning/amber
 
   const S = {
@@ -5433,13 +5435,159 @@ export default function TestBankApp() {
         {/* ── DASHBOARD ── */}
         {screen === "home" && (
           <div>
-            <div style={S.pageHeader}>
-              <h1 style={S.h1}>Dashboard</h1>
-              <p style={S.sub}>Welcome to TestBank Pro — your exam authoring workspace.</p>
+            {/* Header */}
+            <div style={{marginBottom:"2.5rem"}}>
+              <h1 style={{...S.h1, fontSize:"2rem", marginBottom:"0.3rem"}}>Dashboard</h1>
+              <p style={{...S.sub, fontSize:"0.85rem"}}>Welcome back — your exam authoring workspace.</p>
             </div>
 
-            {/* Workflow connector */}
-            <div style={{background:"#1B4332", border:"1px solid "+border, borderRadius:"12px", padding:"1.4rem", marginBottom:"1.5rem"}}>
+            {/* Workflow strip — horizontal pill row */}
+            <div style={{marginBottom:"2.5rem"}}>
+              <div style={{fontSize:"0.6rem", color:text3, textTransform:"uppercase", letterSpacing:"0.18em", fontWeight:"700", marginBottom:"1rem", fontFamily:"'Inter',system-ui,sans-serif"}}>Your Workflow</div>
+              <div style={{display:"flex", gap:"0.5rem", alignItems:"stretch"}}>
+                {[
+                  { step:"1", label:"Generate", sub:"Create with AI", sc:"generate", color:"#2D6A4F", icon:"✦" },
+                  { step:"2", label:"Review", sub:"Check & save",    sc:"review",   color:"#92400E", icon:"◎", badge: lastGenerated.length || 0 },
+                  { step:"3", label:"Build Exam", sub:"Select & version", sc:"versions", color:"#7C3AED", icon:"⊞" },
+                  { step:"4", label:"Export",   sub:"Word · QTI · Print", sc:"export", color:"#185FA5", icon:"⬇" },
+                ].map((s, i) => (
+                  <div key={i} style={{display:"flex", alignItems:"center", flex:1, gap:"0.5rem"}}>
+                    <div onClick={() => {
+                      if (s.sc === "export") { setScreen("versions"); setExportHighlight(true); setTimeout(() => setExportHighlight(false), 2500); }
+                      else setScreen(s.sc);
+                    }} style={{
+                      flex:1, padding:"1rem 1.1rem", borderRadius:"12px", cursor:"pointer",
+                      background: (s.sc === "export" ? exportHighlight : screen===s.sc) ? s.color+"12" : bg1,
+                      border:"1.5px solid "+((s.sc === "export" ? exportHighlight : screen===s.sc) ? s.color+"60" : border),
+                      transition:"all 0.15s", display:"flex", alignItems:"center", gap:"0.75rem"
+                    }}>
+                      <div style={{width:"34px", height:"34px", borderRadius:"9px", background:s.color+"15",
+                        border:"1px solid "+s.color+"30", display:"flex", alignItems:"center", justifyContent:"center",
+                        flexShrink:0, position:"relative"}}>
+                        <span style={{fontSize:"0.85rem", color:s.color}}>{s.icon}</span>
+                        <div style={{position:"absolute", top:"-7px", right:"-7px", width:"16px", height:"16px",
+                          borderRadius:"50%", background:s.color, display:"flex", alignItems:"center",
+                          justifyContent:"center", fontSize:"0.55rem", fontWeight:"800", color:"#fff",
+                          fontFamily:"'Inter',system-ui,sans-serif"}}>
+                          {s.step}
+                        </div>
+                        {s.badge > 0 && (
+                          <div style={{position:"absolute", top:"-7px", left:"-7px", width:"16px", height:"16px",
+                            borderRadius:"50%", background:"#92400E", display:"flex", alignItems:"center",
+                            justifyContent:"center", fontSize:"0.55rem", fontWeight:"800", color:"#fff",
+                            fontFamily:"'Inter',system-ui,sans-serif"}}>
+                            {s.badge}
+                          </div>
+                        )}
+                      </div>
+                      <div>
+                        <div style={{fontSize:"0.82rem", fontWeight:"700", color:text1, fontFamily:"'Inter',system-ui,sans-serif"}}>{s.label}</div>
+                        <div style={{fontSize:"0.65rem", color:text3, marginTop:"1px", fontFamily:"'Inter',system-ui,sans-serif"}}>{s.sub}</div>
+                      </div>
+                    </div>
+                    {i < 3 && <div style={{color:text3, fontSize:"0.8rem", flexShrink:0}}>›</div>}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Stats row — clean metric cards */}
+            <div style={{display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:"1rem", marginBottom:"2.5rem"}}>
+              {[
+                { label:"Questions in Bank", value:bank.length, color:"#2D6A4F", bg:"#D1FAE5", action:() => setScreen("bank") },
+                { label:"Pending Review",    value:lastGenerated.length || 0, color:"#92400E", bg:"#FEF3C7", action:() => setScreen("review") },
+                { label:"Issues Found",      value:bankIssueCount, color:bankIssueCount>0?"#9B1C1C":"#2D6A4F", bg:bankIssueCount>0?"#FEE2E2":"#D1FAE5", action:() => { setFilterIssuesOnly(bankIssueCount > 0); setScreen("bank"); } },
+              ].map((s,i) => (
+                <div key={i} onClick={s.action} style={{
+                  background:bg1, border:"1px solid "+border, borderRadius:"14px",
+                  padding:"1.5rem 1.5rem 1.25rem", cursor:"pointer", transition:"border-color 0.15s",
+                  borderLeft:"4px solid "+s.color
+                }}>
+                  <div style={{fontSize:"2.2rem", fontWeight:"800", color:s.color, letterSpacing:"-0.04em",
+                    fontFamily:"'Georgia',serif", lineHeight:1, marginBottom:"0.5rem"}}>{s.value}</div>
+                  <div style={{fontSize:"0.72rem", color:text2, fontFamily:"'Inter',system-ui,sans-serif", textTransform:"uppercase", letterSpacing:"0.06em", fontWeight:"600"}}>{s.label}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Courses */}
+            <div style={{display:"flex", justifyContent:"space-between", alignItems:"baseline", marginBottom:"1.25rem"}}>
+              <h2 style={S.h2}>Courses</h2>
+              <button style={{...S.oBtn(accent), fontSize:"0.72rem", padding:"0.3rem 0.9rem"}} onClick={() => setScreen("generate")}>+ Generate Questions</button>
+            </div>
+            <div style={{display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(210px,1fr))", gap:"0.85rem", marginBottom:"2.5rem"}}>
+              {Object.entries(allCourses).map(([name, { color, chapters }]) => {
+                const qCount = bank.filter(q => q.course === name).length;
+                return (
+                  <div key={name} onClick={() => { setCourse(name); setSelectedSections([]); setSectionCounts({}); setSectionConfig({}); setScreen("generate"); }}
+                    style={{
+                      background:bg1, borderRadius:"14px", padding:"1.25rem 1.25rem 1rem",
+                      border:"1px solid "+border, cursor:"pointer",
+                      borderBottom:"3px solid "+color, transition:"all 0.15s",
+                      display:"flex", flexDirection:"column", gap:"0.3rem"
+                    }}>
+                    <div style={{fontSize:"0.88rem", fontWeight:"700", color:text1, lineHeight:1.3, fontFamily:"'Georgia',serif"}}>{name}</div>
+                    <div style={{fontSize:"0.68rem", color:text3, fontFamily:"'Inter',system-ui,sans-serif"}}>{chapters.length} chapters</div>
+                    {qCount > 0 && (
+                      <div style={{marginTop:"0.5rem", display:"inline-flex", alignItems:"center", gap:"0.35rem",
+                        background:color+"12", border:"1px solid "+color+"30", borderRadius:"20px",
+                        padding:"0.15rem 0.6rem", width:"fit-content"}}>
+                        <div style={{width:"5px", height:"5px", borderRadius:"50%", background:color, flexShrink:0}}/>
+                        <span style={{fontSize:"0.65rem", color:color, fontWeight:"600", fontFamily:"'Inter',system-ui,sans-serif"}}>{qCount} questions</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Custom Course Builder */}
+            <CustomCourseBuilder
+              customCourses={customCourses}
+              onSave={saveCustomCourse}
+              onDelete={deleteCustomCourse}
+              text1={text1} text2={text2} text3={text3} border={border} bg1={bg1} S={S}
+              isAdmin={isAdmin}
+            />
+
+            {/* Recent questions */}
+            {bank.length > 0 && (
+              <div style={{marginTop:"2rem"}}>
+                <h2 style={{...S.h2, marginBottom:"1rem"}}>Recent Questions</h2>
+                <div style={{display:"flex", flexDirection:"column", gap:"0"}}>
+                  {bank.slice(0,5).map((q,i) => (
+                    <div key={i} style={{
+                      display:"flex", alignItems:"center", gap:"1rem",
+                      padding:"0.85rem 0",
+                      borderBottom: i < 4 ? "1px solid "+border+"88" : "none",
+                    }}>
+                      <div style={{flexShrink:0, width:"32px", height:"32px", borderRadius:"8px",
+                        background:(courseColors[q.course]||accent)+"18",
+                        display:"flex", alignItems:"center", justifyContent:"center",
+                        fontSize:"0.65rem", color:courseColors[q.course]||accent, fontWeight:"800",
+                        fontFamily:"'Inter',system-ui,sans-serif"}}>
+                        {(q.section||"?").split(" ")[0]}
+                      </div>
+                      <div style={{flex:1, minWidth:0}}>
+                        <div style={{display:"flex", gap:"0.4rem", marginBottom:"0.2rem", flexWrap:"wrap"}}>
+                          <span style={S.tag(courseColors[q.course])}>{q.course}</span>
+                          <span style={S.diffTag(q.difficulty||"")}>{q.difficulty}</span>
+                        </div>
+                        <div style={{fontSize:"0.82rem", color:text1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", fontFamily:"'Georgia',serif"}}>
+                          {q.type==="Branched" ? q.stem : q.question}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <button style={{...S.oBtn(text2), fontSize:"0.75rem", marginTop:"1rem"}} onClick={() => setScreen("bank")}>
+                  View all {bank.length} questions →
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
               <div style={{fontSize:"0.6rem", color:text3, textTransform:"uppercase", letterSpacing:"0.14em", fontWeight:"700", marginBottom:"1rem"}}>Your Workflow</div>
               <div style={{display:"flex", alignItems:"center", gap:"0"}}>
                 {[
@@ -6895,7 +7043,7 @@ export default function TestBankApp() {
 
         {/* SAVED EXAMS */}
         {screen === "saved" && (
-          <SavedExamsScreen S={S} text2={text2} text3={text3} border={border}
+          <SavedExamsScreen S={S} text1={text1} text2={text2} text3={text3} border={border}
             onLoad={(exam) => {
               // Restore exam into Versions tab
               const vers = exam.versions || [];
