@@ -2379,6 +2379,10 @@ function mathToOmml(raw) {
   w = w.replace(/\[([^\[\]]+)\]\/\[([^\[\]]+)\]/g,
     (_,n,d) => addToken({t:'frac', n, d}));
 
+  // number/bare-letter — e.g. 4/s, 1/s (no exponent or parens on denominator)
+  w = w.replace(/\b([0-9]+)\/([a-zA-Z])\b/g,
+    (_,n,d) => addToken({t:'frac', n, d}));
+
   // number/number
   w = w.replace(/\b([0-9]+)\/([0-9]+)\b/g,
     (_,n,d) => addToken({t:'frac', n, d}));
@@ -2483,6 +2487,24 @@ function makeDocxImageXml(base64png, widthEmu=4800000, heightEmu=2800000) {
 <GRAPH_REL_PLACEHOLDER rid="${rid}" b64="${b64}"/>`;
 }
 
+// Strip prose lines from explanation — keep only lines that look like math equations
+// A math line contains =, +, -, *, /, ^, (, ) or starts with = or a number
+function mathStepsOnly(explanation) {
+  if (!explanation) return [];
+  const PROSE_START = /^(use|using|apply|applying|note|since|because|let|we|thus|therefore|hence|so|by|from|with|this|the|a |an |for|now|then|here|recall|substitute|plug|expand|simplify|combine|factor|divide|multiply|add|subtract|differentiat|integrat|taking|setting|solving|substitut)/i;
+  return explanation.split(/\n/).map(s => s.trim()).filter(line => {
+    if (!line) return false;
+    // Keep if it contains math operators or equals signs
+    if (/[=+\-*/^(){}[\]]/.test(line)) return true;
+    // Keep if it starts with a number, =, or a known math pattern
+    if (/^[=\-+0-9(]/.test(line)) return true;
+    // Drop pure prose lines
+    if (PROSE_START.test(line)) return false;
+    // Keep everything else (could be partial math)
+    return true;
+  });
+}
+
 async function buildAnswerKey(versions, course) {
   const JSZip = window.JSZip;
   if (!JSZip) { alert("JSZip not loaded"); return null; }
@@ -2552,7 +2574,7 @@ async function buildAnswerKey(versions, course) {
           if (!p.answer) return;
           body += mathPara(`(${String.fromCharCode(97+pi)})  Answer:  ${p.answer}`, {size:21, color:"1a7a4a", indent:560, spacing:30});
           if (p.explanation) {
-            const steps = p.explanation.split(/\n/).map(s=>s.trim()).filter(Boolean);
+            const steps = mathStepsOnly(p.explanation);
             steps.forEach((step) => {
               body += mathPara(step, {size:19, color:"444444", indent:840, spacing:25});
             });
@@ -2561,7 +2583,7 @@ async function buildAnswerKey(versions, course) {
       } else if (isFR) {
         if (q.answer) body += mathPara(`Answer:  ${q.answer}`, {size:21, color:"1a7a4a", indent:560, spacing:30});
         if (q.explanation) {
-          const steps = q.explanation.split(/\n/).map(s=>s.trim()).filter(Boolean);
+          const steps = mathStepsOnly(q.explanation);
           steps.forEach((step) => {
             body += mathPara(step, {size:19, color:"444444", indent:840, spacing:25});
           });
@@ -2842,7 +2864,7 @@ ${body}
         if (!p.answer) return;
         answerKeyBody += mathPara(`(${String.fromCharCode(97+pi)})  Answer:  ${p.answer}`, {indent:560, size:21, color:"1a7a4a", spacing:30});
         if (p.explanation) {
-          p.explanation.split(/\n/).map(s=>s.trim()).filter(Boolean).forEach((step) => {
+          mathStepsOnly(p.explanation).forEach((step) => {
             answerKeyBody += mathPara(step, {indent:840, size:18, color:"555555", spacing:25});
           });
         }
@@ -2850,7 +2872,7 @@ ${body}
     } else if (isFR) {
       if (q.answer) answerKeyBody += mathPara(`Answer:  ${q.answer}`, {indent:560, size:21, color:"1a7a4a", spacing:30});
       if (q.explanation) {
-        q.explanation.split(/\n/).map(s=>s.trim()).filter(Boolean).forEach((step) => {
+        mathStepsOnly(q.explanation).forEach((step) => {
           answerKeyBody += mathPara(step, {indent:840, size:18, color:"444444", spacing:25});
         });
       }
