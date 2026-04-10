@@ -4628,7 +4628,10 @@ export default function TestBankApp() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Generation failed");
-      onSuccess(data.result);
+      // data.result may be undefined if API route returns content differently
+      const result = data.result || data.content?.[0]?.text || data.text || "";
+      if (!result) throw new Error("Empty response from API. Try again.");
+      onSuccess(result);
     } catch(e) {
       setGenerateError(e.message);
       showToast(e.message, "error");
