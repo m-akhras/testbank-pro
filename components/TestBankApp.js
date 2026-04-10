@@ -303,7 +303,7 @@ function PipeTableHTML({ text }) {
             const Tag = ri === 0 ? "th" : "td";
             return (
               <Tag key={ci} style={{
-                border:"1px solid #2a2a4a",
+                border:"1px solid "+border,
                 padding:"0.3rem 0.6rem",
                 background: ri === 0 ? "#1a1a35" : ci === 0 ? "#141428" : "transparent",
                 color: ri === 0 ? "#a0a0c0" : "#d0d0cc",
@@ -571,11 +571,11 @@ function GraphEditor({ initialConfig, onSave, onRemove, onClose }) {
 
   const inp = (val, set, placeholder, width="80px") => (
     <input value={val} onChange={e => set(e.target.value)} placeholder={placeholder}
-      style={{width, padding:"0.2rem 0.4rem", background:"#1a1a2e", border:"1px solid #334155",
-        color:"#e8e8e0", borderRadius:"4px", fontSize:"0.78rem"}} />
+      style={{width, padding:"0.2rem 0.4rem", background:bg2, border:"1px solid "+border,
+        color:text1, borderRadius:"4px", fontSize:"0.78rem"}} />
   );
 
-  const lbl = (text) => <span style={{fontSize:"0.72rem", color:"#94a3b8", marginRight:"6px"}}>{text}</span>;
+  const lbl = (text) => <span style={{fontSize:"0.72rem", color:text2, marginRight:"6px"}}>{text}</span>;
 
   const row = (children) => (
     <div style={{display:"flex", alignItems:"center", gap:"8px", marginBottom:"0.5rem", flexWrap:"wrap"}}>
@@ -595,10 +595,10 @@ function GraphEditor({ initialConfig, onSave, onRemove, onClose }) {
   }[type] || type;
 
   return (
-    <div style={{marginTop:"0.75rem", padding:"1rem", background:"#0f1629", border:"1px solid #1e3a5f",
+    <div style={{marginTop:"0.75rem", padding:"1rem", background:bg1, border:"1px solid "+border,
       borderRadius:"8px"}}>
-      <div style={{fontSize:"0.78rem", color:"#60a5fa", fontWeight:"600", marginBottom:"0.75rem"}}>
-        📈 Graph Editor — <span style={{color:"#94a3b8", fontWeight:"400"}}>{typeLabel}</span>
+      <div style={{fontSize:"0.78rem", color:"#185FA5", fontWeight:"600", marginBottom:"0.75rem"}}>
+        📈 Graph Editor — <span style={{color:text2, fontWeight:"400"}}>{typeLabel}</span>
       </div>
 
       {/* Single curve inputs */}
@@ -606,7 +606,7 @@ function GraphEditor({ initialConfig, onSave, onRemove, onClose }) {
         {row(<>{lbl("f(x) =")} {inp(fn, setFn, "e.g. x^2 - 3", "200px")}</>)}
         {row(<>
           {lbl("Label:")} {inp(fnLabel, setFnLabel, "e.g. f(x) = x²-3", "150px")}
-          <label style={{display:"flex",alignItems:"center",gap:"5px",fontSize:"0.72rem",color:"#94a3b8",cursor:"pointer"}}>
+          <label style={{display:"flex",alignItems:"center",gap:"5px",fontSize:"0.72rem",color:text2,cursor:"pointer"}}>
             <input type="checkbox" checked={showFnLabel} onChange={e=>setShowFnLabel(e.target.checked)} /> Show
           </label>
         </>)}
@@ -615,8 +615,8 @@ function GraphEditor({ initialConfig, onSave, onRemove, onClose }) {
           {inp(holeInput, setHoleInput, "e.g. 2,3", "100px")}
           <button onClick={() => addPoint(holes, setHoles, holeInput, setHoleInput)}
             style={{fontSize:"0.72rem", padding:"0.2rem 0.5rem", borderRadius:"4px", cursor:"pointer",
-              background:"transparent", border:"1px solid #334155", color:"#94a3b8"}}>+ Add</button>
-          {holes.map((h,i) => <span key={i} style={{fontSize:"0.7rem", color:"#60a5fa", cursor:"pointer"}}
+              background:"transparent", border:"1px solid "+border, color:text2}}>+ Add</button>
+          {holes.map((h,i) => <span key={i} style={{fontSize:"0.7rem", color:"#185FA5", cursor:"pointer"}}
             onClick={() => setHoles(holes.filter((_,j)=>j!==i))}>({h[0]},{h[1]}) ✕</span>)}
         </>)}
         {row(<>
@@ -624,7 +624,7 @@ function GraphEditor({ initialConfig, onSave, onRemove, onClose }) {
           {inp(pointInput, setPointInput, "e.g. 2,5", "100px")}
           <button onClick={() => addPoint(points, setPoints, pointInput, setPointInput)}
             style={{fontSize:"0.72rem", padding:"0.2rem 0.5rem", borderRadius:"4px", cursor:"pointer",
-              background:"transparent", border:"1px solid #334155", color:"#94a3b8"}}>+ Add</button>
+              background:"transparent", border:"1px solid "+border, color:text2}}>+ Add</button>
           {points.map((p,i) => <span key={i} style={{fontSize:"0.7rem", color:"#10b981", cursor:"pointer"}}
             onClick={() => setPoints(points.filter((_,j)=>j!==i))}>({p[0]},{p[1]}) ✕</span>)}
         </>)}
@@ -637,9 +637,9 @@ function GraphEditor({ initialConfig, onSave, onRemove, onClose }) {
           {lbl("label:")} {inp(fnTopLabel, setFnTopLabel, "f(x)", "60px")}
           {lbl("offset:")}
           <input type="number" value={topLabelOffsetX} onChange={e=>setTopLabelOffsetX(Number(e.target.value))} placeholder="x" title="X offset in pixels"
-            style={{width:"42px",padding:"0.18rem 0.3rem",background:"#1a1a2e",border:"1px solid #334155",color:"#e8e8e0",borderRadius:"4px",fontSize:"0.72rem"}} />
+            style={{width:"42px",padding:"0.18rem 0.3rem",background:bg2,border:"1px solid "+border,color:text1,borderRadius:"4px",fontSize:"0.72rem"}} />
           <input type="number" value={topLabelOffsetY} onChange={e=>setTopLabelOffsetY(Number(e.target.value))} placeholder="y" title="Y offset in pixels"
-            style={{width:"42px",padding:"0.18rem 0.3rem",background:"#1a1a2e",border:"1px solid #334155",color:"#e8e8e0",borderRadius:"4px",fontSize:"0.72rem"}} />
+            style={{width:"42px",padding:"0.18rem 0.3rem",background:bg2,border:"1px solid "+border,color:text1,borderRadius:"4px",fontSize:"0.72rem"}} />
           <span style={{fontSize:"0.62rem",color:"#475569"}}>px</span>
         </>)}
         {row(<>
@@ -647,14 +647,14 @@ function GraphEditor({ initialConfig, onSave, onRemove, onClose }) {
           {lbl("label:")} {inp(fnBottomLabel, setFnBottomLabel, "g(x)", "60px")}
           {lbl("offset:")}
           <input type="number" value={botLabelOffsetX} onChange={e=>setBotLabelOffsetX(Number(e.target.value))} placeholder="x" title="X offset in pixels"
-            style={{width:"42px",padding:"0.18rem 0.3rem",background:"#1a1a2e",border:"1px solid #334155",color:"#e8e8e0",borderRadius:"4px",fontSize:"0.72rem"}} />
+            style={{width:"42px",padding:"0.18rem 0.3rem",background:bg2,border:"1px solid "+border,color:text1,borderRadius:"4px",fontSize:"0.72rem"}} />
           <input type="number" value={botLabelOffsetY} onChange={e=>setBotLabelOffsetY(Number(e.target.value))} placeholder="y" title="Y offset in pixels"
-            style={{width:"42px",padding:"0.18rem 0.3rem",background:"#1a1a2e",border:"1px solid #334155",color:"#e8e8e0",borderRadius:"4px",fontSize:"0.72rem"}} />
+            style={{width:"42px",padding:"0.18rem 0.3rem",background:bg2,border:"1px solid "+border,color:text1,borderRadius:"4px",fontSize:"0.72rem"}} />
           <span style={{fontSize:"0.62rem",color:"#475569"}}>px</span>
         </>)}
         {row(<>
           {lbl("Shade from x =")} {inp(shadeFrom, setShadeFrom, "-1", "55px")} {lbl("to x =")} {inp(shadeTo, setShadeTo, "2", "55px")}
-          <label style={{display:"flex",alignItems:"center",gap:"5px",fontSize:"0.72rem",color:"#94a3b8",cursor:"pointer"}}>
+          <label style={{display:"flex",alignItems:"center",gap:"5px",fontSize:"0.72rem",color:text2,cursor:"pointer"}}>
             <input type="checkbox" checked={showFnLabel} onChange={e=>setShowFnLabel(e.target.checked)} /> Show labels
           </label>
         </>)}
@@ -668,14 +668,14 @@ function GraphEditor({ initialConfig, onSave, onRemove, onClose }) {
           <button onClick={() => setShadeAbove(true)}
             style={{fontSize:"0.72rem", padding:"0.2rem 0.5rem", borderRadius:"4px", cursor:"pointer",
               background: shadeAbove ? "#185FA5" : "transparent", color: shadeAbove ? "#fff" : "#94a3b8",
-              border:`1px solid ${shadeAbove?"#185FA5":"#334155"}`}}>Above</button>
+              border:`1px solid ${shadeAbove?"#185FA5":border}`}}>Above</button>
           <button onClick={() => setShadeAbove(false)}
             style={{fontSize:"0.72rem", padding:"0.2rem 0.5rem", borderRadius:"4px", cursor:"pointer",
               background: !shadeAbove ? "#185FA5" : "transparent", color: !shadeAbove ? "#fff" : "#94a3b8",
-              border:`1px solid ${!shadeAbove?"#185FA5":"#334155"}`}}>Below</button>
+              border:`1px solid ${!shadeAbove?"#185FA5":border}`}}>Below</button>
         </>)}
         {row(<>
-          <label style={{display:"flex",alignItems:"center",gap:"6px",fontSize:"0.72rem",color:"#94a3b8",cursor:"pointer"}}>
+          <label style={{display:"flex",alignItems:"center",gap:"6px",fontSize:"0.72rem",color:text2,cursor:"pointer"}}>
             <input type="checkbox" checked={boundDashed} onChange={e=>setBoundDashed(e.target.checked)} />
             Dashed boundary (strict inequality)
           </label>
@@ -686,35 +686,35 @@ function GraphEditor({ initialConfig, onSave, onRemove, onClose }) {
       {/* x domain + display toggles */}
       <div style={{display:"flex", gap:"12px", flexWrap:"wrap", marginBottom:"0.5rem", marginTop:"0.25rem", alignItems:"center"}}>
         <div style={{display:"flex", alignItems:"center", gap:"6px"}}>
-          {lbl("x:")} {inp(xMin, setXMin, "-5", "44px")} <span style={{color:"#94a3b8",fontSize:"0.72rem"}}>to</span> {inp(xMax, setXMax, "5", "44px")}
+          {lbl("x:")} {inp(xMin, setXMin, "-5", "44px")} <span style={{color:text2,fontSize:"0.72rem"}}>to</span> {inp(xMax, setXMax, "5", "44px")}
         </div>
         <div style={{display:"flex", alignItems:"center", gap:"6px"}}>
           {lbl("y:")}
           {inp(yMinState ?? "", v => setYMinState(v===""?null:v), "auto", "44px")}
-          <span style={{color:"#94a3b8",fontSize:"0.72rem"}}>to</span>
+          <span style={{color:text2,fontSize:"0.72rem"}}>to</span>
           {inp(yMaxState ?? "", v => setYMaxState(v===""?null:v), "auto", "44px")}
           <span style={{fontSize:"0.65rem", color:"#475569"}}>(blank = auto)</span>
         </div>
-        <label style={{display:"flex",alignItems:"center",gap:"5px",fontSize:"0.72rem",color:"#94a3b8",cursor:"pointer"}}>
+        <label style={{display:"flex",alignItems:"center",gap:"5px",fontSize:"0.72rem",color:text2,cursor:"pointer"}}>
           <input type="checkbox" checked={showNumbers} onChange={e=>setShowNumbers(e.target.checked)} /> Axis numbers
         </label>
-        <label style={{display:"flex",alignItems:"center",gap:"5px",fontSize:"0.72rem",color:"#94a3b8",cursor:"pointer"}}>
+        <label style={{display:"flex",alignItems:"center",gap:"5px",fontSize:"0.72rem",color:text2,cursor:"pointer"}}>
           <input type="checkbox" checked={showGrid} onChange={e=>setShowGrid(e.target.checked)} /> Grid
         </label>
         {["continuous_dist","discrete_dist","standard_normal"].includes(type) && (
-          <label style={{display:"flex",alignItems:"center",gap:"5px",fontSize:"0.72rem",color:"#94a3b8",cursor:"pointer"}}>
+          <label style={{display:"flex",alignItems:"center",gap:"5px",fontSize:"0.72rem",color:text2,cursor:"pointer"}}>
             <input type="checkbox" checked={showFnLabel} onChange={e=>setShowFnLabel(e.target.checked)} /> Show label
           </label>
         )}
         {["continuous_dist","discrete_dist","standard_normal"].includes(type) && showFnLabel && (
-          <div style={{display:"flex",alignItems:"center",gap:"5px",fontSize:"0.72rem",color:"#94a3b8"}}>
+          <div style={{display:"flex",alignItems:"center",gap:"5px",fontSize:"0.72rem",color:text2}}>
             <span>Label offset:</span>
             <span>x</span>
             <input type="number" value={labelOffsetX} onChange={e=>setLabelOffsetX(Number(e.target.value))}
-              style={{width:"46px",padding:"0.18rem 0.3rem",background:"#1a1a2e",border:"1px solid #334155",color:"#e8e8e0",borderRadius:"4px",fontSize:"0.72rem"}} />
+              style={{width:"46px",padding:"0.18rem 0.3rem",background:bg2,border:"1px solid "+border,color:text1,borderRadius:"4px",fontSize:"0.72rem"}} />
             <span>y</span>
             <input type="number" value={labelOffsetY} onChange={e=>setLabelOffsetY(Number(e.target.value))}
-              style={{width:"46px",padding:"0.18rem 0.3rem",background:"#1a1a2e",border:"1px solid #334155",color:"#e8e8e0",borderRadius:"4px",fontSize:"0.72rem"}} />
+              style={{width:"46px",padding:"0.18rem 0.3rem",background:bg2,border:"1px solid "+border,color:text1,borderRadius:"4px",fontSize:"0.72rem"}} />
             <span style={{fontSize:"0.65rem",color:"#475569"}}>px</span>
           </div>
         )}
@@ -740,7 +740,7 @@ function GraphEditor({ initialConfig, onSave, onRemove, onClose }) {
         )}
         <button onClick={onClose}
           style={{padding:"0.3rem 0.8rem", fontSize:"0.78rem", borderRadius:"4px", cursor:"pointer",
-            background:"transparent", color:"#94a3b8", border:"1px solid #334155"}}>
+            background:"transparent", color:text2, border:"1px solid "+border}}>
           Cancel
         </button>
       </div>
@@ -761,14 +761,14 @@ function InlineEditor({ q, onSave, onClose }) {
 
   const inp = (val, set, ph, rows) => rows
     ? <textarea value={val} onChange={e => set(e.target.value)} placeholder={ph} rows={rows}
-        style={{width:"100%", padding:"0.4rem 0.6rem", background:"#0d1425", border:"1px solid #1e3a5f",
-          color:"#e8e8e0", borderRadius:"6px", fontSize:"0.82rem", resize:"vertical",
+        style={{width:"100%", padding:"0.4rem 0.6rem", background:bg2, border:"1px solid "+border,
+          color:text1, borderRadius:"6px", fontSize:"0.82rem", resize:"vertical",
           lineHeight:1.5, fontFamily:"inherit", boxSizing:"border-box"}} />
     : <input value={val} onChange={e => set(e.target.value)} placeholder={ph}
-        style={{width:"100%", padding:"0.35rem 0.6rem", background:"#0d1425", border:"1px solid #1e3a5f",
-          color:"#e8e8e0", borderRadius:"6px", fontSize:"0.82rem", fontFamily:"inherit", boxSizing:"border-box"}} />;
+        style={{width:"100%", padding:"0.35rem 0.6rem", background:bg2, border:"1px solid "+border,
+          color:text1, borderRadius:"6px", fontSize:"0.82rem", fontFamily:"inherit", boxSizing:"border-box"}} />;
 
-  const lbl = (t) => <div style={{fontSize:"0.68rem", color:"#4a6fa5", textTransform:"uppercase",
+  const lbl = (t) => <div style={{fontSize:"0.68rem", color:text2, textTransform:"uppercase",
     letterSpacing:"0.1em", fontWeight:"600", marginBottom:"0.3rem", marginTop:"0.75rem"}}>{t}</div>;
 
   const handleSave = async () => {
@@ -781,12 +781,12 @@ function InlineEditor({ q, onSave, onClose }) {
   };
 
   return (
-    <div style={{marginTop:"0.75rem", padding:"1rem", background:"#080d1a",
-      border:"1px solid #1e3a5f", borderRadius:"8px", borderLeft:"3px solid #60a5fa"}}>
-      <div style={{fontSize:"0.75rem", color:"#60a5fa", fontWeight:"700", marginBottom:"0.75rem",
+    <div style={{marginTop:"0.75rem", padding:"1rem", background:"#1B4332",
+      border:"1px solid "+border, borderRadius:"8px", borderLeft:"3px solid #60a5fa"}}>
+      <div style={{fontSize:"0.75rem", color:"#185FA5", fontWeight:"700", marginBottom:"0.75rem",
         display:"flex", alignItems:"center", gap:"0.5rem"}}>
         ✏️ Edit Question
-        <span style={{fontSize:"0.65rem", color:"#3a5a8a", fontWeight:"400"}}>— changes save to Supabase</span>
+        <span style={{fontSize:"0.65rem", color:text3, fontWeight:"400"}}>— changes save to Supabase</span>
       </div>
 
       {q.type === "Branched" ? (<>
@@ -794,11 +794,11 @@ function InlineEditor({ q, onSave, onClose }) {
         {inp(stem, setStem, "Shared context for all parts...", 2)}
         {parts.map((p, pi) => (
           <div key={pi} style={{marginTop:"0.75rem", paddingLeft:"0.75rem", borderLeft:"2px solid #1e3a5f"}}>
-            <div style={{fontSize:"0.68rem", color:"#4a6fa5", marginBottom:"0.3rem"}}>Part ({String.fromCharCode(97+pi)})</div>
+            <div style={{fontSize:"0.68rem", color:text2, marginBottom:"0.3rem"}}>Part ({String.fromCharCode(97+pi)})</div>
             {inp(p.question, (v) => { const np=[...parts]; np[pi]={...np[pi],question:v}; setParts(np); }, "Question text...", 2)}
-            <div style={{fontSize:"0.65rem", color:"#4a6fa5", margin:"0.3rem 0 0.2rem"}}>Answer</div>
+            <div style={{fontSize:"0.65rem", color:text2, margin:"0.3rem 0 0.2rem"}}>Answer</div>
             {inp(p.answer, (v) => { const np=[...parts]; np[pi]={...np[pi],answer:v}; setParts(np); }, "Answer...")}
-            <div style={{fontSize:"0.65rem", color:"#4a6fa5", margin:"0.3rem 0 0.2rem"}}>Solution steps (math lines only, one per line)</div>
+            <div style={{fontSize:"0.65rem", color:text2, margin:"0.3rem 0 0.2rem"}}>Solution steps (math lines only, one per line)</div>
             {inp(p.explanation||"", (v) => { const np=[...parts]; np[pi]={...np[pi],explanation:v}; setParts(np); }, "= (10)/(s^3) - (6)/(s^2) + (4)/(s)", 3)}
           </div>
         ))}
@@ -813,18 +813,18 @@ function InlineEditor({ q, onSave, onClose }) {
               <button onClick={() => setAnswer(c)}
                 style={{flexShrink:0, width:"24px", height:"24px", borderRadius:"50%", border:"none",
                   cursor:"pointer", fontSize:"0.7rem", fontWeight:"700",
-                  background: answer===c ? "#10b981" : "#1e3a5f",
+                  background: answer===c ? "#10b981" : border,
                   color: answer===c ? "#fff" : "#4a6fa5"}}>
                 {String.fromCharCode(65+ci)}
               </button>
               <input value={c} onChange={e => { const nc=[...choices]; nc[ci]=e.target.value; setChoices(nc);
                   if (answer===c) setAnswer(e.target.value); }}
-                style={{flex:1, padding:"0.3rem 0.5rem", background:"#0d1425",
-                  border:"1px solid "+(answer===c?"#10b981":"#1e3a5f"),
-                  color:"#e8e8e0", borderRadius:"5px", fontSize:"0.8rem"}} />
+                style={{flex:1, padding:"0.3rem 0.5rem", background:bg2,
+                  border:"1px solid "+(answer===c?"#10b981":border),
+                  color:text1, borderRadius:"5px", fontSize:"0.8rem"}} />
             </div>
           ))}
-          <div style={{fontSize:"0.65rem", color:"#3a5a8a", marginTop:"0.3rem"}}>
+          <div style={{fontSize:"0.65rem", color:text3, marginTop:"0.3rem"}}>
             Click a letter to mark as correct answer · Currently: <span style={{color:"#10b981"}}>{answer || "none selected"}</span>
           </div>
         </>)}
@@ -838,7 +838,7 @@ function InlineEditor({ q, onSave, onClose }) {
       {lbl("Solution Steps (answer key)")}
       {q.type === "Free Response" || q.type === "Short Answer" ? (
         <div style={{marginBottom:"0.35rem"}}>
-          <div style={{fontSize:"0.63rem", color:"#3a5a8a", marginBottom:"0.3rem", lineHeight:1.5}}>
+          <div style={{fontSize:"0.63rem", color:text3, marginBottom:"0.3rem", lineHeight:1.5}}>
             One math line per line — no prose. Prose lines (starting with "Use", "Thus", "Let", etc.) are auto-filtered out.
             <span style={{color:"#10b981", marginLeft:"0.4rem"}}>Example: = (10)/(s^3) - (6)/(s^2) + (4)/(s)</span>
           </div>
@@ -850,14 +850,14 @@ function InlineEditor({ q, onSave, onClose }) {
 
       <div style={{display:"flex", gap:"0.5rem", marginTop:"0.85rem"}}>
         <button onClick={handleSave} disabled={saving}
-          style={{padding:"0.35rem 0.9rem", background:"#10b981", color:"#000",
+          style={{padding:"0.35rem 0.9rem", background:"#2D6A4F", color:"#fff",
             border:"none", borderRadius:"6px", fontSize:"0.78rem", fontWeight:"600",
             cursor:saving?"not-allowed":"pointer", opacity:saving?0.7:1}}>
           {saving ? "Saving…" : "✓ Save Changes"}
         </button>
         <button onClick={onClose}
-          style={{padding:"0.35rem 0.8rem", background:"transparent", color:"#4a6fa5",
-            border:"1px solid #1e3a5f", borderRadius:"6px", fontSize:"0.78rem", cursor:"pointer"}}>
+          style={{padding:"0.35rem 0.8rem", background:"transparent", color:text2,
+            border:"1px solid "+border, borderRadius:"6px", fontSize:"0.78rem", cursor:"pointer"}}>
           Cancel
         </button>
       </div>
@@ -3589,12 +3589,23 @@ The expressions in graphConfig must EXACTLY match the functions mentioned in the
     "Multiple Choice": "4 choices as plain strings. answer = exact text of correct choice.",
     "True/False": 'choices = ["True","False"]. answer = "True" or "False".',
     "Free Response": `answer = final answer only (math expression, no prose).
-explanation = solution steps as newline-separated math lines ONLY — no English prose, no words like "use", "thus", "we get", "therefore", "applying", "note", "let", "since".
-Each line must be a pure math equation or expression, e.g.:
-  L{5t^2 - 6t + 4} = 5*(2/s^3) - 6*(1/s^2) + 4*(1/s)
-  = (10)/(s^3) - (6)/(s^2) + (4)/(s)
-For fractions: ALWAYS write as (numerator)/(denominator) — e.g. (10)/(s^3), (1)/((s-3)^2).
-Never write: "Use linearity", "Thus", "Differentiating", "With a = 3" — equations only.`,
+explanation = FULL worked solution — every step a student needs to show for full marks.
+Write each step on its own line. Each line is one mathematical step, substitution, or simplification.
+Rules:
+- NO English prose. No "Use linearity", "Thus", "Let", "We get", "Therefore", "Applying", "Since".
+- Each line must be a pure math equation or expression.
+- Show ALL intermediate steps — do not skip steps.
+- Start from the original expression, show formula identification, substitutions, algebra, and arrive at the final answer.
+- For fractions: ALWAYS (numerator)/(denominator) — e.g. (10)/(s^3), (1)/((s-3)^2), (8s)/((s^2+4)^2).
+- For Laplace: use L{...} notation, show the formula used then the substitution then the result.
+
+Example for L{t^2*sin(4t)}:
+  L{t^n*f(t)} = (-1)^n * (d^n)/(ds^n) * F(s)
+  L{sin(4t)} = (4)/(s^2+16)
+  L{t*sin(4t)} = (-1) * (d)/(ds) * (4)/(s^2+16) = (8s)/((s^2+16)^2)
+  L{t^2*sin(4t)} = (-1)^2 * (d^2)/(ds^2) * (4)/(s^2+16)
+  = (d)/(ds) * (8s)/((s^2+16)^2)
+  = (8*(3s^2-16))/((s^2+16)^3)`,
     "Fill in the Blank": "question has blank shown as ___. answer = the missing word or expression.",
     "Formula": "Include variables array [{name,min,max,precision}] with sensible ranges. Include answerFormula as math expression using variable names. Question text uses [varname] placeholders.",
     "Branched": "Include stem (shared given info), parts array [{question,answer,explanation}]. Decide number of parts (2-4) based on topic. All parts share the same stem.",
@@ -4066,8 +4077,8 @@ Reply with ONLY the JSON, no markdown, no explanation.`;
 
   const inp = (val, set, placeholder, width="100%", type="text") => (
     <input type={type} value={val} onChange={e => set(e.target.value)} placeholder={placeholder}
-      style={{ width, padding:"0.5rem 0.7rem", background:"#1a1a2e", border:"1px solid #334155",
-        borderRadius:"6px", color:"#e8e8e0", fontSize:"0.82rem", outline:"none", boxSizing:"border-box" }} />
+      style={{ width, padding:"0.5rem 0.7rem", background:bg2, border:"1px solid "+border,
+        borderRadius:"6px", color:text1, fontSize:"0.82rem", outline:"none", boxSizing:"border-box" }} />
   );
 
   return (
@@ -4095,7 +4106,7 @@ Reply with ONLY the JSON, no markdown, no explanation.`;
                 <div key={name} style={{ display:"flex", alignItems:"center", gap:"6px", background:bg1,
                   border:`1px solid ${border}`, borderRadius:"8px", padding:"0.4rem 0.75rem",
                   borderLeft:`3px solid ${c.color}` }}>
-                  <span style={{ fontSize:"0.82rem", color:"#e8e8e0" }}>{name}</span>
+                  <span style={{ fontSize:"0.82rem", color:text1 }}>{name}</span>
                   <button onClick={() => startEdit(name)}
                     style={{ background:"none", border:"none", cursor:"pointer", color:text3, fontSize:"0.75rem" }}>✏</button>
                   <button onClick={() => { if(confirm(`Delete "${name}"?`)) onDelete(name); }}
@@ -4107,28 +4118,28 @@ Reply with ONLY the JSON, no markdown, no explanation.`;
 
           {/* Editor */}
           {editing && (
-            <div style={{ background:"#0a1628", border:"1px solid #1e3a5f", borderRadius:"10px", padding:"1.25rem" }}>
-              <div style={{ fontSize:"0.82rem", fontWeight:"600", color:"#60a5fa", marginBottom:"1rem" }}>
+            <div style={{ background:bg1, border:"1px solid "+border, borderRadius:"10px", padding:"1.25rem" }}>
+              <div style={{ fontSize:"0.82rem", fontWeight:"600", color:"#185FA5", marginBottom:"1rem" }}>
                 {editing === "new" ? "New Course" : `Editing: ${editing}`}
               </div>
 
               {/* Syllabus Import */}
               <div style={{ marginBottom:"0.75rem" }}>
                 <button onClick={() => setShowSyllabus(s => !s)}
-                  style={{ background: showSyllabus ? "#1e3a5f" : "transparent", color:"#60a5fa",
-                    border:"1px solid #1e3a5f", borderRadius:"6px", padding:"0.35rem 0.85rem",
+                  style={{ background: showSyllabus ? border : "transparent", color:"#185FA5",
+                    border:"1px solid "+border, borderRadius:"6px", padding:"0.35rem 0.85rem",
                     fontSize:"0.78rem", cursor:"pointer", marginBottom: showSyllabus ? "0.75rem" : 0 }}>
                   📄 {showSyllabus ? "Hide" : "Import from Syllabus"}
                 </button>
                 {showSyllabus && (
-                  <div style={{ background:"#060d1a", border:"1px solid #1e3a5f", borderRadius:"8px", padding:"0.85rem" }}>
+                  <div style={{ background:bg2, border:"1px solid "+border, borderRadius:"8px", padding:"0.85rem" }}>
                     {/* Mode tabs */}
                     <div style={{ display:"flex", gap:"0.5rem", marginBottom:"0.75rem" }}>
                       {["file", "paste"].map(mode => (
                         <button key={mode} onClick={() => setSyllabusMode(mode)}
-                          style={{ background: syllabusMode === mode ? "#1e3a5f" : "transparent",
+                          style={{ background: syllabusMode === mode ? border : "transparent",
                             color: syllabusMode === mode ? "#60a5fa" : text3,
-                            border:`1px solid ${syllabusMode === mode ? "#1e3a5f" : "#334155"}`,
+                            border:`1px solid ${syllabusMode === mode ? border : border}`,
                             borderRadius:"6px", padding:"0.3rem 0.75rem", fontSize:"0.75rem", cursor:"pointer" }}>
                           {mode === "file" ? "📎 Upload File" : "📋 Paste Text"}
                         </button>
@@ -4144,7 +4155,7 @@ Reply with ONLY the JSON, no markdown, no explanation.`;
                           onChange={handleFileUpload}
                           style={{ display:"none" }} />
                         <button onClick={() => fileRef.current?.click()}
-                          style={{ background:"#1e3a5f", color:"#60a5fa", border:"1px solid #1e3a5f",
+                          style={{ background:border, color:"#185FA5", border:"1px solid "+border,
                             borderRadius:"6px", padding:"0.5rem 1rem", fontSize:"0.82rem", cursor:"pointer" }}>
                           {fileName ? `📄 ${fileName}` : "Choose File"}
                         </button>
@@ -4171,8 +4182,8 @@ Reply with ONLY the JSON, no markdown, no explanation.`;
                         <textarea value={syllabusText} onChange={e => setSyllabusText(e.target.value)}
                           placeholder="Paste syllabus text here..."
                           rows={6}
-                          style={{ width:"100%", padding:"0.5rem 0.7rem", background:"#1a1a2e", border:"1px solid #334155",
-                            borderRadius:"6px", color:"#e8e8e0", fontSize:"0.78rem", outline:"none",
+                          style={{ width:"100%", padding:"0.5rem 0.7rem", background:bg2, border:"1px solid "+border,
+                            borderRadius:"6px", color:text1, fontSize:"0.78rem", outline:"none",
                             boxSizing:"border-box", resize:"vertical", fontFamily:"inherit", marginBottom:"0.5rem" }} />
                         <button onClick={importFromSyllabus} disabled={syllabusLoading || !syllabusText.trim()}
                           style={{ background: syllabusLoading ? "#064e3b" : "#10b981", color:"#fff", border:"none",
@@ -4215,9 +4226,9 @@ Reply with ONLY the JSON, no markdown, no explanation.`;
                 <div style={{ fontSize:"0.72rem", color:text3, marginBottom:"0.4rem" }}>Chapters ({form.chapters.length})</div>
                 {form.chapters.map((ch, i) => (
                   <div key={i} style={{ display:"flex", alignItems:"center", gap:"8px", marginBottom:"0.4rem",
-                    background:"#060d1a", borderRadius:"6px", padding:"0.4rem 0.7rem" }}>
-                    <span style={{ fontSize:"0.75rem", color:"#60a5fa", fontWeight:"600", minWidth:"20px" }}>{ch.ch}</span>
-                    <span style={{ fontSize:"0.78rem", color:"#e8e8e0", flex:1 }}>{ch.title}</span>
+                    background:bg2, borderRadius:"6px", padding:"0.4rem 0.7rem" }}>
+                    <span style={{ fontSize:"0.75rem", color:"#185FA5", fontWeight:"600", minWidth:"20px" }}>{ch.ch}</span>
+                    <span style={{ fontSize:"0.78rem", color:text1, flex:1 }}>{ch.title}</span>
                     <span style={{ fontSize:"0.68rem", color:text3 }}>{ch.sections.length} sections</span>
                     {isAdmin && <button onClick={() => removeChapter(i)}
                       style={{ background:"none", border:"none", cursor:"pointer", color:"#f87171", fontSize:"0.8rem" }}>✕</button>}
@@ -4226,7 +4237,7 @@ Reply with ONLY the JSON, no markdown, no explanation.`;
 
                 {/* Add chapter manually — admin only */}
                 {isAdmin && (
-                  <div style={{ background:"#060d1a", border:"1px dashed #1e3a5f", borderRadius:"8px", padding:"0.85rem", marginTop:"0.5rem" }}>
+                  <div style={{ background:bg2, border:"1px dashed #1e3a5f", borderRadius:"8px", padding:"0.85rem", marginTop:"0.5rem" }}>
                     <div style={{ fontSize:"0.72rem", color:text3, marginBottom:"0.5rem" }}>Add Chapter Manually</div>
                     <div style={{ display:"grid", gridTemplateColumns:"80px 1fr", gap:"0.5rem", marginBottom:"0.5rem" }}>
                       {inp(newChapter.ch, v => setNewChapter(p => ({...p, ch:v})), "Ch#", "100%")}
@@ -4235,11 +4246,11 @@ Reply with ONLY the JSON, no markdown, no explanation.`;
                     <textarea value={newChapter.sections} onChange={e => setNewChapter(p => ({...p, sections:e.target.value}))}
                       placeholder={"One section per line:\n1.1 Introduction\n1.2 Key Concepts"}
                       rows={3}
-                      style={{ width:"100%", padding:"0.5rem 0.7rem", background:"#1a1a2e", border:"1px solid #334155",
-                        borderRadius:"6px", color:"#e8e8e0", fontSize:"0.78rem", outline:"none",
+                      style={{ width:"100%", padding:"0.5rem 0.7rem", background:bg2, border:"1px solid "+border,
+                        borderRadius:"6px", color:text1, fontSize:"0.78rem", outline:"none",
                         boxSizing:"border-box", resize:"vertical", fontFamily:"inherit" }} />
                     <button onClick={addChapter}
-                      style={{ marginTop:"0.5rem", background:"#1e3a5f", color:"#60a5fa", border:"none",
+                      style={{ marginTop:"0.5rem", background:border, color:"#185FA5", border:"none",
                         borderRadius:"6px", padding:"0.35rem 0.85rem", fontSize:"0.75rem", cursor:"pointer" }}>
                       + Add Chapter
                     </button>
@@ -4256,7 +4267,7 @@ Reply with ONLY the JSON, no markdown, no explanation.`;
                   {saving ? "Saving..." : "Save Course"}
                 </button>
                 <button onClick={() => setEditing(null)}
-                  style={{ background:"none", color:text2, border:"1px solid #334155", borderRadius:"6px",
+                  style={{ background:"none", color:text2, border:"1px solid "+border, borderRadius:"6px",
                     padding:"0.5rem 1rem", fontSize:"0.85rem", cursor:"pointer" }}>
                   Cancel
                 </button>
@@ -4378,13 +4389,13 @@ function SavedExamsScreen({ S, text2, text3, border, onLoad }) {
         <div key={exam.id} style={S.card}>
           <div style={{display:"flex", justifyContent:"space-between", alignItems:"flex-start", flexWrap:"wrap", gap:"0.5rem"}}>
             <div>
-              <div style={{fontSize:"1rem", fontWeight:"bold", color:"#e8e8e0", marginBottom:"0.25rem"}}>{exam.name}</div>
+              <div style={{fontSize:"1rem", fontWeight:"bold", color:text1, marginBottom:"0.25rem"}}>{exam.name}</div>
               <div style={{fontSize:"0.72rem", color:text3}}>
                 {new Date(exam.created_at).toLocaleDateString()} · {versions.length} version(s)
                 {hasMultipleSections && ` · ${sectionNums.length} sections`}
               </div>
               <button style={{marginTop:"0.4rem", padding:"0.25rem 0.7rem", fontSize:"0.72rem",
-                background:"#10b981", color:"#000", border:"none", borderRadius:"4px",
+                background:"#2D6A4F", color:"#fff", border:"none", borderRadius:"4px",
                 cursor:"pointer", fontWeight:"600"}}
                 onClick={() => onLoad && onLoad(exam)}>
                 ▶ Load into Versions tab
@@ -4485,7 +4496,7 @@ function SavedExamsScreen({ S, text2, text3, border, onLoad }) {
 
           {/* Grades Results Panel */}
           {showGrades[exam.id] && gradesData[exam.id] && (
-            <div style={{marginTop:"0.75rem", background:"#060d18", border:"1px solid #1e3a5f", borderRadius:"10px", padding:"1rem"}}>
+            <div style={{marginTop:"0.75rem", background:bg2, border:"1px solid "+border, borderRadius:"10px", padding:"1rem"}}>
               <div style={{fontSize:"0.78rem", color:"#06b6d4", fontWeight:"600", marginBottom:"0.75rem"}}>
                 📊 Question Performance — sorted by lowest score
                 <span style={{fontSize:"0.68rem", color:text3, fontWeight:"400", marginLeft:"0.5rem"}}>
@@ -4496,10 +4507,10 @@ function SavedExamsScreen({ S, text2, text3, border, onLoad }) {
                 <div key={i} style={{display:"flex", alignItems:"center", gap:"0.75rem", marginBottom:"0.4rem",
                   padding:"0.4rem 0.6rem", borderRadius:"6px",
                   background: r.pct < 50 ? "#1a0a0a" : r.pct < 70 ? "#1a1200" : "#0a1200"}}>
-                  <div style={{flex:1, fontSize:"0.78rem", color:"#e8e8e0", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}
+                  <div style={{flex:1, fontSize:"0.78rem", color:text1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}
                     title={r.label}>{r.label}</div>
                   <div style={{flexShrink:0, width:"180px"}}>
-                    <div style={{height:"6px", borderRadius:"3px", background:"#1e3a5f", overflow:"hidden"}}>
+                    <div style={{height:"6px", borderRadius:"3px", background:border, overflow:"hidden"}}>
                       <div style={{height:"100%", width:`${r.pct}%`, borderRadius:"3px",
                         background: r.pct < 50 ? "#f87171" : r.pct < 70 ? "#f59e0b" : "#4ade80"}} />
                     </div>
@@ -4524,11 +4535,11 @@ function SavedExamsScreen({ S, text2, text3, border, onLoad }) {
 
       {exportLog.length > 0 && (
         <>
-          <h2 style={{fontSize:"1.1rem", fontWeight:"normal", margin:"2rem 0 0.75rem", color:"#e8e8e0"}}>Export History</h2>
+          <h2 style={{fontSize:"1.1rem", fontWeight:"normal", margin:"2rem 0 0.75rem", color:text1}}>Export History</h2>
           <div style={S.card}>
             {exportLog.map((log, i) => (
               <div key={i} style={{display:"flex", justifyContent:"space-between", padding:"0.4rem 0", borderBottom: i < exportLog.length-1 ? `1px solid ${border}` : "none", fontSize:"0.78rem"}}>
-                <span style={{color:"#e8e8e0"}}>{log.exam_name} — V{log.version_label}</span>
+                <span style={{color:text1}}>{log.exam_name} — V{log.version_label}</span>
                 <span style={{color:text3}}>{log.format} · {new Date(log.exported_at).toLocaleDateString()}</span>
               </div>
             ))}
@@ -4677,7 +4688,7 @@ export default function TestBankApp() {
   const [customCourses, setCustomCourses] = useState({});
 
   const allCourses = { ...COURSES, ...customCourses };
-  const accent = course ? (allCourses[course]?.color || "#10b981") : "#10b981";
+  const accent = course ? (allCourses[course]?.color || "#2D6A4F") : "#2D6A4F";
 
   useEffect(() => {
     loadBank().then(q => { setBank(q); setBankLoaded(true); });
@@ -5013,85 +5024,95 @@ export default function TestBankApp() {
   )].sort((a,b) => new Date(`1970/01/01 ${b}`) - new Date(`1970/01/01 ${a}`));
   const courseColors = { "Calculus 1":"#10b981","Calculus 2":"#8b5cf6","Calculus 3":"#f59e0b","Quantitative Methods I":"#06b6d4","Quantitative Methods II":"#f43f5e","Precalculus":"#e879f9","Discrete Mathematics":"#a855f7" };
 
-  // ── Design tokens ────────────────────────────────────────────────────────────
-  const bg0   = "#080c14";   // deepest bg
-  const bg1   = "#0d1321";   // card bg
-  const bg2   = "#111827";   // elevated card
-  const bg3   = "#1a2235";   // hover / subtle
-  const border = "#1e2d45";
-  const text1  = "#f0f4ff";
-  const text2  = "#7a92b8";
-  const text3  = "#3a4f6a";
+  // ── Design tokens — Warm Ivory & Forest Green ────────────────────────────────
+  const bg0   = "#F2EDE4";   // page bg — warm parchment
+  const bg1   = "#FDFAF5";   // card bg — cream white
+  const bg2   = "#F7F2E9";   // elevated / input bg
+  const bg3   = "#EDE8DE";   // hover / subtle
+  const border = "#D9D0C0";
+  const text1  = "#1C1A16";  // near-black warm
+  const text2  = "#6B6355";  // warm mid
+  const text3  = "#A89E8E";  // warm muted
+
+  // Forest green primary, amber secondary
+  const green1 = "#2D6A4F";  // primary action
+  const green2 = "#1B4332";  // dark variant
+  const green3 = "#52B788";  // light accent
+  const amber1 = "#92400E";  // warning/amber
 
   const S = {
     // Layout
-    app: { display:"flex", minHeight:"100vh", background:bg0, fontFamily:"'Inter',system-ui,sans-serif", color:text1 },
+    app: { display:"flex", minHeight:"100vh", background:bg0, fontFamily:"'Georgia',serif", color:text1 },
     sidebar: {
-      width:"242px", flexShrink:0, background:"#080d1a",
-      borderRight:"1px solid #0f1e3a",
+      width:"230px", flexShrink:0, background:"#1B4332",
+      borderRight:"none",
       display:"flex", flexDirection:"column", padding:"0",
       position:"sticky", top:0, height:"100vh", overflowY:"auto"
     },
     sidebarLogo: {
-      padding:"1.4rem 1.2rem 1.1rem", borderBottom:"1px solid #0f1e3a",
+      padding:"1.5rem 1.25rem 1.2rem", borderBottom:"1px solid #2D6A4F",
       display:"flex", alignItems:"center", gap:"0.75rem"
     },
     logoMark: {
-      width:"34px", height:"34px", borderRadius:"9px",
-      background:"linear-gradient(135deg, "+accent+" 0%, #0ea5e9 100%)",
+      width:"36px", height:"36px", borderRadius:"10px",
+      background:"#52B788",
       display:"flex", alignItems:"center", justifyContent:"center",
-      fontSize:"0.95rem", fontWeight:"900", color:"#fff", flexShrink:0,
-      boxShadow:"0 0 14px "+accent+"55"
+      fontSize:"1rem", fontWeight:"900", color:"#1B4332", flexShrink:0,
     },
-    logoText: { fontSize:"0.97rem", fontWeight:"800", letterSpacing:"-0.03em", color:"#eef2ff" },
-    logoSub: { fontSize:"0.57rem", color:"#2d4a7a", letterSpacing:"0.1em", textTransform:"uppercase", marginTop:"2px" },
-    navSection: { padding:"1.1rem 1rem 0.3rem", fontSize:"0.57rem", letterSpacing:"0.14em", textTransform:"uppercase", color:"#1e3660", fontWeight:"700" },
+    logoText: { fontSize:"0.95rem", fontWeight:"700", letterSpacing:"-0.02em", color:"#D8F3DC", fontFamily:"'Georgia',serif" },
+    logoSub: { fontSize:"0.55rem", color:"#52B788", letterSpacing:"0.12em", textTransform:"uppercase", marginTop:"3px", fontFamily:"'Inter',system-ui,sans-serif" },
+    navSection: { padding:"1.2rem 1rem 0.3rem", fontSize:"0.55rem", letterSpacing:"0.16em", textTransform:"uppercase", color:"#52B788", fontWeight:"700", fontFamily:"'Inter',system-ui,sans-serif" },
     navBtn: (a) => ({
       display:"flex", alignItems:"center", gap:"0.65rem",
-      padding:"0.58rem 0.85rem", margin:"0.06rem 0.55rem",
+      padding:"0.55rem 0.9rem", margin:"0.04rem 0.6rem",
       borderRadius:"8px", border:"none", cursor:"pointer",
-      background: a ? accent+"1a" : "transparent",
-      color: a ? accent : "#5a7aa8",
+      background: a ? "#52B78825" : "transparent",
+      color: a ? "#D8F3DC" : "#74B49B",
       fontSize:"0.82rem", fontWeight: a ? "600" : "400",
-      textAlign:"left", width:"calc(100% - 1.1rem)",
+      textAlign:"left", width:"calc(100% - 1.2rem)",
       transition:"background 0.12s, color 0.12s",
-      borderLeft: a ? "2px solid "+accent : "2px solid transparent",
+      borderLeft: a ? "3px solid #52B788" : "3px solid transparent",
+      fontFamily:"'Inter',system-ui,sans-serif",
     }),
-    navIcon: { fontSize:"1rem", width:"20px", textAlign:"center", flexShrink:0 },
+    navIcon: { fontSize:"0.95rem", width:"20px", textAlign:"center", flexShrink:0 },
     navBadge: (c) => ({
-      marginLeft:"auto", background:c+"20", color:c, border:"1px solid "+c+"40",
-      borderRadius:"10px", padding:"0.06rem 0.42rem", fontSize:"0.61rem", fontWeight:"700"
+      marginLeft:"auto", background:"#52B78830", color:"#D8F3DC", border:"1px solid #52B78860",
+      borderRadius:"10px", padding:"0.05rem 0.4rem", fontSize:"0.6rem", fontWeight:"700",
+      fontFamily:"'Inter',system-ui,sans-serif"
     }),
-    main: { flex:1, minWidth:0, padding:"2rem 2.5rem", maxWidth:"960px" },
-    pageHeader: { marginBottom:"2rem" },
-    h1: { fontSize:"1.6rem", fontWeight:"700", letterSpacing:"-0.03em", marginBottom:"0.25rem", color:text1 },
-    h2: { fontSize:"1.1rem", fontWeight:"600", letterSpacing:"-0.02em", marginBottom:"0.5rem", color:text1 },
-    sub: { color:text2, fontSize:"0.83rem", marginBottom:"0", lineHeight:1.5 },
+    main: { flex:1, minWidth:0, padding:"2.5rem 3rem", maxWidth:"980px" },
+    pageHeader: { marginBottom:"2rem", borderBottom:"1px solid "+border, paddingBottom:"1.25rem" },
+    h1: { fontSize:"1.75rem", fontWeight:"700", letterSpacing:"-0.03em", marginBottom:"0.25rem", color:text1, fontFamily:"'Georgia',serif" },
+    h2: { fontSize:"1.1rem", fontWeight:"700", letterSpacing:"-0.02em", marginBottom:"0.5rem", color:text1, fontFamily:"'Georgia',serif" },
+    sub: { color:text2, fontSize:"0.83rem", marginBottom:"0", lineHeight:1.6, fontFamily:"'Inter',system-ui,sans-serif" },
     // Cards
     card: {
-      background:bg1, border:"1px solid "+border, borderRadius:"12px",
-      padding:"1.5rem", marginBottom:"1rem"
+      background:bg1, border:"1px solid "+border, borderRadius:"14px",
+      padding:"1.5rem", marginBottom:"1rem",
+      boxShadow:"0 1px 3px rgba(45,106,79,0.06)"
     },
     cardSm: {
       background:bg1, border:"1px solid "+border, borderRadius:"10px",
-      padding:"1rem", marginBottom:"0.75rem"
+      padding:"1rem", marginBottom:"0.75rem",
+      boxShadow:"0 1px 2px rgba(45,106,79,0.04)"
     },
     statCard: (c) => ({
-      background:bg1, border:"1px solid "+border, borderRadius:"12px",
-      padding:"1.25rem", position:"relative", overflow:"hidden"
+      background:bg1, border:"1px solid "+border, borderRadius:"14px",
+      padding:"1.25rem", position:"relative", overflow:"hidden",
+      boxShadow:"0 1px 3px rgba(45,106,79,0.06)"
     }),
     statAccent: (c) => ({
-      position:"absolute", top:0, left:0, right:0, height:"2px",
-      background:"linear-gradient(90deg, "+c+", "+c+"44)"
+      position:"absolute", top:0, left:0, right:0, height:"3px",
+      background:c
     }),
     // Course chips
     courseChip: (c, active) => ({
       display:"inline-flex", alignItems:"center", gap:"0.4rem",
       padding:"0.4rem 0.9rem", borderRadius:"20px", cursor:"pointer", border:"none",
-      background: active ? c+"22" : bg2,
+      background: active ? c+"20" : bg2,
       color: active ? c : text2,
       fontSize:"0.78rem", fontWeight: active ? "600" : "400",
-      outline: active ? "1.5px solid "+c+"66" : "1px solid "+border,
+      outline: active ? "1.5px solid "+c+"77" : "1px solid "+border,
       fontFamily:"'Inter',system-ui,sans-serif", transition:"all 0.15s"
     }),
     courseDot: (c) => ({
@@ -5100,24 +5121,24 @@ export default function TestBankApp() {
     // Section buttons
     sGrid: { display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:"0.35rem" },
     sBtn: (sel) => ({
-      background: sel ? accent+"15" : bg2,
-      border: "1px solid "+(sel ? accent+"55" : border),
+      background: sel ? green1+"15" : bg2,
+      border: "1px solid "+(sel ? green1+"55" : border),
       borderRadius:"8px", padding:"0.55rem 0.75rem", cursor:"pointer",
-      color: sel ? accent : text2, fontSize:"0.78rem", textAlign:"left",
+      color: sel ? green1 : text2, fontSize:"0.78rem", textAlign:"left",
       fontFamily:"'Inter',system-ui,sans-serif", display:"flex", alignItems:"center", gap:"0.45rem",
       transition:"all 0.15s"
     }),
     chk: (sel) => ({
       width:"14px", height:"14px", borderRadius:"4px",
-      border:"1.5px solid "+(sel ? accent : text3),
-      background: sel ? accent : "transparent", flexShrink:0,
+      border:"1.5px solid "+(sel ? green1 : text3),
+      background: sel ? green1 : "transparent", flexShrink:0,
       display:"flex", alignItems:"center", justifyContent:"center",
-      fontSize:"9px", color:"#000", fontWeight:"bold"
+      fontSize:"9px", color:"#fff", fontWeight:"bold"
     }),
     // Form elements
     row: { display:"flex", gap:"1rem", marginBottom:"1.25rem", flexWrap:"wrap" },
     field: { flex:1, minWidth:"120px" },
-    lbl: { display:"block", fontSize:"0.65rem", textTransform:"uppercase", letterSpacing:"0.1em", color:text3, marginBottom:"0.4rem", fontWeight:"600" },
+    lbl: { display:"block", fontSize:"0.65rem", textTransform:"uppercase", letterSpacing:"0.1em", color:text3, marginBottom:"0.4rem", fontWeight:"600", fontFamily:"'Inter',system-ui,sans-serif" },
     sel: {
       width:"100%", background:bg2, border:"1px solid "+border, borderRadius:"8px",
       padding:"0.6rem 0.8rem", color:text1, fontSize:"0.83rem",
@@ -5130,67 +5151,75 @@ export default function TestBankApp() {
     },
     // Buttons
     btn: (bg, dis) => ({
-      background: dis ? bg3 : bg, color: dis ? text3 : "#000",
-      border:"none", borderRadius:"8px", padding:"0.65rem 1.4rem",
+      background: dis ? bg3 : bg, color: dis ? text3 : (bg === green1 ? "#fff" : "#fff"),
+      border:"none", borderRadius:"9px", padding:"0.65rem 1.4rem",
       fontSize:"0.83rem", fontWeight:"600", cursor: dis ? "not-allowed" : "pointer",
       fontFamily:"'Inter',system-ui,sans-serif", display:"inline-flex",
-      alignItems:"center", gap:"0.45rem", transition:"opacity 0.15s"
+      alignItems:"center", gap:"0.45rem", transition:"opacity 0.15s",
+      opacity: dis ? 0.5 : 1
     }),
     oBtn: (c) => ({
       background:"transparent", color:c, border:"1px solid "+c+"66",
-      borderRadius:"8px", padding:"0.55rem 1.1rem", fontSize:"0.78rem",
+      borderRadius:"9px", padding:"0.55rem 1.1rem", fontSize:"0.78rem",
       cursor:"pointer", fontFamily:"'Inter',system-ui,sans-serif",
       display:"inline-flex", alignItems:"center", gap:"0.4rem"
     }),
     smBtn: {
-      background:bg3, border:"1px solid "+border, color:text2, borderRadius:"6px",
+      background:bg2, border:"1px solid "+border, color:text2, borderRadius:"6px",
       padding:"0.2rem 0.55rem", fontSize:"0.68rem", cursor:"pointer",
       fontFamily:"'Inter',system-ui,sans-serif"
     },
     ghostBtn: (c) => ({
-      background:c+"12", color:c, border:"none", borderRadius:"6px",
+      background:c+"15", color:c, border:"1px solid "+c+"33", borderRadius:"6px",
       padding:"0.25rem 0.6rem", fontSize:"0.7rem", cursor:"pointer",
       fontFamily:"'Inter',system-ui,sans-serif", fontWeight:"500"
     }),
     // Tags
     tag: (c) => ({
       display:"inline-flex", alignItems:"center", gap:"0.25rem",
-      background:(c||accent)+"15", border:"1px solid "+(c||accent)+"33",
-      color:(c||accent), borderRadius:"5px", padding:"0.1rem 0.45rem",
-      fontSize:"0.65rem", fontWeight:"500", marginRight:"0.25rem"
+      background:(c||green1)+"15", border:"1px solid "+(c||green1)+"33",
+      color:(c||green1), borderRadius:"5px", padding:"0.1rem 0.45rem",
+      fontSize:"0.65rem", fontWeight:"600", marginRight:"0.25rem",
+      fontFamily:"'Inter',system-ui,sans-serif"
     }),
     diffTag: (d) => {
-      const dc = d==="Easy"?"#10b981":d==="Medium"?"#f59e0b":"#f43f5e";
-      return { display:"inline-block", background:dc+"18", color:dc, border:"1px solid "+dc+"33",
-        borderRadius:"4px", padding:"0.1rem 0.4rem", fontSize:"0.62rem", fontWeight:"600" };
+      const dc = d==="Easy"?"#2D6A4F":d==="Medium"?"#92400E":"#9B1C1C";
+      const bg = d==="Easy"?"#D1FAE5":d==="Medium"?"#FEF3C7":"#FEE2E2";
+      return { display:"inline-block", background:bg, color:dc, border:"none",
+        borderRadius:"4px", padding:"0.1rem 0.45rem", fontSize:"0.62rem", fontWeight:"700",
+        fontFamily:"'Inter',system-ui,sans-serif" };
     },
     divider: { border:"none", borderTop:"1px solid "+border, margin:"1.5rem 0" },
     // Question cards
     qCard: {
-      background:bg1, border:"1px solid "+border, borderRadius:"10px",
-      padding:"1.1rem", marginBottom:"0.6rem", transition:"border-color 0.15s"
+      background:bg1, border:"1px solid "+border, borderRadius:"12px",
+      padding:"1.1rem", marginBottom:"0.6rem", transition:"border-color 0.15s, box-shadow 0.15s",
+      boxShadow:"0 1px 2px rgba(45,106,79,0.04)"
     },
     qMeta: {
-      fontSize:"0.62rem", color:text3, letterSpacing:"0.05em",
+      fontSize:"0.62rem", color:text3, letterSpacing:"0.04em",
       textTransform:"uppercase", marginBottom:"0.4rem",
-      display:"flex", gap:"0.4rem", alignItems:"center", flexWrap:"wrap"
+      display:"flex", gap:"0.4rem", alignItems:"center", flexWrap:"wrap",
+      fontFamily:"'Inter',system-ui,sans-serif"
     },
-    qText: { fontSize:"0.88rem", color:"#c8d8f0", lineHeight:1.7, marginBottom:"0.65rem" },
+    qText: { fontSize:"0.88rem", color:text1, lineHeight:1.75, marginBottom:"0.65rem", fontFamily:"'Georgia',serif" },
     cList: { listStyle:"none", padding:0, margin:0, marginBottom:"0.5rem" },
     cItem: (correct) => ({
       padding:"0.35rem 0.65rem", marginBottom:"0.2rem", borderRadius:"6px",
-      background: correct ? "#10b98115" : "transparent",
-      border: "1px solid "+(correct ? "#10b98144" : border),
-      color: correct ? "#10b981" : text2, fontSize:"0.83rem",
-      display:"flex", alignItems:"flex-start", gap:"0.5rem"
+      background: correct ? "#D1FAE5" : "transparent",
+      border: "1px solid "+(correct ? "#2D6A4F44" : border),
+      color: correct ? green2 : text2, fontSize:"0.83rem",
+      display:"flex", alignItems:"flex-start", gap:"0.5rem",
+      fontFamily:"'Inter',system-ui,sans-serif"
     }),
     ans: {
-      fontSize:"0.8rem", color:"#10b981", background:"#10b98110",
-      border:"1px solid #10b98130", borderRadius:"6px",
+      fontSize:"0.8rem", color:green2, background:"#D1FAE5",
+      border:"1px solid #2D6A4F30", borderRadius:"6px",
       padding:"0.35rem 0.7rem", marginBottom:"0.35rem",
-      display:"flex", alignItems:"center", gap:"0.4rem"
+      display:"flex", alignItems:"center", gap:"0.4rem",
+      fontFamily:"'Inter',system-ui,sans-serif"
     },
-    expl: { fontSize:"0.76rem", color:text2, fontStyle:"italic", marginTop:"0.2rem", lineHeight:1.6 },
+    expl: { fontSize:"0.76rem", color:text2, fontStyle:"italic", marginTop:"0.2rem", lineHeight:1.6, fontFamily:"'Georgia',serif" },
     vTab: (active, c) => ({
       background: active ? c+"20" : "transparent",
       border: "1px solid "+(active ? c+"66" : border),
@@ -5200,7 +5229,7 @@ export default function TestBankApp() {
     }),
     // Paste/prompt
     pasteBox: {
-      background:bg2, border:"1px solid "+accent+"33", borderRadius:"10px",
+      background:bg1, border:"1px solid "+green1+"33", borderRadius:"12px",
       padding:"1.25rem", marginTop:"1.5rem"
     },
     textarea: {
@@ -5262,28 +5291,28 @@ export default function TestBankApp() {
       {lastGenerated.length > 0 && (
         <div onClick={() => setScreen("review")} style={{
           margin:"0.7rem 0.6rem 0", padding:"0.55rem 0.7rem",
-          background:"#f59e0b14", border:"1px solid #f59e0b40",
+          background:"#FEF3C7", border:"1px solid #FCD34D",
           borderRadius:"8px", cursor:"pointer",
           display:"flex", alignItems:"center", gap:"0.5rem"
         }}>
           <span style={{fontSize:"0.9rem"}}>⚡</span>
           <div>
             <div style={{fontSize:"0.71rem", color:"#f59e0b", fontWeight:"600", lineHeight:1.3}}>{lastGenerated.length} questions ready to review</div>
-            <div style={{fontSize:"0.62rem", color:"#7a5a10", marginTop:"1px"}}>Click to review →</div>
+            <div style={{fontSize:"0.62rem", color:"#92400E", marginTop:"1px"}}>Click to review →</div>
           </div>
         </div>
       )}
       {bankIssueCount > 0 && (
         <div onClick={() => { setFilterIssuesOnly(true); setScreen("bank"); }} style={{
           margin:"0.4rem 0.6rem 0", padding:"0.5rem 0.7rem",
-          background:"#f8717114", border:"1px solid #f8717140",
+          background:"#FEE2E2", border:"1px solid #FECACA",
           borderRadius:"8px", cursor:"pointer",
           display:"flex", alignItems:"center", gap:"0.5rem"
         }}>
           <span style={{fontSize:"0.9rem"}}>⚠️</span>
           <div>
-            <div style={{fontSize:"0.71rem", color:"#fca5a5", fontWeight:"600", lineHeight:1.3}}>{bankIssueCount} question{bankIssueCount>1?"s":""} with issues</div>
-            <div style={{fontSize:"0.62rem", color:"#6b2525", marginTop:"1px"}}>Click to fix →</div>
+            <div style={{fontSize:"0.71rem", color:"#9B1C1C", fontWeight:"600", lineHeight:1.3}}>{bankIssueCount} question{bankIssueCount>1?"s":""} with issues</div>
+            <div style={{fontSize:"0.62rem", color:"#9B1C1C", marginTop:"1px"}}>Click to fix →</div>
           </div>
         </div>
       )}
@@ -5308,8 +5337,8 @@ export default function TestBankApp() {
 
       {/* Active course */}
       {course && (
-        <div style={{padding:"0.7rem 1rem", borderTop:"1px solid #0f1e3a"}}>
-          <div style={{fontSize:"0.57rem", color:"#1e3660", textTransform:"uppercase", letterSpacing:"0.12em", marginBottom:"0.3rem"}}>Active Course</div>
+        <div style={{padding:"0.7rem 1rem", borderTop:"1px solid "+border}}>
+          <div style={{fontSize:"0.57rem", color:text3, textTransform:"uppercase", letterSpacing:"0.12em", marginBottom:"0.3rem"}}>Active Course</div>
           <div style={{display:"flex", alignItems:"center", gap:"0.5rem"}}>
             <div style={{width:"7px", height:"7px", borderRadius:"50%", background:accent, flexShrink:0, boxShadow:"0 0 6px "+accent}}/>
             <span style={{fontSize:"0.74rem", color:accent, fontWeight:"600", lineHeight:1.3}}>{course}</span>
@@ -5318,10 +5347,10 @@ export default function TestBankApp() {
       )}
 
       {/* Footer */}
-      <div style={{padding:"0.55rem 1rem", borderTop:"1px solid #0f1e3a"}}>
+      <div style={{padding:"0.55rem 1rem", borderTop:"1px solid "+border}}>
         {user && (
           <div style={{marginBottom:"0.4rem"}}>
-            <div style={{fontSize:"0.6rem", color:"#1e3660", marginBottom:"0.15rem", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
+            <div style={{fontSize:"0.6rem", color:text3, marginBottom:"0.15rem", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
               {user.email}
             </div>
             <button
@@ -5332,8 +5361,8 @@ export default function TestBankApp() {
           </div>
         )}
         <div style={{display:"flex", justifyContent:"space-between", alignItems:"center"}}>
-          <span style={{fontSize:"0.57rem", color:"#1e3660"}}>TestBank Pro</span>
-          <span style={{fontSize:"0.57rem", color:"#1e3660", background:"#0f1e3a", padding:"0.1rem 0.4rem", borderRadius:"4px", fontWeight:"600"}}>v55</span>
+          <span style={{fontSize:"0.57rem", color:text3}}>TestBank Pro</span>
+          <span style={{fontSize:"0.57rem", color:text3, background:bg3, padding:"0.1rem 0.4rem", borderRadius:"4px", fontWeight:"600"}}>v55</span>
         </div>
       </div>
     </aside>
@@ -5342,9 +5371,9 @@ export default function TestBankApp() {
   const [confirmDelete, setConfirmDelete] = useState(null); // {id, label}
 
   if (authLoading) return (
-    <div style={{ minHeight:"100vh", background:"#0a0a1a", display:"flex", alignItems:"center", justifyContent:"center" }}>
+    <div style={{ minHeight:"100vh", background:bg0, display:"flex", alignItems:"center", justifyContent:"center" }}>
       <div style={{ textAlign:"center" }}>
-        <div style={{ fontSize:"1.4rem", fontWeight:"800", color:"#e8e8e0", marginBottom:"1.25rem", letterSpacing:"-0.5px" }}>
+        <div style={{ fontSize:"1.4rem", fontWeight:"800", color:text1, marginBottom:"1.25rem", letterSpacing:"-0.5px" }}>
           TestBank <span style={{ color:"#10b981" }}>Pro</span>
         </div>
         <div style={{ width:"28px", height:"28px", border:"2px solid #1e3a5f", borderTop:"2px solid #10b981", borderRadius:"50%", animation:"spin 0.8s linear infinite", margin:"0 auto" }} />
@@ -5373,9 +5402,9 @@ export default function TestBankApp() {
       {confirmDelete && (
         <div style={{position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", zIndex:9998,
           display:"flex", alignItems:"center", justifyContent:"center"}}>
-          <div style={{background:"#0d1425", border:"1px solid #1e3a5f", borderRadius:"12px",
+          <div style={{background:bg2, border:"1px solid "+border, borderRadius:"12px",
             padding:"1.5rem", maxWidth:"380px", width:"90%", boxShadow:"0 8px 32px rgba(0,0,0,0.5)"}}>
-            <div style={{fontSize:"1rem", fontWeight:"700", color:"#f0f4ff", marginBottom:"0.5rem"}}>Delete Question?</div>
+            <div style={{fontSize:"1rem", fontWeight:"700", color:text1, marginBottom:"0.5rem"}}>Delete Question?</div>
             <div style={{fontSize:"0.82rem", color:"#6b89b8", marginBottom:"1.25rem", lineHeight:1.5}}>
               This will permanently remove the question from your bank. This cannot be undone.
             </div>
@@ -5385,13 +5414,13 @@ export default function TestBankApp() {
                 setBank(prev => prev.filter(q => q.id !== confirmDelete.id));
                 setConfirmDelete(null);
                 showToast("Question deleted");
-              }} style={{flex:1, padding:"0.5rem", background:"#7c2d12", color:"#fca5a5",
+              }} style={{flex:1, padding:"0.5rem", background:"#7c2d12", color:"#9B1C1C",
                 border:"1px solid #f8717144", borderRadius:"6px", cursor:"pointer", fontWeight:"600", fontSize:"0.82rem"}}>
                 Delete
               </button>
               <button onClick={() => setConfirmDelete(null)}
                 style={{flex:1, padding:"0.5rem", background:"transparent", color:"#6b89b8",
-                  border:"1px solid #1e3a5f", borderRadius:"6px", cursor:"pointer", fontSize:"0.82rem"}}>
+                  border:"1px solid "+border, borderRadius:"6px", cursor:"pointer", fontSize:"0.82rem"}}>
                 Cancel
               </button>
             </div>
@@ -5410,8 +5439,8 @@ export default function TestBankApp() {
             </div>
 
             {/* Workflow connector */}
-            <div style={{background:"#080d1a", border:"1px solid #0f1e3a", borderRadius:"12px", padding:"1.4rem", marginBottom:"1.5rem"}}>
-              <div style={{fontSize:"0.6rem", color:"#1e3660", textTransform:"uppercase", letterSpacing:"0.14em", fontWeight:"700", marginBottom:"1rem"}}>Your Workflow</div>
+            <div style={{background:"#1B4332", border:"1px solid "+border, borderRadius:"12px", padding:"1.4rem", marginBottom:"1.5rem"}}>
+              <div style={{fontSize:"0.6rem", color:text3, textTransform:"uppercase", letterSpacing:"0.14em", fontWeight:"700", marginBottom:"1rem"}}>Your Workflow</div>
               <div style={{display:"flex", alignItems:"center", gap:"0"}}>
                 {[
                   { step:"1", label:"Generate", sub:"Create with AI", sc:"generate", color:"#10b981" },
@@ -5425,7 +5454,7 @@ export default function TestBankApp() {
                       else setScreen(s.sc);
                     }} style={{
                       flex:1, padding:"1rem 0.75rem", borderRadius:"10px", cursor:"pointer", textAlign:"center",
-                      background: (s.sc === "export" ? exportHighlight : screen===s.sc) ? s.color+"18" : "#0d1530",
+                      background: (s.sc === "export" ? exportHighlight : screen===s.sc) ? s.color+"18" : bg2,
                       border:"1px solid "+((s.sc === "export" ? exportHighlight : screen===s.sc) ? s.color+"50" : "#0f1e3a"),
                       transition:"all 0.15s"
                     }}>
@@ -5436,7 +5465,7 @@ export default function TestBankApp() {
                         {s.badge > 0 && <span style={{background:"#f59e0b22", color:"#f59e0b", fontSize:"0.6rem", fontWeight:"700", padding:"0.05rem 0.35rem", borderRadius:"8px"}}>{s.badge}</span>}
                       </div>
                       <div style={{fontSize:"0.8rem", fontWeight:"600", color:s.color}}>{s.label}</div>
-                      <div style={{fontSize:"0.62rem", color:"#3a5a8a", marginTop:"0.2rem"}}>{s.sub}</div>
+                      <div style={{fontSize:"0.62rem", color:text3, marginTop:"0.2rem"}}>{s.sub}</div>
                     </div>
                     {i < 3 && (
                       <div style={{display:"flex", alignItems:"center", padding:"0 0.3rem", flexShrink:0}}>
@@ -5592,10 +5621,10 @@ export default function TestBankApp() {
                                           <button key={gt} onClick={() => setSectionDiff(sec, d, "graphType", gt)}
                                             style={{padding:"0.15rem 0.35rem", fontSize:"0.65rem", borderRadius:"3px", cursor:"pointer",
                                               background: cfg[d].graphType===gt
-                                                ? (gt==="graph"?"#1D9E75":gt==="table"?"#185FA5":gt==="mix"?"#8b5cf6":"#334155")
+                                                ? (gt==="graph"?"#1D9E75":gt==="table"?"#185FA5":gt==="mix"?"#8b5cf6":border)
                                                 : "transparent",
                                               color: cfg[d].graphType===gt ? "#fff" : text3,
-                                              border:`1px solid ${cfg[d].graphType===gt?(gt==="graph"?"#1D9E75":gt==="table"?"#185FA5":gt==="mix"?"#8b5cf6":"#475569"):"#334155"}`}}>
+                                              border:`1px solid ${cfg[d].graphType===gt?(gt==="graph"?"#1D9E75":gt==="table"?"#185FA5":gt==="mix"?"#8b5cf6":"#475569"):border}`}}>
                                             {gt==="normal"?"Text":gt==="graph"?"Graph":gt==="table"?"Table":"Mix"}
                                           </button>
                                         ))}
@@ -5638,9 +5667,9 @@ export default function TestBankApp() {
 
             <div style={{display:"flex", gap:"0.75rem", flexWrap:"wrap", alignItems:"center"}}>
               {generateConfirm ? (
-                <div style={{display:"flex", alignItems:"center", gap:"0.75rem", background:"#0a1628",
-                  border:"1px solid #1e3a5f", borderRadius:"8px", padding:"0.6rem 1rem"}}>
-                  <span style={{fontSize:"0.85rem", color:"#e8e8e0"}}>
+                <div style={{display:"flex", alignItems:"center", gap:"0.75rem", background:bg1,
+                  border:"1px solid "+border, borderRadius:"8px", padding:"0.6rem 1rem"}}>
+                  <span style={{fontSize:"0.85rem", color:text1}}>
                     Generate {selectedSections.reduce((a,s) => a+(sectionCounts[s]||3), 0)} questions?
                   </span>
                   <button style={S.btn(accent, false)} onClick={async () => {
@@ -5743,7 +5772,7 @@ export default function TestBankApp() {
                   <span style={S.tag()}>{q.difficulty}</span>
                   {issues.length > 0 && (
                     <span title={issues.join("\n")} style={{marginLeft:"auto", cursor:"help",
-                      background:"#7c2d12", color:"#fca5a5", fontSize:"0.68rem", fontWeight:"600",
+                      background:"#7c2d12", color:"#9B1C1C", fontSize:"0.68rem", fontWeight:"600",
                       padding:"0.1rem 0.4rem", borderRadius:"4px", whiteSpace:"nowrap"}}>
                       ⚠️ {issues.length} issue{issues.length > 1 ? "s" : ""}
                     </span>
@@ -5860,8 +5889,8 @@ export default function TestBankApp() {
               <input
                 value={bankSearch} onChange={e => setBankSearch(e.target.value)}
                 placeholder="🔍  Search questions, answers, sections..."
-                style={{width:"100%", padding:"0.5rem 0.75rem", background:"#0d1425",
-                  border:"1px solid #1e3a5f", color:"#e8e8e0", borderRadius:"8px",
+                style={{width:"100%", padding:"0.5rem 0.75rem", background:bg2,
+                  border:"1px solid "+border, color:text1, borderRadius:"8px",
                   fontSize:"0.83rem", boxSizing:"border-box", outline:"none"}}
               />
             </div>
@@ -5956,7 +5985,7 @@ export default function TestBankApp() {
                       <button style={{...S.smBtn, flexShrink:0, color:inExam?accent:text3, border:"1px solid "+(inExam?accent+"44":border)}}
                         onClick={() => setSelectedForExam(p => p.includes(q.id) ? p.filter(id=>id!==q.id) : [...p,q.id])}>
                         {inExam?"✓":"+"}</button>
-                      <button style={{...S.smBtn, flexShrink:0, color:"#a78bfa", border:"1px solid #a78bfa33"}}
+                      <button style={{...S.smBtn, flexShrink:0, color:"#7C3AED", border:"1px solid #a78bfa33"}}
                         onClick={() => { setInlineEditQId(inlineEditQId===q.id?null:q.id); setGraphEditorQId(null); }}>✏</button>
                       <button style={{...S.smBtn, flexShrink:0, color:"#f87171", border:"1px solid #f8717133"}}
                         onClick={() => setConfirmDelete({id:q.id, label:(q.question||q.stem||"").slice(0,60)})}>✕</button>
@@ -5996,7 +6025,7 @@ export default function TestBankApp() {
                       setGeneratedPrompt(prompt);
                       setPendingType("bank_replace"); setPendingMeta({qId: q.id}); setPasteInput(""); setPasteError("");
                     }}>↻</button>
-                  <button style={{...S.smBtn, color:"#60a5fa", border:"1px solid #60a5fa44"}}
+                  <button style={{...S.smBtn, color:"#185FA5", border:"1px solid #60a5fa44"}}
                     onClick={() => { setGraphEditorQId(graphEditorQId === q.id ? null : q.id); setInlineEditQId(null); }}>
                     📈{q.hasGraph ? " Edit" : " Graph"}
                   </button>
@@ -6076,7 +6105,7 @@ export default function TestBankApp() {
                       <button style={S.ghostBtn("#e879f9")} onClick={() => { const p = buildReplacePrompt(q,"function"); setGeneratedPrompt(p); }}>Diff. function</button>
                     </div>
                     {(q.course === "Quantitative Methods I" || q.course === "Quantitative Methods II" || q.hasGraph) && (
-                      <div style={{display:"flex", gap:"0.5rem", marginBottom:"0.5rem", flexWrap:"wrap", paddingTop:"0.35rem", borderTop:"1px solid #334155"}}>
+                      <div style={{display:"flex", gap:"0.5rem", marginBottom:"0.5rem", flexWrap:"wrap", paddingTop:"0.35rem", borderTop:"1px solid "+border}}>
                         <span style={{fontSize:"0.65rem", color:text3, alignSelf:"center"}}>Convert to:</span>
                         {!q.hasGraph && (
                           <button style={S.ghostBtn("#10b981")} onClick={() => { const p = buildConvertPrompt(q,"graph"); setGeneratedPrompt(p); }}>📈 Graph</button>
@@ -6533,7 +6562,7 @@ export default function TestBankApp() {
                         });
                         return allIssues.length > 0 ? (
                           <div style={{background:"#7c2d1222", border:"1px solid #f8717144", borderRadius:"6px",
-                            padding:"0.6rem 0.85rem", marginBottom:"0.75rem", fontSize:"0.75rem", color:"#fca5a5"}}>
+                            padding:"0.6rem 0.85rem", marginBottom:"0.75rem", fontSize:"0.75rem", color:"#9B1C1C"}}>
                             <div style={{fontWeight:"600", marginBottom:"0.3rem"}}>⚠️ {allIssues.length} issue{allIssues.length>1?"s":""} found in this version</div>
                             {allIssues.map((issue,i) => <div key={i} style={{opacity:0.85}}>• {issue}</div>)}
                           </div>
@@ -6671,7 +6700,7 @@ export default function TestBankApp() {
                             <span style={S.tag()}>{q.difficulty}</span>
                             {issues.length > 0 && (
                               <span title={issues.join("\n")} style={{cursor:"help",
-                                background:"#7c2d12", color:"#fca5a5", fontSize:"0.68rem", fontWeight:"600",
+                                background:"#7c2d12", color:"#9B1C1C", fontSize:"0.68rem", fontWeight:"600",
                                 padding:"0.1rem 0.4rem", borderRadius:"4px", whiteSpace:"nowrap"}}>
                                 ⚠️ {issues.length}
                               </span>
@@ -6946,11 +6975,11 @@ export default function TestBankApp() {
         return (
           <div style={{position:"fixed", top:0, left:0, right:0, bottom:0, width:"100vw", height:"100vh", background:"rgba(0,0,0,0.95)", zIndex:99999, display:"flex", flexDirection:"column", overflow:"hidden"}}>
             {/* Top bar */}
-            <div style={{background:"#111827", borderBottom:"1px solid #1e2d45", padding:"0.65rem 1.5rem", display:"flex", alignItems:"center", gap:"1rem", flexShrink:0}}>
-              <span style={{fontSize:"0.85rem", fontWeight:"600", color:"#f0f4ff", flex:1}}>
+            <div style={{background:bg1, borderBottom:"1px solid #1e2d45", padding:"0.65rem 1.5rem", display:"flex", alignItems:"center", gap:"1rem", flexShrink:0}}>
+              <span style={{fontSize:"0.85rem", fontWeight:"600", color:text1, flex:1}}>
                 👁 Print Preview — {courseName} {titleLabel}
               </span>
-              <button style={{background:"#10b981", color:"#000", border:"none", borderRadius:"6px", padding:"0.4rem 1.1rem", fontSize:"0.82rem", fontWeight:"600", cursor:"pointer"}}
+              <button style={{background:"#2D6A4F", color:"#fff", border:"none", borderRadius:"6px", padding:"0.4rem 1.1rem", fontSize:"0.82rem", fontWeight:"600", cursor:"pointer"}}
                 onClick={() => {
                   const win = window.open("","_blank");
                   win.document.write(`<!DOCTYPE html><html><head><title>${courseName} ${titleLabel}</title>
@@ -6966,14 +6995,14 @@ export default function TestBankApp() {
                   win.document.close();
                   setTimeout(() => win.print(), 400);
                 }}>🖨 Print</button>
-              <button style={{background:"transparent", color:"#7a92b8", border:"1px solid #1e2d45", borderRadius:"6px", padding:"0.4rem 0.9rem", fontSize:"0.82rem", cursor:"pointer"}}
+              <button style={{background:"transparent", color:text2, border:"1px solid #1e2d45", borderRadius:"6px", padding:"0.4rem 0.9rem", fontSize:"0.82rem", cursor:"pointer"}}
                 onClick={() => setShowPrintPreview(false)}>✕ Close</button>
             </div>
 
             {/* Preview content */}
             <div style={{flex:1, overflowY:"auto", display:"flex", justifyContent:"center", padding:"2rem 1rem", flexDirection:"column", alignItems:"center"}}>
               {graphsLoading && (
-                <div style={{color:"#60a5fa", fontSize:"0.85rem", marginBottom:"1rem", padding:"0.5rem 1rem", background:"#1e3a5f", borderRadius:"6px"}}>
+                <div style={{color:"#185FA5", fontSize:"0.85rem", marginBottom:"1rem", padding:"0.5rem 1rem", background:border, borderRadius:"6px"}}>
                   ⏳ Rendering graphs...
                 </div>
               )}
