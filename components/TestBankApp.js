@@ -2316,6 +2316,14 @@ function mathToOmml(raw) {
       (_, fn, prime, arg) => addToken({t:'text', val: `${fn}${prime}(${arg})`}));
   } while (w !== prevFn);
 
+  // Stash digit·(expr) products like 4(s+2) so nested parens flatten before fraction pass
+  let prevDP;
+  do {
+    prevDP = w;
+    w = w.replace(/([0-9]+)\(([^()]+)\)/g,
+      (_, coef, inner) => addToken({t:'text', val: `${coef}(${inner})`}));
+  } while (w !== prevDP);
+
   // Process exponents FIRST (innermost), then sqrt can consume the results
 
   // (expr)^(n/m)
@@ -2365,31 +2373,67 @@ function mathToOmml(raw) {
     (_,a,b) => addToken({t:'int', a, b}));
 
   // (expr)/(b) fraction — horizontal bar (MUST come before delimiter processing)
-  w = w.replace(/\(([^()]+)\)\/\(([^()]+)\)/g,
+  // Run iteratively to handle cases where exponent pass produces (TOKEN+x) denominators
+  let prevFrac;
+  do {
+    prevFrac = w;
+
+    // (expr)/(expr) — both sides single-level parens
+    w = w.replace(/\(([^()]+)\)\/\(([^()]+)\)/g,
+      (_,n,d) => addToken({t:'frac', n, d}));
+
+    // TOKEN/TOKEN
+    w = w.replace(/(\x01\d+\x01)\/(\x01\d+\x01)/g,
+      (_,n,d) => addToken({t:'frac', n, d}));
+
+    // (expr)/TOKEN — parenthesized numerator over tokenized denominator
+    w = w.replace(/\(([^()]+)\)\/(\x01\d+\x01)/g,
+      (_,n,d) => addToken({t:'frac', n, d}));
+
+    // TOKEN/(expr) — tokenized numerator over parenthesized denominator
+    w = w.replace(/(\x01\d+\x01)\/\(([^()]+)\)/g,
+      (_,n,d) => addToken({t:'frac', n, d}));
+
+    // number/(expr) or letter/(expr) — e.g. 1/(s+3)
+    w = w.replace(/\b([a-zA-Z0-9]+)\/\(([^()]+)\)/g,
+      (_,n,d) => addToken({t:'frac', n, d}));
+
+    // number/TOKEN or letter/TOKEN — e.g. 4/s^3, 6/TOKEN
+    w = w.replace(/\b([a-zA-Z0-9]+)\/(\x01\d+\x01)/g,
+      (_,n,d) => addToken({t:'frac', n, d}));
+
+    // (expr)/number — e.g. (s+2)/3
+    w = w.replace(/\(([^()]+)\)\/([0-9]+)\b/g,
+      (_,n,d) => addToken({t:'frac', n, d}));
+
+    // compound numerator: digit·TOKEN/TOKEN  e.g. 4TOKEN/TOKEN (4 followed by stashed (s+2))
+    w = w.replace(/([0-9]+(?:\x01\d+\x01)+)\/(\x01\d+\x01)/g,
+      (_,n,d) => addToken({t:'frac', n, d}));
+
+    // compound numerator: digit·TOKEN/(expr)
+    w = w.replace(/([0-9]+(?:\x01\d+\x01)+)\/\(([^()]+)\)/g,
+      (_,n,d) => addToken({t:'frac', n, d}));
+
+  } while (w !== prevFrac);
+
+  // (a)/[b] or TOKEN/[b] fraction — square bracket denominator
+  w = w.replace(/(\([^()]+\)|\x01\d+\x01)\/\[([^\[\]]*(?:\x01\d+\x01[^\[\]]*)*)\]/g,
+    (_,n,d) => addToken({t:'frac', n: n.replace(/^\(|\)$/g,''), d}));
+
+  // simple/[b] fraction
+  w = w.replace(/([a-zA-Z0-9]+)\/\[([^\[\]]+)\]/g,
     (_,n,d) => addToken({t:'frac', n, d}));
 
-  // TOKEN/TOKEN — both numerator and denominator already tokenized (e.g. (10)/(s^3) after sup pass)
-  w = w.replace(/(\x01\d+\x01)\/(\x01\d+\x01)/g,
+  // [a]/[b] fraction
+  w = w.replace(/\[([^\[\]]+)\]\/\[([^\[\]]+)\]/g,
     (_,n,d) => addToken({t:'frac', n, d}));
 
-  // (expr)/TOKEN — parenthesized numerator over tokenized denominator
-  w = w.replace(/\(([^()]+)\)\/(\x01\d+\x01)/g,
+  // number/bare-letter — e.g. 4/s, 1/s
+  w = w.replace(/\b([0-9]+)\/([a-zA-Z])\b/g,
     (_,n,d) => addToken({t:'frac', n, d}));
 
-  // number/(expr) or letter/(expr) — e.g. 1/(s+3), A/(s+1)
-  w = w.replace(/\b([a-zA-Z0-9]+)\/\(([^()]+)\)/g,
-    (_,n,d) => addToken({t:'frac', n, d}));
-
-  // number/TOKEN or letter/TOKEN — e.g. 4/s^3 after s^3 is tokenized
-  w = w.replace(/\b([a-zA-Z0-9]+)\/(\x01\d+\x01)/g,
-    (_,n,d) => addToken({t:'frac', n, d}));
-
-  // TOKEN/(expr) — tokenized numerator over parenthesized denominator
-  w = w.replace(/(\x01\d+\x01)\/\(([^()]+)\)/g,
-    (_,n,d) => addToken({t:'frac', n, d}));
-
-  // (expr)/number — parenthesized numerator over number
-  w = w.replace(/\(([^()]+)\)\/([0-9]+)\b/g,
+  // number/number
+  w = w.replace(/\b([0-9]+)\/([0-9]+)\b/g,
     (_,n,d) => addToken({t:'frac', n, d}));
 
   // (a)/[b] or TOKEN/[b] fraction — square bracket denominator
