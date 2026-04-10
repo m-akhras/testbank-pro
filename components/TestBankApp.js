@@ -3744,13 +3744,16 @@ CRITICAL — LOGICAL NOTATION (always use these symbols, never spell out AND/OR/
   return `TESTBANK_GENERATE_REQUEST\nCourse: ${course}\nType: ${qType}\nTotal questions: ${totalQ}\n\nSections, counts, and difficulty/graph config:\n${breakdown}\n\nIMPORTANT: Follow the exact count and difficulty per section strictly.\n\nType instructions: ${typeInstructions[qType]}\n${tableInstructions}${graphInstructions || ''}\n${courseText}\nMATH NOTATION RULES (critical — follow exactly):\n- Exponents: x^2, s^3, (s-3)^2, t^2\n- Fractions: ALWAYS (numerator)/(denominator) — e.g. (10)/(s^3), (1)/((s-3)^2), (8s)/((s^2+4)^2)\n- Never omit parentheses around numerator or denominator\n- Nested denominator: (1)/((s-a)^2) — double parens for compound denominators\n- Never use square brackets: NOT [denominator] — always (denominator)\n- L{f(t)} notation for Laplace, e.g. L{t^2}, L{e^(at)}, L^{-1}{F(s)}\nBe rigorous, numerically specific, university-level.\nEach question must have a 'section' field with the exact section name.\nEach question must have a 'difficulty' field.\n\nReply with ONLY a valid JSON array, no markdown fences, no explanation:\n[${shape}, ...]`;
 }
 
+// Free Response explanation rule — shared across all prompts
+const FR_EXPLANATION_RULE = `For Free Response questions: explanation MUST contain the FULL worked solution — every step a student needs for full marks. Write each step on its own line as a pure math equation (no English prose, no "Use", "Thus", "Let", "We get"). Show ALL intermediate steps — formula, substitution, algebra, final answer. Use (numerator)/(denominator) for all fractions.`;
+
 function buildVersionPrompt(selectedQuestions, mutationType, versionLabel) {
   const lines = selectedQuestions.map((q,i) => {
     const mut = mutationType[q.id]||"numbers";
     const orig = q.type==="Branched" ? q.stem : q.question;
     return (i+1)+". ["+q.section+"] ["+mut+" mutation] ["+q.type+"] Original: "+orig;
   }).join("\n");
-  return `TESTBANK_VERSION_REQUEST\nVersion: ${versionLabel}\n\nMutate the following questions to create Version ${versionLabel}:\n${lines}\n\nMUTATION RULES:\n- numbers mutation: keep exact same function type and concept, only change coefficients/constants. Same difficulty, same steps.\n- function mutation: change to different but equivalent-difficulty function of same concept. Same difficulty, same steps.\n- For Branched: mutate the shared stem and regenerate ALL parts consistently.\n- ALWAYS regenerate the correct answer key for the mutated version.\n- Keep same question type, section, and difficulty.\n- For Multiple Choice: all 4 choices must be distinct values — no two choices may be identical or equivalent.\n\nReturn a JSON array of mutated questions in the SAME order preserving the original structure:\n- Regular: {type, section, difficulty, question, answer, explanation, choices if MC}\n- Formula: {type, section, difficulty, question, variables, answerFormula, answer, explanation}\n- Branched: {type, section, difficulty, stem, parts:[{question,answer,explanation}]}\nReply with ONLY valid JSON array, no markdown.`;
+  return `TESTBANK_VERSION_REQUEST\nVersion: ${versionLabel}\n\nMutate the following questions to create Version ${versionLabel}:\n${lines}\n\nMUTATION RULES:\n- numbers mutation: keep exact same function type and concept, only change coefficients/constants. Same difficulty, same steps.\n- function mutation: change to different but equivalent-difficulty function of same concept. Same difficulty, same steps.\n- For Branched: mutate the shared stem and regenerate ALL parts consistently.\n- ALWAYS regenerate the correct answer key for the mutated version.\n- Keep same question type, section, and difficulty.\n- For Multiple Choice: all 4 choices must be distinct values — no two choices may be identical or equivalent.\n- ${FR_EXPLANATION_RULE}\n\nReturn a JSON array of mutated questions in the SAME order preserving the original structure:\n- Regular: {type, section, difficulty, question, answer, explanation, choices if MC}\n- Formula: {type, section, difficulty, question, variables, answerFormula, answer, explanation}\n- Branched: {type, section, difficulty, stem, parts:[{question,answer,explanation}]}\nReply with ONLY valid JSON array, no markdown.`;
 }
 
 
@@ -3772,7 +3775,7 @@ function buildAllVersionsPrompt(selectedQuestions, mutationType, labels, classSe
         ? "function mutation — use a DIFFERENT function type (e.g. if original uses polynomial, use exponential or trigonometric). Same concept difficulty, same steps."
         : "numbers mutation — keep exact same function type, change only coefficients/constants."}`;
     }).join("\n");
-    return `TESTBANK_ALL_VERSIONS_REQUEST\nVersions to create: ${versionList}\n\nFor each version, mutate ALL of the following questions:\n${lines}\n\nPER-QUESTION MUTATION RULES:\n${mutRules}\n\nADDITIONAL RULES:\n- ALWAYS regenerate a correct answer key for each mutated version.\n- Keep same question type, section, and difficulty.\n- Each version must be DIFFERENT from all others.\n- Within numbers-mutation questions: versions differ only by coefficients/constants.\n- Within function-mutation questions: versions use different function types from each other.\n- For Multiple Choice: all 4 choices must be distinct values — no two choices may be identical or equivalent.\n\nReturn a JSON object with one key per version label. Each value is a JSON array of mutated questions in the SAME order:\n{\n  "A": [{type, section, difficulty, question, choices, answer, explanation}, ...],\n  "B": [{type, section, difficulty, question, choices, answer, explanation}, ...]\n}\nReply with ONLY valid JSON object, no markdown, no explanation.`;
+    return `TESTBANK_ALL_VERSIONS_REQUEST\nVersions to create: ${versionList}\n\nFor each version, mutate ALL of the following questions:\n${lines}\n\nPER-QUESTION MUTATION RULES:\n${mutRules}\n\nADDITIONAL RULES:\n- ALWAYS regenerate a correct answer key for each mutated version.\n- Keep same question type, section, and difficulty.\n- Each version must be DIFFERENT from all others.\n- Within numbers-mutation questions: versions differ only by coefficients/constants.\n- Within function-mutation questions: versions use different function types from each other.\n- For Multiple Choice: all 4 choices must be distinct values — no two choices may be identical or equivalent.\n- ${FR_EXPLANATION_RULE}\n\nReturn a JSON object with one key per version label. Each value is a JSON array of mutated questions in the SAME order:\n{\n  "A": [{type, section, difficulty, question, choices, answer, explanation}, ...],\n  "B": [{type, section, difficulty, question, choices, answer, explanation}, ...]\n}\nReply with ONLY valid JSON object, no markdown, no explanation.`;
   }
 
   // Multi-section: single prompt, all sections + versions
@@ -3791,7 +3794,7 @@ function buildAllVersionsPrompt(selectedQuestions, mutationType, labels, classSe
 
   const exampleKeys = sectionKeys.map(k => `"${k}": [{...}]`).join(",\n  ");
 
-  return `TESTBANK_ALL_SECTIONS_AND_VERSIONS_REQUEST\nClassroom Sections: ${numClassSections}\nVersions per section: ${versionList}\nTotal keys to generate: ${sectionKeys.join(", ")}\n\nFor each key, mutate ALL of the following questions:\n${lines}\n\nMUTATION RULES BY SECTION:\n${sectionRules}\n\nADDITIONAL RULES:\n- Within each section, versions (A, B, C...) must differ from each other by numbers only.\n- Across sections, questions must use completely different function types.\n- ALWAYS regenerate correct answer keys.\n- Keep same question type, section name, and difficulty throughout.\n- Each version must be a JSON array in the SAME question order.\n- For Multiple Choice: all 4 choices must be distinct values — no two choices may be identical or equivalent.\n\nReturn a single JSON object with ALL keys:\n{\n  ${exampleKeys}\n}\nReply with ONLY valid JSON object, no markdown, no explanation.`;
+  return `TESTBANK_ALL_SECTIONS_AND_VERSIONS_REQUEST\nClassroom Sections: ${numClassSections}\nVersions per section: ${versionList}\nTotal keys to generate: ${sectionKeys.join(", ")}\n\nFor each key, mutate ALL of the following questions:\n${lines}\n\nMUTATION RULES BY SECTION:\n${sectionRules}\n\nADDITIONAL RULES:\n- Within each section, versions (A, B, C...) must differ from each other by numbers only.\n- Across sections, questions must use completely different function types.\n- ALWAYS regenerate correct answer keys.\n- Keep same question type, section name, and difficulty throughout.\n- Each version must be a JSON array in the SAME question order.\n- For Multiple Choice: all 4 choices must be distinct values — no two choices may be identical or equivalent.\n- ${FR_EXPLANATION_RULE}\n\nReturn a single JSON object with ALL keys:\n{\n  ${exampleKeys}\n}\nReply with ONLY valid JSON object, no markdown, no explanation.`;
 }
 
 // Single combined prompt for ALL classroom sections at once
@@ -3829,6 +3832,7 @@ ${sectionRules}
 - Across sections: each section must use different functions entirely.
 - ALWAYS regenerate a correct answer key for each mutated version.
 - Keep same question type, section name, and difficulty.
+- ${FR_EXPLANATION_RULE}
 
 Return a JSON object with one key per version label (${allKeys.join(", ")}):
 {
@@ -3842,7 +3846,7 @@ function buildReplacePrompt(q, mutationType="numbers") {
   const mutationRule = mutationType === "function"
     ? "Use a DIFFERENT function type (e.g. if original uses polynomial, use exponential or trigonometric). Same concept area, same difficulty, same steps count."
     : "Keep the same function type, change only the numbers/coefficients.";
-  return `TESTBANK_REPLACE_REQUEST\nGenerate 1 replacement question.\nSection: ${q.section} | Type: ${q.type} | Difficulty: ${q.difficulty}\nOriginal: ${q.type==="Branched" ? q.stem : q.question}\nMutation: ${mutationType} — ${mutationRule}\nRequirements: same section, same question type, same difficulty, DIFFERENT question.\nUse plain-text math notation.\n${q.type==="Multiple Choice"?"Include 4 choices and correct answer.":""}\n${q.type==="Formula"?"Include variables array and answerFormula.":""}\n${q.type==="Branched"?"Include stem and parts array.":""}\nReply with ONLY a JSON array containing exactly 1 item, no markdown.`;
+  return `TESTBANK_REPLACE_REQUEST\nGenerate 1 replacement question.\nSection: ${q.section} | Type: ${q.type} | Difficulty: ${q.difficulty}\nOriginal: ${q.type==="Branched" ? q.stem : q.question}\nMutation: ${mutationType} — ${mutationRule}\nRequirements: same section, same question type, same difficulty, DIFFERENT question.\nUse plain-text math notation.\n${q.type==="Multiple Choice"?"Include 4 choices and correct answer.":""}\n${q.type==="Formula"?"Include variables array and answerFormula.":""}\n${q.type==="Branched"?"Include stem and parts array.":""}\n${q.type==="Free Response"?FR_EXPLANATION_RULE:""}\nReply with ONLY a JSON array containing exactly 1 item, no markdown.`;
 }
 
 function buildConvertPrompt(q, targetFormat) {
@@ -4750,6 +4754,17 @@ export default function TestBankApp() {
     try {
       const raw = pasteInput.trim();
 
+      // Sanitize any question object from AI — guard null/missing fields
+      const sanitize = (q) => ({
+        ...q,
+        type:       q.type       || "Multiple Choice",
+        difficulty: q.difficulty || "Medium",
+        question:   q.question   || "",
+        answer:     q.answer     || "",
+        choices:    (q.choices   || []).map(c => c ?? ""),
+        explanation: q.explanation || "",
+      });
+
       // For version_all, parse as object {A:[...], B:[...]}
       if (pendingType === "version_all") {
         const objMatch = raw.match(/\{[\s\S]*\}/);
@@ -4759,7 +4774,7 @@ export default function TestBankApp() {
         const allVersions = labels.map(label => {
           const qs = parsed[label] || [];
           const versioned = qs.map((q,i) => ({
-            ...q, id: uid(), originalId: selected[i]?.id,
+            ...sanitize(q), id: uid(), originalId: selected[i]?.id,
             course: selected[i]?.course || course,
             versionLabel: label, classSection, createdAt: Date.now(),
             ...(selected[i]?.hasGraph ? { hasGraph: true, graphConfig: selected[i].graphConfig } : {}),
@@ -4787,7 +4802,7 @@ export default function TestBankApp() {
             const key = `S${s}_${label}`;
             const qs = parsed[key] || [];
             const versioned = qs.map((q,i) => ({
-              ...q, id: uid(), originalId: selected[i]?.id,
+              ...sanitize(q), id: uid(), originalId: selected[i]?.id,
               course: selected[i]?.course || course,
               versionLabel: label, classSection: s, createdAt: Date.now(),
               ...(selected[i]?.hasGraph ? { hasGraph: true, graphConfig: selected[i].graphConfig } : {}),
@@ -4809,15 +4824,6 @@ export default function TestBankApp() {
       const parsed = JSON.parse(match[0]);
       if (!Array.isArray(parsed)) throw new Error("Expected a JSON array.");
 
-      // Sanitize API response — guard against null/missing fields from AI
-      const sanitize = (q) => ({
-        ...q,
-        type:       q.type       || "Multiple Choice",
-        difficulty: q.difficulty || "Medium",
-        question:   q.question   || "",
-        answer:     q.answer     || "",
-        choices:    (q.choices   || []).map(c => c ?? ""),
-      });
       const sanitized = parsed.map(sanitize);
 
       if (pendingType === "generate") {
