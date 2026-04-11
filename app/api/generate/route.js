@@ -3,6 +3,63 @@ import { cookies } from "next/headers";
 
 const RATE_LIMIT = 20;
 
+// ── Validation prompt ────────────────────────────────────────────────────────
+const VALIDATION_SYSTEM = `You are a mathematics answer validator for university-level exams.
+You will be given a multiple choice question with its choices and stated correct answer.
+Your job is to verify whether the stated correct answer is mathematically accurate.
+
+Respond ONLY with a JSON object in this exact format, no preamble, no markdown:
+{
+  "valid": true,
+  "corrected_answer": null,
+  "reason": null
+}
+
+OR if the answer is wrong:
+{
+  "valid": false,
+  "corrected_answer": "the correct answer text here",
+  "reason": "brief explanation of the error"
+}`;
+
+async function validateQuestion(question) {
+  const prompt = `Question: ${question.question}
+
+Choices:
+${(question.choices || []).map((c, i) => `${String.fromCharCode(65 + i)}) ${c}`).join("\n")}
+
+Stated correct answer: ${question.answer}
+
+Is this answer mathematically correct?`;
+
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": process.env.ANTHROPIC_API_KEY,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-5",
+      max_tokens: 300,
+      system: VALIDATION_SYSTEM,
+      messages: [{ role: "user", content: prompt }],
+    }),
+  });
+
+  if (!res.ok) return { valid: true, corrected_answer: null, reason: null }; // fail silently
+
+  const data = await res.json();
+  const text = data.content?.[0]?.text || "";
+  try {
+    const clean = text.replace(/```json|```/g, "").trim();
+    return JSON.parse(clean);
+  } catch {
+    return { valid: true, corrected_answer: null, reason: null }; // fail silently
+  }
+}
+
+// ── Main route ───────────────────────────────────────────────────────────────
 export async function POST(req) {
   try {
     const cookieStore = cookies();
@@ -35,10 +92,22 @@ export async function POST(req) {
 
     await supabase.from("api_usage").insert({ user_id: userId });
 
-    const { prompt, file } = await req.json();
+    const { prompt, file, questions } = await req.json();
+
+    // ── Validation mode ──────────────────────────────────────────────────────
+    // If questions array is passed, run validation only (no generation)
+    if (questions && Array.isArray(questions)) {
+      const results = await Promise.all(questions.map(validateQuestion));
+      const validated = questions.map((q, i) => ({
+        ...q,
+        validation: results[i],
+      }));
+      return Response.json({ validated });
+    }
+
+    // ── Generation mode ──────────────────────────────────────────────────────
     if (!prompt) return Response.json({ error: "No prompt provided" }, { status: 400 });
 
-    // Build message content — support PDF file input
     let messageContent;
     if (file?.base64 && file?.mediaType) {
       messageContent = [
@@ -73,7 +142,6 @@ export async function POST(req) {
 
     const data = await res.json();
 
-    // Warn if response was cut off due to token limit
     if (data.stop_reason === "max_tokens") {
       return Response.json({ ...data, warning: "Response was truncated — try fewer questions per generation." });
     }

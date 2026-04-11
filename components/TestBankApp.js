@@ -4736,6 +4736,9 @@ export default function TestBankApp() {
   const [generatedPrompt, setGeneratedPrompt] = useState("");
   const [autoGenLoading, setAutoGenLoading] = useState(false);
   const [autoGenError, setAutoGenError] = useState("");
+  const [validationResults, setValidationResults] = useState({}); // { questionId: { valid, corrected_answer, reason } }
+  const [validating, setValidating] = useState(false);
+  const [validationError, setValidationError] = useState("");
   const [user, setUser] = useState(null);
 
   const isAdmin = user?.email === "mohammadalakhrass@yahoo.com";
@@ -5455,6 +5458,74 @@ export default function TestBankApp() {
   );
 
   const [confirmDelete, setConfirmDelete] = useState(null); // {id, label}
+
+  // ── Auto-validate all versions (admin only) ───────────────────────────────
+  async function autoValidateAllVersions() {
+    setValidating(true);
+    setValidationError("");
+    try {
+      const allVersions = Object.keys(classSectionVersions).length > 1
+        ? Object.values(classSectionVersions).flat()
+        : versions;
+      const seen = new Set();
+      const uniqueQuestions = [];
+      allVersions.forEach(v => {
+        v.questions.forEach(q => {
+          if (!seen.has(q.id)) { seen.add(q.id); uniqueQuestions.push(q); }
+        });
+      });
+      const res = await fetch("/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ questions: uniqueQuestions }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      const results = {};
+      (data.validated || []).forEach(q => { results[q.id] = q.validation; });
+      setValidationResults(results);
+    } catch (e) {
+      setValidationError(e.message || "Validation failed. Try Copy Validation Prompt instead.");
+    }
+    setValidating(false);
+  }
+
+  // ── Copy validation prompt (admin only) ──────────────────────────────────
+  function copyValidationPrompt() {
+    const allVersions = Object.keys(classSectionVersions).length > 1
+      ? Object.values(classSectionVersions).flat()
+      : versions;
+    const seen = new Set();
+    const uniqueQuestions = [];
+    allVersions.forEach(v => {
+      v.questions.forEach(q => {
+        if (!seen.has(q.id)) { seen.add(q.id); uniqueQuestions.push(q); }
+      });
+    });
+    const questionsText = uniqueQuestions.map((q, i) => {
+      const choices = (q.choices || []).map((c, ci) => `  ${String.fromCharCode(65+ci)}) ${c}`).join("\n");
+      return `Q${i+1}: ${q.question}\n${choices}\n  Correct Answer: ${q.answer}`;
+    }).join("\n\n");
+    const prompt = `You are validating math exam questions for a university course.
+
+For each question below, check:
+1. Is the correct answer mathematically accurate?
+2. Are the distractors plausible student mistakes (not random values)?
+3. Is the question clearly worded with no ambiguity?
+4. Are any two choices mathematically equivalent? (e.g. 1/2 and 0.5, or x+x and 2x)
+5. Are any two choices identical or near-identical in value?
+
+For each issue found, return:
+- Question number
+- Problem: what is wrong
+- Fix: the corrected answer, rewrite, or replacement distractor
+
+If everything is correct, say "All questions verified"
+
+QUESTIONS:
+${questionsText}`;
+    navigator.clipboard.writeText(prompt);
+  }
 
   if (authLoading) return (
     <div style={{ minHeight:"100vh", background:bg0, display:"flex", alignItems:"center", justifyContent:"center" }}>
@@ -6714,7 +6785,40 @@ export default function TestBankApp() {
                           const blob = await buildAnswerKey(allVers, course);
                           if (blob) dlBlob(blob, `${course.replace(/\s+/g,"_")}_Answer_Key.docx`);
                         }}>🔑 Answer Key (.docx)</button>
+                        {isAdmin && (
+                          <button style={S.btn("#7c3aed", validating)} disabled={validating} onClick={autoValidateAllVersions}>
+                            {validating ? "⏳ Validating..." : "✅ Auto Validate"}
+                          </button>
+                        )}
+                        {isAdmin && (
+                          <button style={S.oBtn("#7c3aed")} onClick={() => { copyValidationPrompt(); }}>
+                            📋 Copy Validation Prompt
+                          </button>
+                        )}
                       </div>
+                      {isAdmin && validationError && (
+                        <div style={{background:"#1a0a0a", border:"1px solid #7f1d1d", borderRadius:"6px", padding:"0.5rem 0.85rem", marginBottom:"0.75rem", fontSize:"0.78rem", color:"#f87171"}}>
+                          ⚠️ {validationError}
+                        </div>
+                      )}
+                      {isAdmin && Object.keys(validationResults).length > 0 && (() => {
+                        const issues = Object.entries(validationResults).filter(([,r]) => !r.valid);
+                        return (
+                          <div style={{background: issues.length === 0 ? "#052e16" : "#1c1002", border:`1px solid ${issues.length === 0 ? "#14532d" : "#f59e0b44"}`, borderRadius:"6px", padding:"0.6rem 0.85rem", marginBottom:"0.75rem", fontSize:"0.78rem", color: issues.length === 0 ? "#4ade80" : "#f59e0b"}}>
+                            {issues.length === 0
+                              ? "✅ All questions verified — no issues found."
+                              : <>
+                                  <div style={{fontWeight:"600", marginBottom:"0.3rem"}}>⚠️ {issues.length} issue{issues.length>1?"s":""} found</div>
+                                  {issues.map(([id, r]) => (
+                                    <div key={id} style={{marginBottom:"0.25rem", opacity:0.9}}>
+                                      • <strong>Q{id}:</strong> {r.reason}{r.corrected_answer ? ` → Correct: ${r.corrected_answer}` : ""}
+                                    </div>
+                                  ))}
+                                </>
+                            }
+                          </div>
+                        );
+                      })()}
 
                       {/* Canvas QTI Export Panel */}
                       {Object.keys(classSectionVersions).length > 1 ? (
