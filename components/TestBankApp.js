@@ -3906,7 +3906,10 @@ function buildReplacePrompt(q, mutationType="numbers") {
   const mutationRule = mutationType === "function"
     ? "Use a DIFFERENT function type (e.g. if original uses polynomial, use exponential or trigonometric). Same concept area, same difficulty, same steps count."
     : "Keep the same function type, change only the numbers/coefficients.";
-  return `TESTBANK_REPLACE_REQUEST\nGenerate 1 replacement question.\nSection: ${q.section} | Type: ${q.type} | Difficulty: ${q.difficulty}\nOriginal: ${q.type==="Branched" ? q.stem : q.question}\nMutation: ${mutationType} — ${mutationRule}\nRequirements: same section, same question type, same difficulty, DIFFERENT question.\nUse plain-text math notation.\n${q.type==="Multiple Choice"?"Include 4 choices and correct answer.":""}\n${q.type==="Formula"?"Include variables array and answerFormula.":""}\n${q.type==="Branched"?"Include stem and parts array.":""}\n${q.type==="Free Response"?FR_EXPLANATION_RULE:""}\nReply with ONLY a JSON array containing exactly 1 item, no markdown.`;
+  const MC_VERIFY = q.type === "Multiple Choice"
+    ? `\nANSWER VERIFICATION (mandatory — do this before returning JSON):\n- Solve the question yourself from scratch.\n- Confirm the answer field exactly matches one of the 4 choices (same value, same notation).\n- Confirm all 4 choices are distinct — no two may be equal or mathematically equivalent.\n- If any check fails, fix the question before returning.`
+    : `\nANSWER VERIFICATION (mandatory — do this before returning JSON):\n- Solve the question yourself from scratch and confirm your answer field is correct.\n- If it is wrong, fix it before returning.`;
+  return `TESTBANK_REPLACE_REQUEST\nGenerate 1 replacement question.\nSection: ${q.section} | Type: ${q.type} | Difficulty: ${q.difficulty}\nOriginal: ${q.type==="Branched" ? q.stem : q.question}\nMutation: ${mutationType} — ${mutationRule}\nRequirements: same section, same question type, same difficulty, DIFFERENT question.\nUse plain-text math notation.\n${q.type==="Multiple Choice"?"Include 4 choices and correct answer.":""}\n${q.type==="Formula"?"Include variables array and answerFormula.":""}\n${q.type==="Branched"?"Include stem and parts array.":""}\n${q.type==="Free Response"?FR_EXPLANATION_RULE:""}${MC_VERIFY}\nReply with ONLY a JSON array containing exactly 1 item, no markdown.`;
 }
 
 function buildConvertPrompt(q, targetFormat) {
@@ -5025,6 +5028,16 @@ export default function TestBankApp() {
     const prompt = buildReplacePrompt(versions[vIdx].questions[qIdx], mutationType);
     setGeneratedPrompt(prompt);
     setPendingType("replace"); setPendingMeta({ vIdx, qIdx }); setPasteInput(""); setPasteError("");
+  }
+
+  async function triggerReplaceAuto(vIdx, qIdx, mutationType="numbers") {
+    const baseQ = versions[vIdx].questions[qIdx];
+    const prompt = buildReplacePrompt(baseQ, mutationType);
+    setGeneratedPrompt(prompt);
+    setPendingType("replace");
+    setPendingMeta({ vIdx, qIdx });
+    setPasteInput(""); setPasteError("");
+    await autoGenerateVersions(prompt, "replace", { vIdx, qIdx });
   }
 
   function defaultSecCfg() { return { Easy:{count:1,graphType:"normal",tableRows:4,tableCols:2}, Medium:{count:1,graphType:"normal",tableRows:5,tableCols:3}, Hard:{count:1,graphType:"normal",tableRows:6,tableCols:3} }; }
@@ -6809,9 +6822,9 @@ export default function TestBankApp() {
                             )}
                             <div style={{marginLeft:"auto", display:"flex", gap:"0.3rem"}}>
                               <button style={{...S.smBtn, color:"#f59e0b", border:"1px solid #f59e0b44"}}
-                                onClick={() => triggerReplace(activeVersion,qi,"numbers")}>↻ Replace</button>
+                                onClick={() => isAdmin ? triggerReplace(activeVersion,qi,"numbers") : triggerReplaceAuto(activeVersion,qi,"numbers")}>↻ Replace</button>
                               <button style={{...S.smBtn, color:"#e879f9", border:"1px solid #e879f944"}}
-                                onClick={() => triggerReplace(activeVersion,qi,"function")}>↻ Diff.</button>
+                                onClick={() => isAdmin ? triggerReplace(activeVersion,qi,"function") : triggerReplaceAuto(activeVersion,qi,"function")}>↻ Diff.</button>
                               <button style={{...S.smBtn, color: inlineEditQId===`v${activeVersion}_${qi}` ? "#60a5fa" : "#a78bfa", border:"1px solid #a78bfa44"}}
                                 onClick={() => setInlineEditQId(inlineEditQId===`v${activeVersion}_${qi}` ? null : `v${activeVersion}_${qi}`)}>
                                 ✏️
@@ -6862,18 +6875,45 @@ export default function TestBankApp() {
                               {q.explanation&&<div style={S.expl}>💡 <MathText>{q.explanation}</MathText></div>}
                             </>
                           )}
-                          {pendingType === "replace" && pendingMeta?.vIdx === activeVersion && pendingMeta?.qIdx === qi && generatedPrompt && (
+                          {pendingType === "replace" && pendingMeta?.vIdx === activeVersion && pendingMeta?.qIdx === qi && (
                             <>
-                              <div style={{fontSize:"0.75rem", color:"#f59e0b", fontWeight:"bold", margin:"0.75rem 0 0.4rem"}}>📋 Copy this replacement prompt:</div>
-                              <div style={S.promptBox}>{generatedPrompt}</div>
-                              {isAdmin && <button style={S.oBtn("#f59e0b")} onClick={() => navigator.clipboard.writeText(generatedPrompt)}>Copy Prompt</button>}
-                              <PastePanel
-                                label="Paste the replacement question JSON here."
-                                S={S} text2={text2}
-                                pasteInput={pasteInput} setPasteInput={setPasteInput}
-                                pasteError={pasteError} handlePaste={handlePaste}
-                                onCancel={() => { setPendingType(null); setPasteInput(""); setGeneratedPrompt(""); }}
-                              />
+                              {isAdmin && generatedPrompt && (
+                                <>
+                                  <div style={{fontSize:"0.75rem", color:"#f59e0b", fontWeight:"bold", margin:"0.75rem 0 0.4rem"}}>📋 Replacement prompt:</div>
+                                  <div style={S.promptBox}>{generatedPrompt}</div>
+                                  <div style={{display:"flex", gap:"0.5rem", marginBottom:"0.75rem", flexWrap:"wrap"}}>
+                                    <button
+                                      style={{...S.btn("#10b981", autoGenLoading), minWidth:"150px"}}
+                                      disabled={autoGenLoading}
+                                      onClick={() => autoGenerateVersions(generatedPrompt, "replace", pendingMeta)}>
+                                      {autoGenLoading ? "⏳ Generating..." : "⚡ Auto-Generate"}
+                                    </button>
+                                    <button style={S.oBtn("#f59e0b")} onClick={() => navigator.clipboard.writeText(generatedPrompt)}>Copy Prompt</button>
+                                  </div>
+                                  {autoGenError && <div style={{color:"#f87171", fontSize:"0.78rem", marginBottom:"0.5rem"}}>{autoGenError}</div>}
+                                  <PastePanel
+                                    label="Paste the replacement question JSON here."
+                                    S={S} text2={text2}
+                                    pasteInput={pasteInput} setPasteInput={setPasteInput}
+                                    pasteError={pasteError} handlePaste={handlePaste}
+                                    onCancel={() => { setPendingType(null); setPasteInput(""); setGeneratedPrompt(""); }}
+                                  />
+                                </>
+                              )}
+                              {!isAdmin && (
+                                <div style={{marginTop:"0.75rem", display:"flex", gap:"0.5rem", alignItems:"center", flexWrap:"wrap", padding:"0.6rem 0.75rem", background:"#052e1688", borderRadius:"6px", border:"1px solid #22c55e22"}}>
+                                  {autoGenLoading
+                                    ? <><span style={{fontSize:"0.75rem", color:"#86efac"}}>⏳ Generating replacement...</span></>
+                                    : autoGenError
+                                      ? <span style={{fontSize:"0.72rem", color:"#f87171"}}>{autoGenError}</span>
+                                      : <span style={{fontSize:"0.72rem", color:"#86efac"}}>✓ Done</span>
+                                  }
+                                  <button style={{...S.smBtn, color:text2, marginLeft:"auto"}}
+                                    onClick={() => { setPendingType(null); setGeneratedPrompt(""); }}>
+                                    Cancel
+                                  </button>
+                                </div>
+                              )}
                             </>
                           )}
                         </div>
