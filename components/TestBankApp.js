@@ -5525,6 +5525,7 @@ If everything is correct, say "All questions verified"
 QUESTIONS:
 ${questionsText}`;
     navigator.clipboard.writeText(prompt);
+    showToast("✅ Validation prompt copied — paste it into Claude.ai", "success");
   }
 
   if (authLoading) return (
