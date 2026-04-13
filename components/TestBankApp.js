@@ -3657,6 +3657,43 @@ graphConfig examples:
 For limit questions with holes: use "single" and include "holes":[[x,y]] for open circles and "points":[[x,y]] for filled dots.
 Question text must say "Based on the graph above, ..." — never describe the graph in the question text.
 The expressions in graphConfig must EXACTLY match the functions mentioned in the question text.
+
+CHAPTER 15 — MULTIPLE INTEGRALS (these rules override the general rules above for all Ch.15 sections):
+All Chapter 15 graphs show the 2D integration REGION R in the xy-plane — never attempt to graph the 3D surface f(x,y) itself.
+
+15.1 Double Integrals over Rectangles:
+  Region R is always a rectangle [a,b] × [c,d]. Represent it as a shaded horizontal band using type "area".
+  fnTop = constant upper y-bound (e.g. "2"), fnBottom = constant lower y-bound (e.g. "0").
+  shadeFrom = left x-bound (a), shadeTo = right x-bound (b).
+  Set fnTopLabel = "y = d" and fnBottomLabel = "y = c".
+  Set yDomain to slightly exceed the rectangle bounds so the region is clearly visible.
+  Example — R = [0,3]×[0,2]: {"type":"area","fnTop":"2","fnBottom":"0","shadeFrom":0,"shadeTo":3,"fnTopLabel":"y = 2","fnBottomLabel":"y = 0","showAxisNumbers":true,"showGrid":true,"xDomain":[-0.5,4],"yDomain":[-0.5,3]}
+  Example — R = [1,4]×[1,3]: {"type":"area","fnTop":"3","fnBottom":"1","shadeFrom":1,"shadeTo":4,"fnTopLabel":"y = 3","fnBottomLabel":"y = 1","showAxisNumbers":true,"showGrid":true,"xDomain":[0,5],"yDomain":[0,4]}
+
+15.2 Double Integrals over General Regions:
+  Region R is bounded by two curves in the xy-plane. Use type "area".
+  fnTop = upper boundary curve, fnBottom = lower boundary curve.
+  shadeFrom and shadeTo = x-values where the two curves intersect.
+  Example — region between y=x and y=x²: {"type":"area","fnTop":"x","fnBottom":"x^2","shadeFrom":0,"shadeTo":1,"fnTopLabel":"y = x","fnBottomLabel":"y = x²","showAxisNumbers":true,"showGrid":true,"xDomain":[-0.5,1.5]}
+  Example — region between y=sqrt(x) and y=x²: {"type":"area","fnTop":"sqrt(x)","fnBottom":"x^2","shadeFrom":0,"shadeTo":1,"fnTopLabel":"y = √x","fnBottomLabel":"y = x²","showAxisNumbers":true,"showGrid":true,"xDomain":[-0.5,1.5]}
+
+15.3 Double Integrals in Polar Coordinates:
+  Show the polar region boundary in Cartesian form using type "domain" or type "area".
+  For a full disk r ≤ R: use type "domain" with boundary = "sqrt(R^2 - x^2)", shadeAbove:false (shade below the semicircle, i.e. the disk).
+  For an annular region between r=r1 and r=r2: use type "area" with fnTop = "sqrt(r2^2-x^2)", fnBottom = "sqrt(r1^2-x^2)".
+  For a sector/wedge: represent the angular boundaries as straight lines using type "area".
+  Example — quarter disk r ≤ 2, first quadrant: {"type":"domain","boundary":"sqrt(4-x^2)","shadeAbove":false,"boundaryDashed":false,"boundaryLabel":"r = 2","showAxisNumbers":true,"showGrid":true,"xDomain":[-0.5,2.5],"yDomain":[-0.5,2.5]}
+  Example — annulus 1 ≤ r ≤ 2: {"type":"area","fnTop":"sqrt(4-x^2)","fnBottom":"sqrt(1-x^2)","shadeFrom":-1,"shadeTo":1,"fnTopLabel":"r = 2","fnBottomLabel":"r = 1","showAxisNumbers":true,"showGrid":true,"xDomain":[-2.5,2.5]}
+
+15.5 Surface Area:
+  Show the projection region D in the xy-plane over which the surface area is integrated.
+  Use type "area" if D is bounded by two curves, or type "domain" if D is bounded by one curve.
+  Example — D: y=x to y=x²: {"type":"area","fnTop":"x","fnBottom":"x^2","shadeFrom":0,"shadeTo":1,"fnTopLabel":"y = x","fnBottomLabel":"y = x²","showAxisNumbers":true,"showGrid":true,"xDomain":[-0.5,1.5]}
+
+15.6 Triple Integrals:
+  Show the 2D projection of the 3D region onto the xy-plane (the shadow region).
+  Use type "area" for regions bounded by two curves, or type "domain" for regions bounded by one curve.
+  Example — projection of region below z=4-x²-y²: {"type":"domain","boundary":"sqrt(4-x^2)","shadeAbove":false,"boundaryDashed":false,"boundaryLabel":"x²+y²=4","showAxisNumbers":true,"showGrid":true,"xDomain":[-2.5,2.5],"yDomain":[-2.5,2.5]}
 ` : "";
   const typeInstructions = {
     "Multiple Choice": "4 choices as plain strings. answer = exact text of correct choice.",
@@ -5525,7 +5562,6 @@ If everything is correct, say "All questions verified"
 QUESTIONS:
 ${questionsText}`;
     navigator.clipboard.writeText(prompt);
-    showToast("✅ Validation prompt copied — paste it into Claude.ai", "success");
   }
 
   if (authLoading) return (
