@@ -4733,6 +4733,10 @@ export default function TestBankApp() {
   const [filterTime, setFilterTime] = useState("All");
   const [bankSelectMode, setBankSelectMode] = useState(false);
   const [bankSelected, setBankSelected] = useState(new Set());
+  const [bulkReplacePrompt, setBulkReplacePrompt] = useState("");
+  const [bulkReplacePaste, setBulkReplacePaste] = useState("");
+  const [bulkReplaceError, setBulkReplaceError] = useState("");
+  const [bulkReplaceIds, setBulkReplaceIds] = useState(new Set());
   const [graphEditorQId, setGraphEditorQId] = useState(null); // which question has graph editor open
   const [inlineEditQId,  setInlineEditQId]  = useState(null); // which question has inline editor open
   const [toast, setToast] = useState(null); // {msg, type} — auto-dismisses
@@ -6129,10 +6133,9 @@ ${questionsText}`;
                     setBank(prev => prev.filter(q => !bankSelected.has(q.id)));
                     setBankSelected(new Set()); setBankSelectMode(false);
                   }}>🗑 Delete {bankSelected.size} questions</button>
-                  <button style={S.ghostBtn("#10b981")} onClick={async () => {
+                  <button style={S.ghostBtn("#10b981")} onClick={() => {
                     const selectedQs = bank.filter(q => bankSelected.has(q.id));
                     if (!selectedQs.length) return;
-                    // Build section config from selected questions
                     const secCfg = {};
                     selectedQs.forEach(q => {
                       const sec = q.section || "Unknown";
@@ -6144,39 +6147,9 @@ ${questionsText}`;
                     const sections = Object.keys(secCfg);
                     const qType = selectedQs[0].type || "Multiple Choice";
                     const prompt = buildGeneratePrompt(course, sections, {}, qType, null, secCfg);
-                    if (!window.confirm(`Replace ${bankSelected.size} selected questions with fresh ones from the API?`)) return;
-                    // Delete old
-                    const idsToDelete = new Set(bankSelected);
-                    for (const id of idsToDelete) await deleteQuestion(id);
-                    setBank(prev => prev.filter(q => !idsToDelete.has(q.id)));
-                    setBankSelected(new Set()); setBankSelectMode(false);
-                    // Clear time filter so new questions are visible
-                    setFilterTime("All"); setFilterDay("All");
-                    // Generate new via API — stay on bank screen
-                    setAutoGenLoading(true); setAutoGenError("");
-                    try {
-                      const res = await fetch("/api/generate", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ prompt }),
-                      });
-                      if (!res.ok) throw new Error(`API error: ${res.status}`);
-                      const data = await res.json();
-                      const text = data.content?.[0]?.text || data.text || "";
-                      if (!text) throw new Error("Empty response. Try again.");
-                      const match = text.match(/\[[\s\S]*\]/);
-                      if (!match) throw new Error("No JSON array in response.");
-                      const parsed = JSON.parse(match[0]);
-                      const sanitize = (q) => ({ ...q, type: q.type||"Multiple Choice", difficulty: q.difficulty||"Medium", question: q.question||"", answer: q.answer||"", choices: (q.choices||[]).map(c=>c??""), explanation: q.explanation||"" });
-                      const tagged = parsed.map(q => ({ ...sanitize(q), id: uid(), course, createdAt: Date.now() }));
-                      for (const q of tagged) await saveQuestion(q);
-                      setBank(prev => [...tagged, ...prev]);
-                      showToast(`✓ ${tagged.length} new questions added to bank`, "success");
-                    } catch(e) {
-                      showToast(`Replace failed: ${e.message}`, "error");
-                    } finally {
-                      setAutoGenLoading(false);
-                    }
+                    setBulkReplacePrompt(prompt);
+                    setBulkReplaceIds(new Set(bankSelected));
+                    setBulkReplacePaste(""); setBulkReplaceError("");
                   }}>🔄 Replace {bankSelected.size} with new</button>
                   <button style={S.ghostBtn(text2)} onClick={() => {
                     const ids = new Set(filteredBank.map(q => q.id));
@@ -6185,6 +6158,65 @@ ${questionsText}`;
                 </>
               )}
             </div>
+
+            {/* Bulk replace prompt + paste panel */}
+            {bulkReplacePrompt && (
+              <div style={{background:bg2, border:"1px solid #10b98144", borderRadius:"10px", padding:"1rem", marginBottom:"1rem"}}>
+                <div style={{fontSize:"0.78rem", color:"#10b981", fontWeight:"600", marginBottom:"0.5rem"}}>
+                  🔄 Replace {bulkReplaceIds.size} questions — copy prompt to Claude, paste response back:
+                </div>
+                <div style={{...S.promptBox, maxHeight:"140px"}}>{bulkReplacePrompt}</div>
+                <div style={{display:"flex", gap:"0.5rem", marginBottom:"0.75rem", flexWrap:"wrap"}}>
+                  <button style={{...S.oBtn("#10b981"), fontSize:"0.72rem", padding:"0.3rem 0.7rem"}}
+                    onClick={() => navigator.clipboard.writeText(bulkReplacePrompt)}>📋 Copy Prompt</button>
+                  {isAdmin && <button style={{...S.btn("#10b981", autoGenLoading), fontSize:"0.72rem", padding:"0.3rem 0.7rem"}}
+                    disabled={autoGenLoading}
+                    onClick={async () => {
+                      setAutoGenLoading(true); setAutoGenError("");
+                      try {
+                        const res = await fetch("/api/generate", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({prompt:bulkReplacePrompt}) });
+                        if (!res.ok) throw new Error(`API error: ${res.status}`);
+                        const data = await res.json();
+                        const text = data.content?.[0]?.text || data.text || "";
+                        if (!text) throw new Error("Empty response.");
+                        setBulkReplacePaste(text);
+                      } catch(e) { setBulkReplaceError(e.message); }
+                      finally { setAutoGenLoading(false); }
+                    }}>{autoGenLoading ? "⏳ Generating..." : "⚡ Auto-Generate"}</button>}
+                  <button style={{...S.ghostBtn(text3), fontSize:"0.68rem"}}
+                    onClick={() => { setBulkReplacePrompt(""); setBulkReplaceIds(new Set()); setBulkReplacePaste(""); setBulkReplaceError(""); }}>Cancel</button>
+                </div>
+                {bulkReplaceError && <div style={{color:"#f87171", fontSize:"0.75rem", marginBottom:"0.5rem"}}>{bulkReplaceError}</div>}
+                <textarea
+                  value={bulkReplacePaste}
+                  onChange={e => setBulkReplacePaste(e.target.value)}
+                  placeholder="Paste Claude's JSON response here..."
+                  style={{...S.textarea, minHeight:"80px", marginBottom:"0.5rem"}}
+                />
+                <button style={S.btn("#10b981", !bulkReplacePaste.trim())} disabled={!bulkReplacePaste.trim()}
+                  onClick={async () => {
+                    setBulkReplaceError("");
+                    try {
+                      const match = bulkReplacePaste.match(/\[[\s\S]*\]/);
+                      if (!match) throw new Error("No JSON array found. Copy the full response.");
+                      const parsed = JSON.parse(match[0]);
+                      const sanitize = (q) => ({ ...q, type:q.type||"Multiple Choice", difficulty:q.difficulty||"Medium", question:q.question||"", answer:q.answer||"", choices:(q.choices||[]).map(c=>c??""), explanation:q.explanation||"" });
+                      const tagged = parsed.map(q => ({ ...sanitize(q), id:uid(), course, createdAt:Date.now() }));
+                      // Delete old questions
+                      for (const id of bulkReplaceIds) await deleteQuestion(id);
+                      setBank(prev => prev.filter(q => !bulkReplaceIds.has(q.id)));
+                      // Save new questions
+                      for (const q of tagged) await saveQuestion(q);
+                      setBank(prev => [...tagged, ...prev]);
+                      setFilterTime("All"); setFilterDay("All");
+                      setBankSelected(new Set()); setBankSelectMode(false);
+                      setBulkReplacePrompt(""); setBulkReplaceIds(new Set()); setBulkReplacePaste("");
+                      showToast(`✓ ${tagged.length} questions replaced successfully`, "success");
+                    } catch(e) { setBulkReplaceError(e.message || "Failed to parse response."); }
+                  }}>✓ Submit Replacement</button>
+              </div>
+            )}
+
             <div style={{marginBottom:"0.75rem"}}>
               <input
                 value={bankSearch} onChange={e => setBankSearch(e.target.value)}
