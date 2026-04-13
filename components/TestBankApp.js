@@ -1376,6 +1376,22 @@ function renderGraphToSVG(graphConfig, width = 480, height = 300) {
     yDom = yDom || [-5, 5];
   }
 
+  // Safety guard: for rectangle regions (area type with constant fnTop/fnBottom),
+  // ensure yDomain actually contains both bounds — expand if needed
+  if (cfg.type === "area") {
+    const yTopVal = evalFn(cfg.fnTop,    0);
+    const yBotVal = evalFn(cfg.fnBottom, 0);
+    const pad = (yDom[1] - yDom[0]) * 0.12 || 0.5;
+    if (isFinite(yTopVal) && yTopVal > yDom[1] - 0.1) yDom[1] = yTopVal + pad;
+    if (isFinite(yBotVal) && yBotVal < yDom[0] + 0.1) yDom[0] = yBotVal - pad;
+    // Also ensure xDomain contains shadeFrom/shadeTo
+    const x0 = cfg.shadeFrom ?? xDom[0];
+    const x1 = cfg.shadeTo   ?? xDom[1];
+    const xpad = (xDom[1] - xDom[0]) * 0.12 || 0.5;
+    if (x0 < xDom[0]) xDom[0] = x0 - xpad;
+    if (x1 > xDom[1]) xDom[1] = x1 + xpad;
+  }
+
   const svgNode = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   svgNode.setAttribute("xmlns",   "http://www.w3.org/2000/svg");
   svgNode.setAttribute("width",   String(width));
