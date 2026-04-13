@@ -3911,15 +3911,16 @@ function buildAllVersionsPrompt(selectedQuestions, mutationType, labels, classSe
     }
   }
 
+  const allFunctionFamilies = ["polynomial (e.g. x^3-2x)", "exponential (e.g. e^(2x))", "logarithmic (e.g. ln(x+1))", "trigonometric-sin (e.g. sin(2x))", "trigonometric-cos (e.g. cos(x^2))", "rational (e.g. 1/(x^2+1))", "square root (e.g. sqrt(x^2+1))"];
   const sectionRules = Array.from({length: numClassSections}, (_,i) => {
     const s = i+1;
-    if (s === 1) return `- Section 1 versions (S1_A, S1_B, ...): numbers mutation — change ONLY coefficients/constants. Keep same function types.`;
-    return `- Section ${s} versions (S${s}_A, S${s}_B, ...): function mutation — change to DIFFERENT but equivalent-difficulty functions. Must differ completely from Section 1${s > 2 ? " and all previous sections" : ""}.`;
+    if (s === 1) return `- Section 1 versions (S1_A, S1_B, ...): numbers mutation — change ONLY coefficients/constants. Keep same function types as originals.`;
+    return `- Section ${s} versions (S${s}_A, S${s}_B, ...): function mutation — assign each question a DIFFERENT function family. Pick randomly from: polynomial, exponential, logarithmic, sin, cos, rational, sqrt — but NO two questions in the same section may share the same family. For example with 3 questions: Q1 gets polynomial, Q2 gets e^x, Q3 gets ln(x). Must differ from Section 1${s > 2 ? " and all previous sections" : ""}.`;
   }).join("\n");
 
   const exampleKeys = sectionKeys.map(k => `"${k}": [{...}]`).join(",\n  ");
 
-  return `TESTBANK_ALL_SECTIONS_AND_VERSIONS_REQUEST\nClassroom Sections: ${numClassSections}\nVersions per section: ${versionList}\nTotal keys to generate: ${sectionKeys.join(", ")}\n\nFor each key, mutate ALL of the following questions:\n${lines}\n\nMUTATION RULES BY SECTION:\n${sectionRules}\n\nADDITIONAL RULES:\n- Within each section, versions (A, B, C...) must differ from each other by numbers only.\n- Across sections, questions must use completely different function types.\n- ALWAYS regenerate correct answer keys.\n- Keep same question type, section name, and difficulty throughout.\n- Each version must be a JSON array in the SAME question order.\n- For Multiple Choice: all 4 choices must be distinct values — no two choices may be identical or equivalent.\n- ${FR_EXPLANATION_RULE}\n\nReturn a single JSON object with ALL keys:\n{\n  ${exampleKeys}\n}\nReply with ONLY valid JSON object, no markdown, no explanation.`;
+  return `TESTBANK_ALL_SECTIONS_AND_VERSIONS_REQUEST\nClassroom Sections: ${numClassSections}\nVersions per section: ${versionList}\nTotal keys to generate: ${sectionKeys.join(", ")}\n\nFor each key, mutate ALL of the following questions:\n${lines}\n\nMUTATION RULES BY SECTION:\n${sectionRules}\n\nADDITIONAL RULES:\n- Within each section, versions (A, B, C...) must differ from each other by numbers only.\n- Across sections, questions must use completely different function families.\n- Within each section, EVERY question must come from a DIFFERENT function family — polynomial, exponential, logarithmic, sin, cos, rational, sqrt are all separate families. sin and cos count as the same family.\n- Think of it like assigning a unique function family to each question slot: Q1=polynomial, Q2=e^x, Q3=ln, Q4=sin — no repeats.\n- ALWAYS regenerate correct answer keys.\n- Keep same question type, section name, and difficulty throughout.\n- Each version must be a JSON array in the SAME question order.\n- For Multiple Choice: all 4 choices must be distinct values — no two choices may be identical or equivalent.\n- ${FR_EXPLANATION_RULE}\n\nReturn a single JSON object with ALL keys:\n{\n  ${exampleKeys}\n}\nReply with ONLY valid JSON object, no markdown, no explanation.`;
 }
 
 // Single combined prompt for ALL classroom sections at once
@@ -3937,9 +3938,10 @@ function buildAllSectionsPrompt(selectedQuestions, labels, numClassSections) {
     labels.forEach(v => allKeys.push(`S${s}_${v}`));
   }
 
-  const sectionRules = Array.from({length:numClassSections},(_,i)=>i+1).map(s =>
-    `- Section ${s} versions (S${s}_A, S${s}_B, ...): ${s===1 ? "numbers mutation — change only coefficients/constants, keep same function types." : `function mutation — use COMPLETELY DIFFERENT but equivalent-difficulty functions from Section 1${s>2?" and all previous sections":""}. Different function types (e.g. if S1 used polynomial, use trig or exponential).`}`
-  ).join("\n");
+  const sectionRules = Array.from({length:numClassSections},(_,i)=>i+1).map(s => {
+    if (s === 1) return `- Section 1 versions (S${s}_A, S${s}_B, ...): numbers mutation — change only coefficients/constants, keep same function types.`;
+    return `- Section ${s} versions (S${s}_A, S${s}_B, ...): function mutation — assign each question a DIFFERENT function family randomly. Available families: polynomial, exponential (e^x), logarithmic (ln), sin, cos, rational, sqrt. NO two questions in the same section may use the same family. Example for 3 questions: Q1→polynomial, Q2→e^x, Q3→ln. Must differ from Section 1${s>2?" and all previous sections":""}.`;
+  }).join("\n");
 
   const exampleKeys = allKeys.slice(0,4).map(k => `  "${k}": [{type, section, difficulty, question, choices, answer, explanation}, ...]`).join(",\n");
 
