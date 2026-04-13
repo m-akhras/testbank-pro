@@ -6146,16 +6146,37 @@ ${questionsText}`;
                     const prompt = buildGeneratePrompt(course, sections, {}, qType, null, secCfg);
                     if (!window.confirm(`Replace ${bankSelected.size} selected questions with fresh ones from the API?`)) return;
                     // Delete old
-                    for (const id of bankSelected) await deleteQuestion(id);
-                    setBank(prev => prev.filter(q => !bankSelected.has(q.id)));
+                    const idsToDelete = new Set(bankSelected);
+                    for (const id of idsToDelete) await deleteQuestion(id);
+                    setBank(prev => prev.filter(q => !idsToDelete.has(q.id)));
                     setBankSelected(new Set()); setBankSelectMode(false);
-                    // Generate new
-                    setGeneratedPrompt(prompt);
-                    setPendingType("generate");
-                    setPendingMeta({ course });
-                    setPasteInput(""); setPasteError("");
-                    setScreen("generate");
-                    await autoGenerateVersions(prompt, "generate", { course });
+                    // Clear time filter so new questions are visible
+                    setFilterTime("All"); setFilterDay("All");
+                    // Generate new via API — stay on bank screen
+                    setAutoGenLoading(true); setAutoGenError("");
+                    try {
+                      const res = await fetch("/api/generate", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ prompt }),
+                      });
+                      if (!res.ok) throw new Error(`API error: ${res.status}`);
+                      const data = await res.json();
+                      const text = data.content?.[0]?.text || data.text || "";
+                      if (!text) throw new Error("Empty response. Try again.");
+                      const match = text.match(/\[[\s\S]*\]/);
+                      if (!match) throw new Error("No JSON array in response.");
+                      const parsed = JSON.parse(match[0]);
+                      const sanitize = (q) => ({ ...q, type: q.type||"Multiple Choice", difficulty: q.difficulty||"Medium", question: q.question||"", answer: q.answer||"", choices: (q.choices||[]).map(c=>c??""), explanation: q.explanation||"" });
+                      const tagged = parsed.map(q => ({ ...sanitize(q), id: uid(), course, createdAt: Date.now() }));
+                      for (const q of tagged) await saveQuestion(q);
+                      setBank(prev => [...tagged, ...prev]);
+                      showToast(`✓ ${tagged.length} new questions added to bank`, "success");
+                    } catch(e) {
+                      showToast(`Replace failed: ${e.message}`, "error");
+                    } finally {
+                      setAutoGenLoading(false);
+                    }
                   }}>🔄 Replace {bankSelected.size} with new</button>
                   <button style={S.ghostBtn(text2)} onClick={() => {
                     const ids = new Set(filteredBank.map(q => q.id));
@@ -6402,8 +6423,15 @@ ${questionsText}`;
                       <button style={{...S.ghostBtn(text3), fontSize:"0.68rem"}} onClick={() => { setPendingType(null); setPasteInput(""); setGeneratedPrompt(""); }}>Cancel</button>
                     </div>
                     <div style={S.promptBox}>{generatedPrompt}</div>
-                    {isAdmin && <button style={{...S.oBtn("#f59e0b"), fontSize:"0.72rem", padding:"0.3rem 0.7rem", marginBottom:"0.5rem"}}
-                      onClick={() => navigator.clipboard.writeText(generatedPrompt)}>Copy Prompt</button>}
+                    {isAdmin && <div style={{display:"flex", gap:"0.5rem", marginBottom:"0.5rem", flexWrap:"wrap"}}>
+                      <button style={{...S.oBtn("#f59e0b"), fontSize:"0.72rem", padding:"0.3rem 0.7rem"}}
+                        onClick={() => navigator.clipboard.writeText(generatedPrompt)}>📋 Copy Prompt</button>
+                      <button style={{...S.btn("#10b981", autoGenLoading), fontSize:"0.72rem", padding:"0.3rem 0.7rem"}}
+                        disabled={autoGenLoading}
+                        onClick={() => autoGenerateVersions(generatedPrompt, "bank_replace", pendingMeta)}>
+                        {autoGenLoading ? "⏳ Generating..." : "⚡ Auto-Generate"}
+                      </button>
+                    </div>}
                     <PastePanel
                       label="Paste the replacement question JSON here."
                       S={S} text2={text2}
