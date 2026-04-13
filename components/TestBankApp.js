@@ -1235,6 +1235,9 @@ function mathToHTMLInline(s) {
   r = r.replace(/\b([0-9]+)\/([0-9]+)\b/g,
     (_, n, d) => `${n}&frasl;${d}`);
 
+  // vectors: <a,b> or <a,b,c> → ⟨a,b⟩ (must come BEFORE <= and >= replacements)
+  r = r.replace(/<(-?[^<>]+(?:,[^<>]+)+)>/g, (_, inner) => `&langle;${inner}&rangle;`);
+
   // operators
   r = r.replace(/\*/g, '&middot;');
   r = r.replace(/<=/g, '&le;').replace(/>=/g, '&ge;');
@@ -2283,7 +2286,9 @@ function mathToOmml(raw) {
     .replace(/\blambda\b/gi, 'λ')
     .replace(/\bsigma\b/gi, 'σ')
     .replace(/\binfinity\b/gi, '∞')
-    .replace(/\binf\b/g, '∞');
+    .replace(/\binf\b/g, '∞')
+    // vectors: <a,b> or <a,b,c> → ⟨a,b⟩ (must come before XML escaping)
+    .replace(/<(-?[^<>]+(?:,[^<>]+)+)>/g, (_, inner) => `⟨${inner}⟩`);
 
   // Step 2: parse and build OMML directly
   // We'll do a single-pass conversion using a segment array
