@@ -3668,12 +3668,19 @@ All Chapter 15 graphs show the 2D integration REGION R in the xy-plane — never
 
 15.1 Double Integrals over Rectangles:
   Region R is always a rectangle [a,b] × [c,d]. Represent it as a shaded horizontal band using type "area".
-  fnTop = constant upper y-bound (e.g. "2"), fnBottom = constant lower y-bound (e.g. "0").
+  fnTop = constant upper y-bound (e.g. "3"), fnBottom = constant lower y-bound (e.g. "1").
   shadeFrom = left x-bound (a), shadeTo = right x-bound (b).
   Set fnTopLabel = "y = d" and fnBottomLabel = "y = c".
-  Set yDomain to slightly exceed the rectangle bounds so the region is clearly visible.
-  Example — R = [0,3]×[0,2]: {"type":"area","fnTop":"2","fnBottom":"0","shadeFrom":0,"shadeTo":3,"fnTopLabel":"y = 2","fnBottomLabel":"y = 0","showAxisNumbers":true,"showGrid":true,"xDomain":[-0.5,4],"yDomain":[-0.5,3]}
-  Example — R = [1,4]×[1,3]: {"type":"area","fnTop":"3","fnBottom":"1","shadeFrom":1,"shadeTo":4,"fnTopLabel":"y = 3","fnBottomLabel":"y = 1","showAxisNumbers":true,"showGrid":true,"xDomain":[0,5],"yDomain":[0,4]}
+  Set xDomain and yDomain to slightly exceed the rectangle bounds so the region is clearly visible.
+  IMPORTANT — Use a wide variety of rectangle bounds. Do NOT always start from 0. Examples of valid rectangles:
+  R = [1,4]×[1,3], R = [2,5]×[0,4], R = [-1,2]×[1,3], R = [0,2]×[1,4], R = [-2,1]×[-1,2], R = [1,3]×[2,5], R = [0,3]×[2,4].
+  The function f(x,y) being integrated should also vary: use f=x, f=y, f=xy, f=x+y, f=x^2, f=2x+3y, f=xy^2, etc.
+  Examples:
+  R = [1,4]×[1,3]: {"type":"area","fnTop":"3","fnBottom":"1","shadeFrom":1,"shadeTo":4,"fnTopLabel":"y = 3","fnBottomLabel":"y = 1","showAxisNumbers":true,"showGrid":true,"xDomain":[0,5],"yDomain":[0,4]}
+  R = [-1,2]×[1,3]: {"type":"area","fnTop":"3","fnBottom":"1","shadeFrom":-1,"shadeTo":2,"fnTopLabel":"y = 3","fnBottomLabel":"y = 1","showAxisNumbers":true,"showGrid":true,"xDomain":[-2,3],"yDomain":[0,4]}
+  R = [0,2]×[1,4]: {"type":"area","fnTop":"4","fnBottom":"1","shadeFrom":0,"shadeTo":2,"fnTopLabel":"y = 4","fnBottomLabel":"y = 1","showAxisNumbers":true,"showGrid":true,"xDomain":[-0.5,3],"yDomain":[0,5]}
+  R = [2,5]×[0,3]: {"type":"area","fnTop":"3","fnBottom":"0","shadeFrom":2,"shadeTo":5,"fnTopLabel":"y = 3","fnBottomLabel":"y = 0","showAxisNumbers":true,"showGrid":true,"xDomain":[1,6],"yDomain":[-0.5,4]}
+  R = [-2,1]×[-1,2]: {"type":"area","fnTop":"2","fnBottom":"-1","shadeFrom":-2,"shadeTo":1,"fnTopLabel":"y = 2","fnBottomLabel":"y = -1","showAxisNumbers":true,"showGrid":true,"xDomain":[-3,2],"yDomain":[-2,3]}
 
 15.2 Double Integrals over General Regions:
   Region R is bounded by two curves in the xy-plane. Use type "area".
