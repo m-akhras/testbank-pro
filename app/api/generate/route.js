@@ -59,6 +59,48 @@ Is this answer mathematically correct?`;
   }
 }
 
+// ── JSON repair for truncated responses ──────────────────────────────────────
+function repairTruncatedJSON(text) {
+  try {
+    // Find the start of the JSON array
+    const arrayStart = text.indexOf("[");
+    if (arrayStart === -1) return null;
+    const jsonPart = text.slice(arrayStart);
+
+    // Try parsing as-is first
+    try { JSON.parse(jsonPart); return jsonPart; } catch {}
+
+    // Find the last complete object by scanning for },{ or }] patterns
+    // Walk backwards from the end to find last complete closing brace
+    let depth = 0;
+    let lastCompleteEnd = -1;
+    let inString = false;
+    let escape = false;
+
+    for (let i = 0; i < jsonPart.length; i++) {
+      const c = jsonPart[i];
+      if (escape) { escape = false; continue; }
+      if (c === '\\' && inString) { escape = true; continue; }
+      if (c === '"') { inString = !inString; continue; }
+      if (inString) continue;
+      if (c === '{') depth++;
+      if (c === '}') {
+        depth--;
+        if (depth === 0) lastCompleteEnd = i; // end of a top-level object
+      }
+    }
+
+    if (lastCompleteEnd === -1) return null;
+
+    // Rebuild: take everything up to and including the last complete object, close the array
+    const salvaged = jsonPart.slice(0, lastCompleteEnd + 1) + "]";
+    JSON.parse(salvaged); // verify it parses
+    return salvaged;
+  } catch {
+    return null;
+  }
+}
+
 // ── Main route ───────────────────────────────────────────────────────────────
 export async function POST(req) {
   try {
@@ -143,6 +185,18 @@ export async function POST(req) {
     const data = await res.json();
 
     if (data.stop_reason === "max_tokens") {
+      // Try to salvage partial JSON by truncating to last complete object
+      const rawText = data.content?.[0]?.text || "";
+      const repaired = repairTruncatedJSON(rawText);
+      if (repaired) {
+        // Replace text with repaired version and warn
+        const repairedData = {
+          ...data,
+          content: [{ type: "text", text: repaired }],
+          warning: "Response was truncated — some questions were recovered. Try generating fewer questions at once for best results."
+        };
+        return Response.json(repairedData);
+      }
       return Response.json({ ...data, warning: "Response was truncated — try fewer questions per generation." });
     }
 

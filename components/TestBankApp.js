@@ -5083,6 +5083,7 @@ export default function TestBankApp() {
       const text = data.content?.[0]?.text || data.text || "";
       if (!text) throw new Error("Empty response from API. Try again or use Copy Prompt.");
       if (data.warning) showToast(data.warning, "error");
+      if (data.stop_reason === "max_tokens" && !text) throw new Error("Response truncated — generate fewer questions at once (max 10 recommended).");
       setPasteInput(text);
       setPendingType(pendingTypeVal);
       setPendingMeta(pendingMetaVal);
