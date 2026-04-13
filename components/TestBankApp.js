@@ -1163,55 +1163,55 @@ function mathToHTMLInline(s) {
   r = r.replace(/\(NOT\s+([^)]+)\)/g, '(~$1)');
 
   // Symbols already in text — pass through as HTML entities
-  r = r.replace(/∧/g, '&and;');
-  r = r.replace(/∨/g, '&or;');
+  r = r.replace(/∧/g, '∧');
+  r = r.replace(/∨/g, '∨');
   r = r.replace(/~/g, '~');
-  r = r.replace(/→/g, '&rarr;');
-  r = r.replace(/↔/g, '&harr;');
+  r = r.replace(/→/g, '→');
+  r = r.replace(/↔/g, '↔');
 
-  // Set notation
-  r = r.replace(/\bunion\b/gi, '&cup;');
-  r = r.replace(/\bintersect(?:ion)?\b/gi, '&cap;');
-  r = r.replace(/\bsubset\b/gi, '&sub;');
-  r = r.replace(/\bin\b(?=\s)/g, '&isin;');
+  // Set notation — Unicode directly
+  r = r.replace(/\bunion\b/gi, '∪');
+  r = r.replace(/\bintersect(?:ion)?\b/gi, '∩');
+  r = r.replace(/\bsubset\b/gi, '⊂');
+  r = r.replace(/\bin\b(?=\s)/g, '∈');
 
-  // Greek letters
-  r = r.replace(/\btheta\b/gi, '&theta;');
-  r = r.replace(/\bphi\b/gi, '&phi;');
-  r = r.replace(/(?<![a-zA-Z])pi(?![a-zA-Z])/g, '&pi;');
-  r = r.replace(/\brho\b/gi, '&rho;');
-  r = r.replace(/\balpha\b/gi, '&alpha;');
-  r = r.replace(/\bbeta\b/gi, '&beta;');
-  r = r.replace(/\bgamma\b/gi, '&gamma;');
-  r = r.replace(/\bdelta\b/gi, '&delta;');
-  r = r.replace(/\blambda\b/gi, '&lambda;');
-  r = r.replace(/\bsigma\b/gi, '&sigma;');
-  r = r.replace(/\bmu\b/gi, '&mu;');
-  r = r.replace(/\binfinity\b/gi, '&infin;');
-  r = r.replace(/\binf\b/g, '&infin;');
+  // Greek letters — Unicode directly for Canvas compatibility
+  r = r.replace(/\btheta\b/gi, 'θ');
+  r = r.replace(/\bphi\b/gi, 'φ');
+  r = r.replace(/(?<![a-zA-Z])pi(?![a-zA-Z])/g, 'π');
+  r = r.replace(/\brho\b/gi, 'ρ');
+  r = r.replace(/\balpha\b/gi, 'α');
+  r = r.replace(/\bbeta\b/gi, 'β');
+  r = r.replace(/\bgamma\b/gi, 'γ');
+  r = r.replace(/\bdelta\b/gi, 'δ');
+  r = r.replace(/\blambda\b/gi, 'λ');
+  r = r.replace(/\bsigma\b/gi, 'σ');
+  r = r.replace(/\bmu\b/gi, 'μ');
+  r = r.replace(/\binfinity\b/gi, '∞');
+  r = r.replace(/\binf\b/g, '∞');
 
-  // sqrt
+  // sqrt — use Unicode √ directly so Canvas renders correctly
   let prev;
   do {
     prev = r;
-    r = r.replace(/sqrt\(([^()]+)\)/g, (_, inner) => `&radic;(${inner})`);
+    r = r.replace(/sqrt\(([^()]+)\)/g, (_, inner) => `√(${inner})`);
   } while (r !== prev);
 
   // integral
   r = r.replace(/integral from ([^\s]+) to ([^\s]+) of/gi,
-    (_, a, b) => `&int;<sub>${a}</sub><sup>${b}</sup>`);
-  r = r.replace(/\bintegral of\b/gi, '&int;');
+    (_, a, b) => `∫<sub>${a}</sub><sup>${b}</sup>`);
+  r = r.replace(/\bintegral of\b/gi, '∫');
 
-  // inequality symbols
-  r = r.replace(/!=/g, '&ne;');
-  r = r.replace(/(?<![<>])<=(?![>])/g, '&le;');
-  r = r.replace(/(?<![<>])>=(?![<])/g, '&ge;');
+  // inequality symbols — use Unicode directly
+  r = r.replace(/!=/g, '≠');
+  r = r.replace(/(?<![<>])<=(?![>])/g, '≤');
+  r = r.replace(/(?<![<>])>=(?![<])/g, '≥');
 
   // lim as x->a  /  \lim_{x->a}  /  lim_{x→a}
   r = r.replace(/\\lim_\{([^}]+)\}/g,
-    (_, sub) => `lim<sub>${sub.replace(/\\to/g,'&rarr;').replace(/->/g,'&rarr;')}</sub>`);
+    (_, sub) => `lim<sub>${sub.replace(/\\to/g,'→').replace(/->/g,'→')}</sub>`);
   r = r.replace(/\blim_\{([^}]+)\}/gi,
-    (_, sub) => `lim<sub>${sub.replace(/\\to/g,'&rarr;').replace(/->/g,'&rarr;')}</sub>`);
+    (_, sub) => `lim<sub>${sub.replace(/\\to/g,'→').replace(/->/g,'→')}</sub>`);
   r = r.replace(/\blim(?:it)?\s*(?:as\s+)?([a-zA-Z])\s*(?:->|→|\\to)\s*([^\s,;.()]+)\s*of\b/gi,
     (_, v, a) => `lim<sub>${v}&rarr;${a}</sub>`);
   r = r.replace(/\blim(?:it)?\s*(?:as\s+)?([a-zA-Z])\s*(?:->|→|\\to)\s*([^\s,;.()]+)/gi,
@@ -1229,19 +1229,19 @@ function mathToHTMLInline(s) {
   r = r.replace(/([a-zA-Z0-9])\^(-?[0-9]+)/g,
     (_, b, e) => `${b}<sup>${e}</sup>`);
 
-  // fractions
+  // fractions — keep as plain / for Canvas (frasl entity not reliably rendered)
   r = r.replace(/\(([^()]+)\)\/\(([^()]+)\)/g,
-    (_, n, d) => `(${n})&frasl;(${d})`);
+    (_, n, d) => `(${n})/(${d})`);
   r = r.replace(/\b([0-9]+)\/([0-9]+)\b/g,
-    (_, n, d) => `${n}&frasl;${d}`);
+    (_, n, d) => `${n}/${d}`);
 
   // vectors: <a,b> or <a,b,c> → ⟨a,b⟩ (must come BEFORE <= and >= replacements)
-  r = r.replace(/<(-?[^<>]+(?:,[^<>]+)+)>/g, (_, inner) => `&langle;${inner}&rangle;`);
+  r = r.replace(/<(-?[^<>]+(?:,[^<>]+)+)>/g, (_, inner) => `⟨${inner}⟩`);
 
-  // operators
-  r = r.replace(/\*/g, '&middot;');
-  r = r.replace(/<=/g, '&le;').replace(/>=/g, '&ge;');
-  r = r.replace(/!=/g, '&ne;');
+  // operators — Unicode directly for Canvas compatibility
+  r = r.replace(/\*/g, '·');
+  r = r.replace(/<=/g, '≤').replace(/>=/g, '≥');
+  r = r.replace(/!=/g, '≠');
 
   return r;
 }
