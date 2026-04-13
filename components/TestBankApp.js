@@ -3866,7 +3866,7 @@ CRITICAL — LOGICAL NOTATION (always use these symbols, never spell out AND/OR/
     ? "You are a college professor writing a test bank for Discrete Mathematics based on Susanna Epp's Discrete Mathematics with Applications. Follow the exact question style and structure from the book — change values but not structure."
     : "You are a college math professor writing a test bank from Stewart Calculus Early Transcendentals 9th Edition.";
 
-  return `TESTBANK_GENERATE_REQUEST\nCourse: ${course}\nType: ${qType}\nTotal questions: ${totalQ}\n\nSections, counts, and difficulty/graph config:\n${breakdown}\n\nIMPORTANT: Follow the exact count and difficulty per section strictly.\n\nType instructions: ${typeInstructions[qType]}\n${tableInstructions}${graphInstructions || ''}\n${courseText}\nMATH NOTATION RULES (critical — follow exactly):\n- Exponents: x^2, s^3, (s-3)^2, t^2\n- Fractions: ALWAYS (numerator)/(denominator) — e.g. (10)/(s^3), (1)/((s-3)^2), (8s)/((s^2+4)^2)\n- Never omit parentheses around numerator or denominator\n- Nested denominator: (1)/((s-a)^2) — double parens for compound denominators\n- Never use square brackets: NOT [denominator] — always (denominator)\n- L{f(t)} notation for Laplace, e.g. L{t^2}, L{e^(at)}, L^{-1}{F(s)}\nCALCULUS 3 NOTATION RULES (apply whenever course is Calculus 3):\n- Vectors and gradients MUST use angle bracket notation: <a,b> or <a,b,c> — NEVER parentheses (a,b) for vectors.\n  Correct: <1/sqrt(2), 1/sqrt(2)>   Wrong: (1/sqrt(2), 1/sqrt(2))\n- Unit vectors, gradient vectors, all vector answers: always <...> angle bracket notation.\n- Points in space use parentheses: (2,2) is a point; <2,2> is a vector. Never confuse them.\nCALCULUS 3 CONTENT RULES - 14.7 Maximum and Minimum Values:\n- Always ask for ALL critical points of the function, not just one.\n- Classify EACH critical point using the Second Derivative Test: D = fxx*fyy - (fxy)^2.\n- Classify each as: local maximum, local minimum, or saddle point.\n- Question style: Find all critical points of f(x,y) = ... and classify each as a local maximum, local minimum, or saddle point.\n- Answer choices must list all critical points with their full classifications.\nBe rigorous, numerically specific, university-level.\nEach question must have a 'section' field with the exact section name.\nEach question must have a 'difficulty' field.\n\nReply with ONLY a valid JSON array, no markdown fences, no explanation:\n[${shape}, ...]`;
+  return `TESTBANK_GENERATE_REQUEST\nCourse: ${course}\nType: ${qType}\nTotal questions: ${totalQ}\n\nSections, counts, and difficulty/graph config:\n${breakdown}\n\nIMPORTANT: Follow the exact count and difficulty per section strictly.\n\nType instructions: ${typeInstructions[qType]}\n${tableInstructions}${graphInstructions || ''}\n${courseText}\nMATH NOTATION RULES (critical — follow exactly):\n- Exponents: x^2, s^3, (s-3)^2, t^2\n- Fractions: ALWAYS (numerator)/(denominator) — e.g. (10)/(s^3), (1)/((s-3)^2), (8s)/((s^2+4)^2)\n- Never omit parentheses around numerator or denominator\n- Nested denominator: (1)/((s-a)^2) — double parens for compound denominators\n- Never use square brackets: NOT [denominator] — always (denominator)\n- L{f(t)} notation for Laplace, e.g. L{t^2}, L{e^(at)}, L^{-1}{F(s)}\nCALCULUS 3 NOTATION RULES (apply whenever course is Calculus 3):\n- Vectors and gradients MUST use angle bracket notation: <a,b> or <a,b,c> — NEVER parentheses (a,b) for vectors.\n  Correct: <1/sqrt(2), 1/sqrt(2)>   Wrong: (1/sqrt(2), 1/sqrt(2))\n- Unit vectors, gradient vectors, all vector answers: always <...> angle bracket notation.\n- Points in space use parentheses: (2,2) is a point; <2,2> is a vector. Never confuse them.\nCALCULUS 3 CONTENT RULES - 14.7 Maximum and Minimum Values:\n- Questions MUST involve functions that have AT LEAST 2 critical points (e.g. f=x^3-3x+y^3-3y has (1,1),(1,-1),(-1,1),(-1,-1)).\n- Choose functions that yield 2 or 3 critical points: polynomials like x^3+y^3-3x-3y, x^3-3xy+y^3, x^4-2x^2+y^2, etc.\n- Always ask: "Find ALL critical points of f(x,y) = ... and classify each using the Second Derivative Test."\n- Show ALL critical points in the answer: e.g. "(1,1) local min, (-1,-1) local max, (1,-1) saddle point".\n- Choices must each list a complete set of critical points with classifications — not just one point.\n- Use D = fxx*fyy - (fxy)^2: D>0 and fxx>0 → local min; D>0 and fxx<0 → local max; D<0 → saddle point.\n- NEVER generate a question that has only one critical point for 14.7.\nBe rigorous, numerically specific, university-level.\nEach question must have a 'section' field with the exact section name.\nEach question must have a 'difficulty' field.\n\nReply with ONLY a valid JSON array, no markdown fences, no explanation:\n[${shape}, ...]`;
 }
 
 // Free Response explanation rule — shared across all prompts
@@ -6129,6 +6129,34 @@ ${questionsText}`;
                     setBank(prev => prev.filter(q => !bankSelected.has(q.id)));
                     setBankSelected(new Set()); setBankSelectMode(false);
                   }}>🗑 Delete {bankSelected.size} questions</button>
+                  <button style={S.ghostBtn("#10b981")} onClick={async () => {
+                    const selectedQs = bank.filter(q => bankSelected.has(q.id));
+                    if (!selectedQs.length) return;
+                    // Build section config from selected questions
+                    const secCfg = {};
+                    selectedQs.forEach(q => {
+                      const sec = q.section || "Unknown";
+                      if (!secCfg[sec]) secCfg[sec] = { Easy:{count:0,graphType:"normal"}, Medium:{count:0,graphType:"normal"}, Hard:{count:0,graphType:"normal"} };
+                      const diff = q.difficulty || "Medium";
+                      if (secCfg[sec][diff]) secCfg[sec][diff].count++;
+                      if (q.hasGraph) secCfg[sec][diff].graphType = "graph";
+                    });
+                    const sections = Object.keys(secCfg);
+                    const qType = selectedQs[0].type || "Multiple Choice";
+                    const prompt = buildGeneratePrompt(course, sections, {}, qType, null, secCfg);
+                    if (!window.confirm(`Replace ${bankSelected.size} selected questions with fresh ones from the API?`)) return;
+                    // Delete old
+                    for (const id of bankSelected) await deleteQuestion(id);
+                    setBank(prev => prev.filter(q => !bankSelected.has(q.id)));
+                    setBankSelected(new Set()); setBankSelectMode(false);
+                    // Generate new
+                    setGeneratedPrompt(prompt);
+                    setPendingType("generate");
+                    setPendingMeta({ course });
+                    setPasteInput(""); setPasteError("");
+                    setScreen("generate");
+                    await autoGenerateVersions(prompt, "generate", { course });
+                  }}>🔄 Replace {bankSelected.size} with new</button>
                   <button style={S.ghostBtn(text2)} onClick={() => {
                     const ids = new Set(filteredBank.map(q => q.id));
                     setBankSelected(ids);
