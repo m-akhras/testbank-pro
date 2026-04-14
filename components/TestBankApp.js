@@ -527,6 +527,9 @@ function GraphEditor({ initialConfig, onSave, onRemove, onClose }) {
   const [topLabelOffsetY, setTopLabelOffsetY] = useState(initialConfig?.topLabelOffsetY ?? 0);
   const [botLabelOffsetX, setBotLabelOffsetX] = useState(initialConfig?.botLabelOffsetX ?? 0);
   const [botLabelOffsetY, setBotLabelOffsetY] = useState(initialConfig?.botLabelOffsetY ?? 0);
+  const [chartTitle,      setChartTitle]      = useState(initialConfig?.title  || "");
+  const [chartXLabel,     setChartXLabel]     = useState(initialConfig?.xLabel || "");
+  const [chartYLabel,     setChartYLabel]     = useState(initialConfig?.yLabel || "");
   const [holeInput,   setHoleInput]   = useState("");
   const [pointInput,  setPointInput]  = useState("");
   const previewRef = useRef(null);
@@ -556,7 +559,10 @@ function GraphEditor({ initialConfig, onSave, onRemove, onClose }) {
     // Stat chart types — pass through initialConfig, just add display flags
     if (["bar","histogram","scatter","discrete_dist","continuous_dist","standard_normal"].includes(type)) {
       return { ...(initialConfig || {}), showAxisNumbers: showNumbers, showGrid, showFnLabel,
-               labelOffsetX: Number(labelOffsetX)||0, labelOffsetY: Number(labelOffsetY)||0 };
+               labelOffsetX: Number(labelOffsetX)||0, labelOffsetY: Number(labelOffsetY)||0,
+               title: chartTitle || undefined,
+               xLabel: chartXLabel || undefined,
+               yLabel: chartYLabel || undefined };
     }
     return base;
   };
@@ -732,6 +738,21 @@ function GraphEditor({ initialConfig, onSave, onRemove, onClose }) {
           </div>
         )}
       </div>
+
+      {/* Title / axis label editors for stat charts */}
+      {["bar","histogram","scatter","discrete_dist","continuous_dist","standard_normal"].includes(type) && (
+        <div style={{display:"flex", gap:"8px", flexWrap:"wrap", alignItems:"center", marginBottom:"0.5rem"}}>
+          {lbl("Title:")}
+          <input value={chartTitle} onChange={e=>setChartTitle(e.target.value)} placeholder="e.g. Normal Distribution"
+            style={{width:"200px",padding:"0.2rem 0.4rem",background:bg2,border:"1px solid "+border,color:text1,borderRadius:"4px",fontSize:"0.78rem"}} />
+          {lbl("x-axis:")}
+          <input value={chartXLabel} onChange={e=>setChartXLabel(e.target.value)} placeholder="e.g. x"
+            style={{width:"80px",padding:"0.2rem 0.4rem",background:bg2,border:"1px solid "+border,color:text1,borderRadius:"4px",fontSize:"0.78rem"}} />
+          {lbl("y-axis:")}
+          <input value={chartYLabel} onChange={e=>setChartYLabel(e.target.value)} placeholder="e.g. f(x)"
+            style={{width:"80px",padding:"0.2rem 0.4rem",background:bg2,border:"1px solid "+border,color:text1,borderRadius:"4px",fontSize:"0.78rem"}} />
+        </div>
+      )}
 
       {/* Live preview */}
       <div ref={previewRef} style={{width:"100%", background:"#fff", borderRadius:"6px",
@@ -5207,6 +5228,12 @@ export default function TestBankApp() {
         if (filterTime !== "All" && d.toLocaleTimeString("en-US", {hour:"2-digit", minute:"2-digit"}) !== filterTime) return false;
         return true;
       })();
+  }).sort((a, b) => {
+    const [aMaj, aMin] = sectionSortKey(a.section);
+    const [bMaj, bMin] = sectionSortKey(b.section);
+    if (aMaj !== bMaj) return aMaj - bMaj;
+    if (aMin !== bMin) return aMin - bMin;
+    return (a.createdAt || 0) - (b.createdAt || 0); // within same section: oldest first
   });
 
   // Available years, months, days from bank
