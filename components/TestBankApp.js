@@ -6911,7 +6911,11 @@ ${questionsText}`;
                         disabled={!saveExamName.trim() || savingExam}
                         onClick={async () => {
                           setSavingExam(true);
-                          const result = await saveExam(saveExamName.trim(), versions);
+                          // Save all sections — if multi-section, flatten all versions; otherwise just current versions
+                          const allVersions = Object.keys(classSectionVersions).length > 1
+                            ? Object.values(classSectionVersions).flat()
+                            : versions;
+                          const result = await saveExam(saveExamName.trim(), allVersions);
                           if (result) setExamSaved(true);
                           setSavingExam(false);
                         }}
