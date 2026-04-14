@@ -1099,11 +1099,33 @@ function validateQuestion(q) {
   }
 
   // graph config validation
+  if (q.hasGraph && !q.graphConfig) {
+    issues.push("Question marked as having a graph but graphConfig is missing");
+  }
   if (q.hasGraph && q.graphConfig) {
     const gc = q.graphConfig;
+    if (!gc.type) issues.push("Graph missing type");
+    if (gc.type === "single" && !gc.fn) issues.push("Single curve graph missing fn");
     if (gc.type === "area" && (!gc.fnTop || !gc.fnBottom)) issues.push("Area graph missing fnTop or fnBottom");
     if (gc.type === "domain" && !gc.boundary) issues.push("Domain graph missing boundary");
-    if (gc.type === "single" && !gc.fn) issues.push("Single curve graph missing fn");
+    if (gc.type === "piecewise" && (!gc.pieces || !gc.pieces.length)) issues.push("Piecewise graph missing pieces");
+    if (gc.type === "multi" && (!gc.fns || !gc.fns.length)) issues.push("Multi graph missing fns array");
+    if (gc.type === "bar") {
+      if (!gc.labels || !gc.labels.length) issues.push("Bar chart missing labels");
+      if (!gc.values || !gc.values.length) issues.push("Bar chart missing values");
+      if (gc.labels && gc.values && gc.labels.length !== gc.values.length) issues.push("Bar chart labels and values length mismatch");
+    }
+    if (gc.type === "histogram" && (!gc.bins || !gc.bins.length)) issues.push("Histogram missing bins");
+    if (gc.type === "scatter" && (!gc.points || !gc.points.length)) issues.push("Scatter plot missing points");
+    if (gc.type === "discrete_dist" && (!gc.data || !gc.data.length)) issues.push("Discrete distribution missing data");
+    if (gc.type === "continuous_dist" || gc.type === "standard_normal") {
+      const dt = gc.distType || gc.type;
+      if (!dt) issues.push("Continuous distribution missing distType");
+      if ((dt === "normal" || dt === "standard_normal") && gc.sigma !== undefined && gc.sigma <= 0) issues.push("Normal distribution sigma must be > 0");
+      if (dt === "exponential" && gc.lambda !== undefined && gc.lambda <= 0) issues.push("Exponential distribution lambda must be > 0");
+      if (dt === "uniform" && gc.uMin !== undefined && gc.uMax !== undefined && gc.uMin >= gc.uMax) issues.push("Uniform distribution uMin must be < uMax");
+    }
+    if ((gc.xMin !== undefined && gc.xMax !== undefined) && gc.xMin >= gc.xMax) issues.push("Graph xMin must be less than xMax");
   }
 
   return issues;
@@ -1398,7 +1420,7 @@ function renderGraphToSVG(graphConfig, width = 480, height = 300) {
   svgNode.setAttribute("height",  String(height));
   svgNode.setAttribute("viewBox", `0 0 ${width} ${height}`);
 
-  const margin = { top: 22, right: 36, bottom: 34, left: 42 };
+  const margin = { top: 22, right: 36, bottom: 34, left: 50 };
   const iW = width  - margin.left - margin.right;
   const iH = height - margin.top  - margin.bottom;
 
@@ -1808,7 +1830,7 @@ function renderStatChartToSVG(chartConfig, width=480, height=300) {
   const cfg = rawCfg.type === "standard_normal"
     ? { ...rawCfg, type: "continuous_dist", distType: "standard_normal", mu: 0, sigma: 1 }
     : rawCfg;
-  const margin = {top:30, right:30, bottom:55, left:55};
+  const margin = {top:30, right:30, bottom:68, left:55};
   const iW = width  - margin.left - margin.right;
   const iH = height - margin.top  - margin.bottom;
 
@@ -1869,7 +1891,7 @@ function renderStatChartToSVG(chartConfig, width=480, height=300) {
     g.append("line").attr("x1",0).attr("y1",0).attr("x2",0).attr("y2",iH).attr("stroke",COL.text).attr("stroke-width",1.5);
     if (showNumbers) d3.ticks(0, yMax, 6).forEach(t => { axisLabel(t, -8, yScale(t)+4, "end", 10); });
     if (cfg.xLabel) axisLabel(cfg.xLabel, iW/2, iH+42);
-    if (cfg.yLabel) g.append("text").attr("transform",`translate(-40,${iH/2}) rotate(-90)`).attr("text-anchor","middle").attr("font-size",11).attr("fill",COL.text).text(cfg.yLabel);
+    if (cfg.yLabel) g.append("text").attr("transform",`translate(-46,${iH/2}) rotate(-90)`).attr("text-anchor","middle").attr("font-size",11).attr("fill",COL.text).text(cfg.yLabel);
     if (cfg.title)  axisLabel(cfg.title, iW/2, -12, "middle", 13);
   }
 
@@ -1899,7 +1921,7 @@ function renderStatChartToSVG(chartConfig, width=480, height=300) {
       d3.ticks(0,yMax,6).forEach(t => { axisLabel(t,-8,yScale(t)+4,"end",10); });
     }
     if (cfg.xLabel) axisLabel(cfg.xLabel, iW/2, iH+42);
-    if (cfg.yLabel) g.append("text").attr("transform",`translate(-40,${iH/2}) rotate(-90)`).attr("text-anchor","middle").attr("font-size",11).attr("fill",COL.text).text(cfg.yLabel);
+    if (cfg.yLabel) g.append("text").attr("transform",`translate(-46,${iH/2}) rotate(-90)`).attr("text-anchor","middle").attr("font-size",11).attr("fill",COL.text).text(cfg.yLabel);
     if (cfg.title)  axisLabel(cfg.title, iW/2, -12, "middle", 13);
   }
 
@@ -1933,7 +1955,7 @@ function renderStatChartToSVG(chartConfig, width=480, height=300) {
       d3.ticks(yMin-yPad,yMax+yPad,6).forEach(t => { axisLabel(Math.round(t*10)/10,-8,yScale(t)+4,"end",10); });
     }
     if (cfg.xLabel) axisLabel(cfg.xLabel, iW/2, iH+42);
-    if (cfg.yLabel) g.append("text").attr("transform",`translate(-40,${iH/2}) rotate(-90)`).attr("text-anchor","middle").attr("font-size",11).attr("fill",COL.text).text(cfg.yLabel);
+    if (cfg.yLabel) g.append("text").attr("transform",`translate(-46,${iH/2}) rotate(-90)`).attr("text-anchor","middle").attr("font-size",11).attr("fill",COL.text).text(cfg.yLabel);
     if (cfg.title)  axisLabel(cfg.title, iW/2, -12, "middle", 13);
   }
 
@@ -1961,7 +1983,7 @@ function renderStatChartToSVG(chartConfig, width=480, height=300) {
     g.append("line").attr("x1",0).attr("y1",0).attr("x2",0).attr("y2",iH).attr("stroke",COL.text).attr("stroke-width",1.5);
     if (showNumbers) d3.ticks(0,pMax,5).forEach(t => { axisLabel(t.toFixed(2),-8,yScale(t)+4,"end",10); });
     axisLabel(cfg.xLabel||"x", iW/2, iH+42);
-    g.append("text").attr("transform",`translate(-40,${iH/2}) rotate(-90)`).attr("text-anchor","middle").attr("font-size",11).attr("fill",COL.text).text(cfg.yLabel||"P(X = x)");
+    g.append("text").attr("transform",`translate(-46,${iH/2}) rotate(-90)`).attr("text-anchor","middle").attr("font-size",11).attr("fill",COL.text).text(cfg.yLabel||"P(X = x)");
     if (cfg.title) axisLabel(cfg.title, iW/2, -12, "middle", 13);
   }
 
@@ -2092,7 +2114,7 @@ function renderStatChartToSVG(chartConfig, width=480, height=300) {
     // x/z axis label
     const axX = isStdNorm ? "z" : (cfg.xLabel || "x");
     axisLabel(axX, iW/2, iH+44);
-    g.append("text").attr("transform",`translate(-40,${iH/2}) rotate(-90)`)
+    g.append("text").attr("transform",`translate(-46,${iH/2}) rotate(-90)`)
       .attr("text-anchor","middle").attr("font-size",11).attr("fill",COL.text)
       .text(cfg.yLabel || "f(x)");
 
@@ -2106,7 +2128,7 @@ function renderStatChartToSVG(chartConfig, width=480, height=300) {
         .attr("stroke",COL.muted).attr("stroke-width",1).attr("stroke-dasharray","3,3");
       const muLabel = isStdNorm ? "\u03bc=0" : ("\u03bc=" + mu);
       if (sFrom !== mu && sTo !== mu) // don't overlap with boundary label
-        axisLabel(muLabel, xScale(mu), iH+42, "middle", 9);
+        axisLabel(muLabel, xScale(mu), iH+58, "middle", 9);
     }
   }
 
@@ -3079,7 +3101,7 @@ async function buildQTIZip(qtiXml, title) {
     imgIdx++;
     if (cfg) {
       try {
-        const _isStatQTI = cfg.type && ["bar","histogram","scatter","discrete_dist","continuous_dist"].includes(cfg.type);
+        const _isStatQTI = cfg.type && ["bar","histogram","scatter","discrete_dist","continuous_dist","standard_normal"].includes(cfg.type);
         const b64 = _isStatQTI ? await statChartToBase64PNG(cfg, 480, 280) : await graphToBase64PNG(cfg, 480, 280);
         if (b64) {
           const imgName = `graph_${imgIdx}.png`;
@@ -3132,7 +3154,15 @@ async function buildClassroomSectionsQTI(classSectionVersions, course, useGroups
   function uid8() { return Math.random().toString(16).slice(2,10).padEnd(8,'0'); }
 
   function makeItem(q, ident, qnum) {
-    const qhtml = mathToHTML(q.question || "");
+    // register graph config keyed by ident so buildQTIZip resolver always matches
+    if (q.hasGraph && q.graphConfig) {
+      window._qtiGraphConfigs = window._qtiGraphConfigs || {};
+      window._qtiGraphConfigs[ident] = q.graphConfig;
+    }
+    const graphImg = (q.hasGraph && q.graphConfig)
+      ? `<img src="GRAPH_PLACEHOLDER_${ident}" alt="graph" style="max-width:480px;display:block;margin-bottom:8px;"/>`
+      : "";
+    const qhtml = graphImg + mathToHTML(q.question || "");
     const isMC = q.type === "Multiple Choice" && q.choices;
     const qType = isMC ? "multiple_choice_question" : "short_answer_question";
     const meta = `<itemmetadata><qtimetadata>
@@ -3269,11 +3299,11 @@ function buildQTICompare(versions, course, useGroups=false, pointsPerQ=1) {
 
   // register graph configs
   window._qtiGraphConfigs = window._qtiGraphConfigs || {};
-  versions.forEach(v => v.questions.forEach((q, i) => {
-    if (q.hasGraph && q.graphConfig) window._qtiGraphConfigs[`i${i}_${v.label}`] = q.graphConfig;
-  }));
 
   function makeItem(q, id, pointsPer) {
+    if (q.hasGraph && q.graphConfig) {
+      window._qtiGraphConfigs[id] = q.graphConfig;
+    }
     const graphImg = (q.hasGraph && q.graphConfig)
       ? `<img src="GRAPH_PLACEHOLDER_${id}" alt="graph" style="max-width:480px;display:block;margin-bottom:8px;"/>`
       : "";
@@ -3371,11 +3401,8 @@ ${groupSections.join("\n")}
 // ─── Merged All-Sections QTI: Q1 pool = S1_A + S1_B + S2_A + S2_B + ... ──────
 function buildQTIAllSectionsMerged(classSectionVersions, course, pointsPerQ=1) {
   function uid8() { return Math.random().toString(16).slice(2,10).padEnd(8,'0'); }
-  // register graph configs
+  // register graph configs inline per-item (keyed by id) instead of pre-registering
   window._qtiGraphConfigs = window._qtiGraphConfigs || {};
-  Object.values(classSectionVersions).forEach(vers => vers.forEach(v => (v.questions||[]).forEach((q,i) => {
-    if (q.hasGraph && q.graphConfig) window._qtiGraphConfigs[`m${i}`] = q.graphConfig;
-  })));
 
   // Get all sections sorted
   const sortedSecs = Object.keys(classSectionVersions).sort((a,b) => Number(a)-Number(b));
@@ -3385,6 +3412,9 @@ function buildQTIAllSectionsMerged(classSectionVersions, course, pointsPerQ=1) {
   const numQ = classSectionVersions[sortedSecs[0]]?.[0]?.questions?.length || 0;
 
   function makeItem(q, id) {
+    if (q.hasGraph && q.graphConfig) {
+      window._qtiGraphConfigs[id] = q.graphConfig;
+    }
     const graphImg = (q.hasGraph && q.graphConfig)
       ? `<img src="GRAPH_PLACEHOLDER_${id}" alt="graph" style="max-width:480px;display:block;margin-bottom:8px;"/>`
       : "";
@@ -6272,6 +6302,21 @@ ${questionsText}`;
                 </select>
               )}
               <span style={{fontSize:"0.78rem", color:text2, alignSelf:"center"}}>{filteredBank.length} matching</span>
+              {selectedForExam.length > 0 && (
+                <span style={{
+                  display:"inline-flex", alignItems:"center", gap:"0.3rem",
+                  fontSize:"0.75rem", fontWeight:"700", color:"#fff",
+                  background:accent, borderRadius:"999px",
+                  padding:"0.18rem 0.65rem", alignSelf:"center",
+                  boxShadow:"0 1px 4px "+accent+"55"
+                }}>
+                  ✓ {selectedForExam.length} selected for exam
+                  <span
+                    title="Clear selection"
+                    onClick={() => setSelectedForExam([])}
+                    style={{cursor:"pointer", marginLeft:"2px", opacity:0.75, fontWeight:"400", fontSize:"0.72rem"}}>✕</span>
+                </span>
+              )}
               {bankIssueCount > 0 && (
                 <button
                   style={{...S.ghostBtn(filterIssuesOnly ? "#f87171" : text3), alignSelf:"center", border: filterIssuesOnly ? "1px solid #f8717144" : "1px solid "+border}}
@@ -6312,7 +6357,8 @@ ${questionsText}`;
                       display:"flex", alignItems:"center", gap:"0.6rem",
                       padding:"0.45rem 0.75rem",
                       borderBottom: qi < filteredBank.length-1 ? "1px solid "+border+"55" : "none",
-                      background: inExam ? accent+"08" : qi%2===0 ? "transparent" : "#ffffff04",
+                      background: inExam ? accent+"15" : qi%2===0 ? "transparent" : "#ffffff04",
+                      borderLeft: inExam ? "4px solid "+accent : "4px solid transparent",
                     }}>
                       <span style={{...S.diffTag(q.difficulty||""), flexShrink:0, fontSize:"0.58rem", padding:"0.05rem 0.3rem"}}>{(q.difficulty||"?")[0]}</span>
                       <span style={{fontSize:"0.68rem", color:text3, flexShrink:0, minWidth:"80px", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>{(q.section||"").split(" ").slice(0,3).join(" ")}</span>
@@ -6335,7 +6381,13 @@ ${questionsText}`;
             ) : filteredBank.map(q => {
               const inExam = selectedForExam.includes(q.id);
               return (
-              <div key={q.id} style={{...S.qCard, borderColor: inExam ? accent+"66" : undefined}}>
+              <div key={q.id} style={{
+                ...S.qCard,
+                borderColor: inExam ? accent : border,
+                borderLeftWidth: inExam ? "4px" : "1px",
+                background: inExam ? accent+"0f" : bg1,
+                boxShadow: inExam ? "0 0 0 1px "+accent+"33, 0 2px 8px "+accent+"22" : S.qCard.boxShadow,
+              }}>
                 <div style={S.qMeta}>
                   <span style={S.tag(courseColors[q.course])}>{q.course}</span>
                   <span style={S.tag()}>{q.type}</span>
