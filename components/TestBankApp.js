@@ -1191,14 +1191,10 @@ function mathToHTMLInline(s) {
   r = r.replace(/\binf\b/g, '∞');
 
   // sqrt — use Unicode √ directly so Canvas renders correctly
-  // Simple args (single number/var): √5 — complex args: √(x+1)
   let prev;
   do {
     prev = r;
-    r = r.replace(/sqrt\(([^()]+)\)/g, (_, inner) => {
-      const t = inner.trim();
-      return /^[a-zA-Z0-9]+$/.test(t) ? `&#x221A;${t}` : `&#x221A;(${t})`;
-    });
+    r = r.replace(/sqrt\(([^()]+)\)/g, (_, inner) => `√(${inner})`);
   } while (r !== prev);
 
   // integral
@@ -1233,14 +1229,11 @@ function mathToHTMLInline(s) {
   r = r.replace(/([a-zA-Z0-9])\^(-?[0-9]+)/g,
     (_, b, e) => `${b}<sup>${e}</sup>`);
 
-  // fractions — stacked inline fraction with dividing line (renders in Canvas)
-  const frac = (n, d) =>
-    `<span style="display:inline-block;vertical-align:middle;text-align:center;">` +
-    `<span style="display:block;border-bottom:1px solid;padding:0 2px;font-size:0.85em;">${n}</span>` +
-    `<span style="display:block;padding:0 2px;font-size:0.85em;">${d}</span>` +
-    `</span>`;
-  r = r.replace(/\(([^()]+)\)\/\(([^()]+)\)/g, (_, n, d) => frac(n, d));
-  r = r.replace(/\b([0-9]+)\/([0-9]+)\b/g, (_, n, d) => frac(n, d));
+  // fractions — keep as plain / for Canvas (frasl entity not reliably rendered)
+  r = r.replace(/\(([^()]+)\)\/\(([^()]+)\)/g,
+    (_, n, d) => `(${n})/(${d})`);
+  r = r.replace(/\b([0-9]+)\/([0-9]+)\b/g,
+    (_, n, d) => `${n}/${d}`);
 
   // vectors: <a,b> or <a,b,c> → ⟨a,b⟩ (must come BEFORE <= and >= replacements)
   r = r.replace(/<(-?[^<>]+(?:,[^<>]+)+)>/g, (_, inner) => `⟨${inner}⟩`);
@@ -3644,10 +3637,14 @@ function buildGeneratePrompt(course, selectedSections, sectionCounts, qType, dif
           .filter(d => (c[d].count||0) > 0)
           .map(d => {
             const gt = c[d].graphType;
+            const count = c[d].count || 0;
             const tableNote = gt === "table" || gt === "mix"
               ? ` [tableRows: ${c[d].tableRows||4}, tableCols: ${c[d].tableCols||2}]`
               : "";
-            return `  ${d}: ${c[d].count} question(s) [graphType: ${gt}${tableNote}]`;
+            const mixNote = gt === "mix" && count > 0
+              ? ` [REQUIRED: ${Math.ceil(count*0.4)} chart(s), ${Math.ceil(count*0.3)} table(s), rest text]`
+              : "";
+            return `  ${d}: ${count} question(s) [graphType: ${gt}${tableNote}${mixNote}]`;
           });
         return `${s}:\n${lines.join("\n")}`;
       }).join("\n")
@@ -3664,9 +3661,9 @@ function buildGeneratePrompt(course, selectedSections, sectionCounts, qType, dif
 
   const graphInstructions = hasGraphQuestions ? `
 GRAPH/TABLE QUESTIONS:
-- graphType "graph": MUST include hasGraph:true and graphConfig in the JSON.
-- graphType "table": MUST include a pipe table in the question text presenting the data. Do NOT include graphConfig.
-- graphType "mix": mix of normal text questions, table questions, and graph questions. Use tables and graphs when they genuinely help.
+- graphType "graph": MUST include hasGraph:true and graphConfig in the JSON. Every question in this group MUST have a statistical chart — no exceptions, no plain text fallback.
+- graphType "table": MUST include a pipe table in the question text. Do NOT include graphConfig.
+- graphType "mix": STRICT DISTRIBUTION REQUIRED — for N questions in this group: ceil(N*0.4) must have hasGraph:true with a chart, ceil(N*0.3) must have a pipe table, the rest can be plain text. Example: 5 questions → 2 charts + 2 tables + 1 text. NEVER generate all tables or all text — charts are mandatory in every mix group.
 - graphType "normal": pure text/calculation only. Do NOT include graphConfig or tables.
 
 CRITICAL — Choose graphConfig type based on how many functions appear in the question:
