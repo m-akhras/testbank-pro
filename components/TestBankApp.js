@@ -1191,10 +1191,14 @@ function mathToHTMLInline(s) {
   r = r.replace(/\binf\b/g, '∞');
 
   // sqrt — use Unicode √ directly so Canvas renders correctly
+  // Simple args (single number/var): √5 — complex args: √(x+1)
   let prev;
   do {
     prev = r;
-    r = r.replace(/sqrt\(([^()]+)\)/g, (_, inner) => `√(${inner})`);
+    r = r.replace(/sqrt\(([^()]+)\)/g, (_, inner) => {
+      const t = inner.trim();
+      return /^[a-zA-Z0-9]+$/.test(t) ? `&#x221A;${t}` : `&#x221A;(${t})`;
+    });
   } while (r !== prev);
 
   // integral
@@ -1229,11 +1233,14 @@ function mathToHTMLInline(s) {
   r = r.replace(/([a-zA-Z0-9])\^(-?[0-9]+)/g,
     (_, b, e) => `${b}<sup>${e}</sup>`);
 
-  // fractions — keep as plain / for Canvas (frasl entity not reliably rendered)
-  r = r.replace(/\(([^()]+)\)\/\(([^()]+)\)/g,
-    (_, n, d) => `(${n})/(${d})`);
-  r = r.replace(/\b([0-9]+)\/([0-9]+)\b/g,
-    (_, n, d) => `${n}/${d}`);
+  // fractions — stacked inline fraction with dividing line (renders in Canvas)
+  const frac = (n, d) =>
+    `<span style="display:inline-block;vertical-align:middle;text-align:center;">` +
+    `<span style="display:block;border-bottom:1px solid;padding:0 2px;font-size:0.85em;">${n}</span>` +
+    `<span style="display:block;padding:0 2px;font-size:0.85em;">${d}</span>` +
+    `</span>`;
+  r = r.replace(/\(([^()]+)\)\/\(([^()]+)\)/g, (_, n, d) => frac(n, d));
+  r = r.replace(/\b([0-9]+)\/([0-9]+)\b/g, (_, n, d) => frac(n, d));
 
   // vectors: <a,b> or <a,b,c> → ⟨a,b⟩ (must come BEFORE <= and >= replacements)
   r = r.replace(/<(-?[^<>]+(?:,[^<>]+)+)>/g, (_, inner) => `⟨${inner}⟩`);
