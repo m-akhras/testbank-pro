@@ -4561,8 +4561,8 @@ function SavedExamsScreen({ S, text1, text2, text3, border, onLoad }) {
 
       {exams.map(exam => {
         const versions = exam.versions || [];
-        // detect sections from classSection field on questions
-        const sectionNums = [...new Set(versions.map(v => v.questions?.[0]?.classSection).filter(Boolean))].sort((a,b)=>a-b);
+        // detect sections — classSection lives on the version object, fall back to questions[0]
+        const sectionNums = [...new Set(versions.map(v => v.classSection ?? v.questions?.[0]?.classSection).filter(Boolean))].sort((a,b)=>a-b);
         const hasMultipleSections = sectionNums.length > 1;
         const safeName = (exam.name||"Exam").replace(/[^a-zA-Z0-9]/g,"_");
 
@@ -4614,7 +4614,7 @@ function SavedExamsScreen({ S, text1, text2, text3, border, onLoad }) {
                       });
                     }
                     const zip = new window.JSZip();
-                    const secVersions = versions.filter(v => v.questions?.[0]?.classSection === sec || (!v.questions?.[0]?.classSection && sec === sectionNums[0]));
+                    const secVersions = versions.filter(v => (v.classSection ?? v.questions?.[0]?.classSection) === sec || (!(v.classSection ?? v.questions?.[0]?.classSection) && sec === sectionNums[0]));
                     for (const v of secVersions) {
                       const blob = await buildDocx(v.questions, exam.name, v.label, sec);
                       const bytes = await blob.arrayBuffer();
@@ -7357,13 +7357,13 @@ ${questionsText}`;
             onLoad={(exam) => {
               // Restore exam into Versions tab
               const vers = exam.versions || [];
-              // detect sections
-              const sectionNums = [...new Set(vers.map(v => v.questions?.[0]?.classSection).filter(Boolean))].sort((a,b)=>a-b);
+              // detect sections — classSection lives on the version object, fall back to questions[0]
+              const sectionNums = [...new Set(vers.map(v => v.classSection ?? v.questions?.[0]?.classSection).filter(Boolean))].sort((a,b)=>a-b);
               if (sectionNums.length > 1) {
                 // multi-section
                 const secVersions = {};
                 sectionNums.forEach(sec => {
-                  secVersions[sec] = vers.filter(v => v.questions?.[0]?.classSection === sec);
+                  secVersions[sec] = vers.filter(v => (v.classSection ?? v.questions?.[0]?.classSection) === sec);
                 });
                 setClassSectionVersions(secVersions);
                 setVersions(secVersions[sectionNums[0]] || vers);
