@@ -3731,23 +3731,29 @@ function buildGeneratePrompt(course, selectedSections, sectionCounts, qType, dif
   const breakdown = useCfg
     ? selectedSections.map(s => {
         const c = sectionConfig[s] || { Easy:{count:1,graphType:"normal"}, Medium:{count:1,graphType:"normal"}, Hard:{count:1,graphType:"normal"} };
+        const isQM = course === "Quantitative Methods I" || course === "Quantitative Methods II";
+        const types = isQM ? ["normal","table","graph","mix"] : ["normal","graph","mix"];
         const lines = ["Easy","Medium","Hard"]
           .filter(d => (c[d].count||0) > 0)
           .map(d => {
-            const gt = c[d].graphType;
             const count = c[d].count || 0;
-            const tableNote = gt === "table" || gt === "mix"
-              ? ` [tableRows: ${c[d].tableRows||4}, tableCols: ${c[d].tableCols||2}]`
-              : "";
-            const mixNote = gt === "mix" && count > 0
-              ? ` [REQUIRED: ${Math.ceil(count*0.4)} chart(s), ${Math.ceil(count*0.3)} table(s), rest text]`
-              : "";
-            const normalSplit = gt === "normal" && (c[d].numTable ?? 0) > 0
-              ? ` [REQUIRED: ${c[d].numText ?? count} plain text, ${c[d].numTable} table [tableRows: ${c[d].tableRows||4}, tableCols: ${c[d].tableCols||2}]]`
-              : "";
-            const graphSplit = "";
-            const tableSplit = "";
-            return `  ${d}: ${count} question(s) [graphType: ${gt}${tableNote}${mixNote}${normalSplit}${graphSplit}${tableSplit}]`;
+            const typeCounts = c[d].typeCounts || {};
+            const hasTypeCounts = types.some(t => (typeCounts[t]||0) > 0);
+            if (hasTypeCounts) {
+              const parts = types
+                .filter(t => (typeCounts[t]||0) > 0)
+                .map(t => {
+                  const n = typeCounts[t];
+                  const tableNote = (t==="table"||t==="mix") ? ` [tableRows:${c[d].tableRows||4}, tableCols:${c[d].tableCols||2}]` : "";
+                  const mixNote = t==="mix" ? ` [REQUIRED: ${Math.ceil(n*0.4)} chart(s), ${Math.ceil(n*0.3)} table(s), rest text]` : "";
+                  return `${n} ${t==="normal"?"text":t}${tableNote}${mixNote}`;
+                }).join(", ");
+              return `  ${d}: ${count} question(s) [${parts}]`;
+            }
+            const gt = c[d].graphType || "normal";
+            const tableNote = gt === "table" || gt === "mix" ? ` [tableRows: ${c[d].tableRows||4}, tableCols: ${c[d].tableCols||2}]` : "";
+            const mixNote = gt === "mix" && count > 0 ? ` [REQUIRED: ${Math.ceil(count*0.4)} chart(s), ${Math.ceil(count*0.3)} table(s), rest text]` : "";
+            return `  ${d}: ${count} question(s) [graphType: ${gt}${tableNote}${mixNote}]`;
           });
         return `${s}:\n${lines.join("\n")}`;
       }).join("\n")
@@ -3759,7 +3765,12 @@ function buildGeneratePrompt(course, selectedSections, sectionCounts, qType, dif
 
   const hasGraphQuestions = useCfg && selectedSections.some(s => {
     const c = sectionConfig[s];
-    return c && ["Easy","Medium","Hard"].some(d => c[d].graphType === "graph" || c[d].graphType === "mix" || c[d].graphType === "table");
+    return c && ["Easy","Medium","Hard"].some(d => {
+      const gt = c[d].graphType;
+      const tc = c[d].typeCounts || {};
+      return gt === "graph" || gt === "mix" || gt === "table" ||
+             (tc.graph||0) > 0 || (tc.mix||0) > 0 || (tc.table||0) > 0;
+    });
   });
 
   const graphInstructions = hasGraphQuestions ? `
@@ -6012,100 +6023,66 @@ ${questionsText}`;
                               {sel && (() => {
                                 const cfg = getSectionConfig(sec);
                                 const diffColors = { Easy:"#10b981", Medium:"#f59e0b", Hard:"#f43f5e" };
+                                const isQM = course === "Quantitative Methods I" || course === "Quantitative Methods II";
+                                const types = isQM ? ["normal","table","graph","mix"] : ["normal","graph","mix"];
+                                const typeLabels = { normal:"Text", table:"Table", graph:"Graph", mix:"Mix" };
+                                const typeColors = { normal: border, table:"#185FA5", graph:"#1D9E75", mix:"#8b5cf6" };
                                 return (
                                   <div style={{marginTop:"0.4rem", paddingLeft:"0.75rem", borderLeft:"2px solid #334155"}}>
-                                    {["Easy","Medium","Hard"].map(d => (
-                                      <div key={d} style={{display:"flex", alignItems:"center", gap:"0.4rem", marginBottom:"0.25rem", flexWrap:"wrap"}}>
-                                        <span style={{fontSize:"0.68rem", color:diffColors[d], fontWeight:"600", minWidth:"46px"}}>{d}</span>
-                                        <input type="number" min={0} max={10} value={cfg[d].count}
-                                          style={{width:"40px", ...S.input, padding:"0.2rem 0.3rem", fontSize:"0.75rem"}}
-                                          onChange={e => {
-                                            const newCount = Number(e.target.value)||0;
-                                            const updates = { count: newCount };
-                                            if (cfg[d].graphType === "normal") {
-                                              const ntbl = Math.min(cfg[d].numTable ?? 0, newCount);
-                                              updates.numTable = ntbl;
-                                              updates.numText = newCount - ntbl;
-                                            }
-                                            setSectionDiff(sec, d, updates);
-                                          }} />
-                                        <span style={{fontSize:"0.65rem", color:text3}}>q</span>
-                                        {((course === "Quantitative Methods I" || course === "Quantitative Methods II") ? ["normal","table","graph","mix"] : ["normal","graph","mix"]).map(gt => (
-                                          <button key={gt} onClick={() => {
-                                            const updates = { graphType: gt };
-                                            if (gt === "normal") {
-                                              updates.numText = cfg[d].count || 1;
-                                              updates.numTable = 0;
-                                            }
-                                            setSectionDiff(sec, d, updates);
-                                          }}
-                                            style={{padding:"0.15rem 0.35rem", fontSize:"0.65rem", borderRadius:"3px", cursor:"pointer",
-                                              background: cfg[d].graphType===gt
-                                                ? (gt==="graph"?"#1D9E75":gt==="table"?"#185FA5":gt==="mix"?"#8b5cf6":border)
-                                                : "transparent",
-                                              color: cfg[d].graphType===gt ? "#fff" : text3,
-                                              border:`1px solid ${cfg[d].graphType===gt?(gt==="graph"?"#1D9E75":gt==="table"?"#185FA5":gt==="mix"?"#8b5cf6":"#475569"):border}`}}>
-                                            {gt==="normal"?"Text":gt==="graph"?"Graph":gt==="table"?"Table":"Mix"}
-                                          </button>
-                                        ))}
-                                        {/* Text type: split into # text + # table */}
-                                        {cfg[d].graphType === "normal" && (course === "Quantitative Methods I" || course === "Quantitative Methods II") && (
-                                          <span style={{display:"flex", alignItems:"center", gap:"0.25rem", marginLeft:"0.25rem"}}>
-                                            <span style={{fontSize:"0.6rem", color:text3}}>text</span>
-                                            <input type="number" min={0} max={cfg[d].count||1} value={cfg[d].numText ?? cfg[d].count ?? 1}
-                                              onChange={e => {
-                                                const nt = Math.max(0, Math.min(cfg[d].count||1, Number(e.target.value)||0));
-                                                setSectionDiff(sec, d, { numText: nt, numTable: Math.max(0, (cfg[d].count||1) - nt) });
-                                              }}
-                                              style={{width:"34px", ...S.input, padding:"0.1rem 0.25rem", fontSize:"0.68rem", textAlign:"center"}} />
-                                            <span style={{fontSize:"0.6rem", color:text3}}>table</span>
-                                            <input type="number" min={0} max={cfg[d].count||1} value={cfg[d].numTable ?? 0}
-                                              onChange={e => {
-                                                const ntbl = Math.max(0, Math.min(cfg[d].count||1, Number(e.target.value)||0));
-                                                setSectionDiff(sec, d, { numTable: ntbl, numText: Math.max(0, (cfg[d].count||1) - ntbl) });
-                                              }}
-                                              style={{width:"34px", ...S.input, padding:"0.1rem 0.25rem", fontSize:"0.68rem", textAlign:"center"}} />
-                                            {(cfg[d].numTable ?? 0) > 0 && (
-                                              <span style={{display:"flex", alignItems:"center", gap:"0.25rem"}}>
-                                                <span style={{fontSize:"0.6rem", color:text3}}>rows</span>
-                                                <input type="number" min={2} max={20} value={cfg[d].tableRows||4}
-                                                  onChange={e => setSectionDiff(sec, d, "tableRows", Math.max(2, Math.min(20, Number(e.target.value)||4)))}
-                                                  style={{width:"34px", ...S.input, padding:"0.1rem 0.25rem", fontSize:"0.68rem", textAlign:"center"}} />
-                                                <span style={{fontSize:"0.6rem", color:text3}}>cols</span>
-                                                <input type="number" min={2} max={8} value={cfg[d].tableCols||2}
-                                                  onChange={e => setSectionDiff(sec, d, "tableCols", Math.max(2, Math.min(8, Number(e.target.value)||2)))}
-                                                  style={{width:"34px", ...S.input, padding:"0.1rem 0.25rem", fontSize:"0.68rem", textAlign:"center"}} />
-                                              </span>
-                                            )}
-                                          </span>
-                                        )}
-                                        {/* Graph type: no sub-split needed — all questions will have graphs */}
-                                        {cfg[d].graphType === "table" && (course === "Quantitative Methods I" || course === "Quantitative Methods II") && (
-                                          <span style={{display:"flex", alignItems:"center", gap:"0.25rem", marginLeft:"0.25rem"}}>
-                                            <span style={{fontSize:"0.6rem", color:text3}}>rows</span>
-                                            <input type="number" min={2} max={20} value={cfg[d].tableRows||4}
-                                              onChange={e => setSectionDiff(sec, d, "tableRows", Math.max(2, Math.min(20, Number(e.target.value)||4)))}
-                                              style={{width:"34px", ...S.input, padding:"0.1rem 0.25rem", fontSize:"0.68rem", textAlign:"center"}} />
-                                            <span style={{fontSize:"0.6rem", color:text3}}>cols</span>
-                                            <input type="number" min={2} max={8} value={cfg[d].tableCols||2}
-                                              onChange={e => setSectionDiff(sec, d, "tableCols", Math.max(2, Math.min(8, Number(e.target.value)||2)))}
-                                              style={{width:"34px", ...S.input, padding:"0.1rem 0.25rem", fontSize:"0.68rem", textAlign:"center"}} />
-                                          </span>
-                                        )}
-                                        {cfg[d].graphType === "mix" && (course === "Quantitative Methods I" || course === "Quantitative Methods II") && (
-                                          <span style={{display:"flex", alignItems:"center", gap:"0.25rem", marginLeft:"0.25rem"}}>
-                                            <span style={{fontSize:"0.6rem", color:text3}}>rows</span>
-                                            <input type="number" min={2} max={20} value={cfg[d].tableRows||4}
-                                              onChange={e => setSectionDiff(sec, d, "tableRows", Math.max(2, Math.min(20, Number(e.target.value)||4)))}
-                                              style={{width:"34px", ...S.input, padding:"0.1rem 0.25rem", fontSize:"0.68rem", textAlign:"center"}} />
-                                            <span style={{fontSize:"0.6rem", color:text3}}>cols</span>
-                                            <input type="number" min={2} max={8} value={cfg[d].tableCols||2}
-                                              onChange={e => setSectionDiff(sec, d, "tableCols", Math.max(2, Math.min(8, Number(e.target.value)||2)))}
-                                              style={{width:"34px", ...S.input, padding:"0.1rem 0.25rem", fontSize:"0.68rem", textAlign:"center"}} />
-                                          </span>
-                                        )}
-                                      </div>
-                                    ))}
+                                    {["Easy","Medium","Hard"].map(d => {
+                                      // total = sum of all type counts
+                                      const typeCounts = cfg[d].typeCounts || {};
+                                      const total = types.reduce((s,t) => s + (typeCounts[t]||0), 0);
+                                      return (
+                                        <div key={d} style={{marginBottom:"0.5rem"}}>
+                                          {/* Header row: difficulty + total */}
+                                          <div style={{display:"flex", alignItems:"center", gap:"0.5rem", marginBottom:"0.25rem"}}>
+                                            <span style={{fontSize:"0.68rem", color:diffColors[d], fontWeight:"600", minWidth:"46px"}}>{d}</span>
+                                            <span style={{fontSize:"0.68rem", color:text2, background:bg2, border:"1px solid "+border, borderRadius:"4px", padding:"0.1rem 0.5rem", minWidth:"28px", textAlign:"center"}}>
+                                              {total}
+                                            </span>
+                                            <span style={{fontSize:"0.6rem", color:text3}}>total</span>
+                                          </div>
+                                          {/* Type counts row */}
+                                          <div style={{display:"flex", gap:"0.4rem", flexWrap:"wrap", alignItems:"flex-start", paddingLeft:"54px"}}>
+                                            {types.map(t => {
+                                              const count = typeCounts[t] || 0;
+                                              const isTable = t === "table" || t === "mix";
+                                              return (
+                                                <div key={t} style={{display:"flex", flexDirection:"column", alignItems:"center", gap:"0.15rem"}}>
+                                                  <span style={{fontSize:"0.6rem", color: count > 0 ? typeColors[t] : text3, fontWeight: count>0?"600":"400"}}>{typeLabels[t]}</span>
+                                                  <input type="number" min={0} max={20} value={count}
+                                                    onChange={e => {
+                                                      const newVal = Math.max(0, Number(e.target.value)||0);
+                                                      const newTypeCounts = { ...typeCounts, [t]: newVal };
+                                                      const newTotal = types.reduce((s,tt) => s + (newTypeCounts[tt]||0), 0);
+                                                      setSectionDiff(sec, d, { typeCounts: newTypeCounts, count: newTotal, graphType: t });
+                                                    }}
+                                                    style={{width:"36px", ...S.input, padding:"0.1rem 0.25rem", fontSize:"0.75rem", textAlign:"center",
+                                                      borderColor: count > 0 ? typeColors[t]+"88" : border}} />
+                                                  {isTable && count > 0 && (
+                                                    <div style={{display:"flex", flexDirection:"column", gap:"0.1rem", alignItems:"center"}}>
+                                                      <div style={{display:"flex", alignItems:"center", gap:"0.15rem"}}>
+                                                        <span style={{fontSize:"0.55rem", color:text3}}>rows</span>
+                                                        <input type="number" min={2} max={20} value={cfg[d].tableRows||4}
+                                                          onChange={e => setSectionDiff(sec, d, "tableRows", Math.max(2, Math.min(20, Number(e.target.value)||4)))}
+                                                          style={{width:"30px", ...S.input, padding:"0.1rem 0.2rem", fontSize:"0.62rem", textAlign:"center"}} />
+                                                      </div>
+                                                      <div style={{display:"flex", alignItems:"center", gap:"0.15rem"}}>
+                                                        <span style={{fontSize:"0.55rem", color:text3}}>cols</span>
+                                                        <input type="number" min={2} max={8} value={cfg[d].tableCols||2}
+                                                          onChange={e => setSectionDiff(sec, d, "tableCols", Math.max(2, Math.min(8, Number(e.target.value)||2)))}
+                                                          style={{width:"30px", ...S.input, padding:"0.1rem 0.2rem", fontSize:"0.62rem", textAlign:"center"}} />
+                                                      </div>
+                                                    </div>
+                                                  )}
+                                                </div>
+                                              );
+                                            })}
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
                                   </div>
                                 );
                               })()}
