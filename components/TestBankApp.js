@@ -4076,7 +4076,10 @@ function buildVersionPrompt(selectedQuestions, mutationType, versionLabel) {
   const lines = selectedQuestions.map((q,i) => {
     const mut = mutationType[q.id]||"numbers";
     const orig = q.type==="Branched" ? q.stem : q.question;
-    return (i+1)+". ["+q.section+"] ["+mut+" mutation] ["+q.type+"] Original: "+orig;
+    const graphNote = q.hasGraph && q.graphConfig
+      ? ` [HAS GRAPH: distType=${q.graphConfig.distType||q.graphConfig.type}, mu=${q.graphConfig.mu??"-"}, sigma=${q.graphConfig.sigma??"-"}, uMin=${q.graphConfig.uMin??"-"}, uMax=${q.graphConfig.uMax??"-"}, shadeFrom=${q.graphConfig.shadeFrom??"-"}, shadeTo=${q.graphConfig.shadeTo??"-"}]`
+      : "";
+    return (i+1)+". ["+q.section+"] ["+mut+" mutation] ["+q.type+"]"+graphNote+" Original: "+orig;
   }).join("\n");
   return `TESTBANK_VERSION_REQUEST\nVersion: ${versionLabel}\n\nMutate the following questions to create Version ${versionLabel}:\n${lines}\n\nMUTATION RULES:\n- numbers mutation: keep exact same function type and concept, only change coefficients/constants. Same difficulty, same steps.\n- function mutation: change to different but equivalent-difficulty function of same concept. Same difficulty, same steps.\n- For Branched: mutate the shared stem and regenerate ALL parts consistently.\n- ALWAYS regenerate the correct answer key for the mutated version.\n- Keep same question type, section, and difficulty.\n- For Multiple Choice: all 4 choices must be distinct values — no two choices may be identical or equivalent.\n- EXPONENTIAL DISTRIBUTION: always use μ (mu) as the parameter — NEVER λ (lambda). Write "μ = 4" not "λ = 0.25".\n- ${FR_EXPLANATION_RULE}\n\nReturn a JSON array of mutated questions in the SAME order preserving the original structure:\n- Regular: {type, section, difficulty, question, answer, explanation, choices if MC}\n- Formula: {type, section, difficulty, question, variables, answerFormula, answer, explanation}\n- Branched: {type, section, difficulty, stem, parts:[{question,answer,explanation}]}\n- If the original question has hasGraph:true, you MUST include hasGraph:true and an updated graphConfig that matches the new numbers (e.g. updated mu, sigma, uMin, uMax, shadeFrom, shadeTo, probability).\nReply with ONLY valid JSON array, no markdown.`;
 }
@@ -4087,7 +4090,10 @@ function buildAllVersionsPrompt(selectedQuestions, mutationType, labels, classSe
   const lines = selectedQuestions.map((q,i) => {
     const orig = q.type==="Branched" ? q.stem : q.question;
     const mut = mutationType[q.id] || "numbers";
-    return (i+1)+". ["+q.section+"] ["+q.type+"] [mutation: "+mut+"] Original: "+orig;
+    const graphNote = q.hasGraph && q.graphConfig
+      ? ` [HAS GRAPH: distType=${q.graphConfig.distType||q.graphConfig.type}, mu=${q.graphConfig.mu??"-"}, sigma=${q.graphConfig.sigma??"-"}, uMin=${q.graphConfig.uMin??"-"}, uMax=${q.graphConfig.uMax??"-"}, shadeFrom=${q.graphConfig.shadeFrom??"-"}, shadeTo=${q.graphConfig.shadeTo??"-"}]`
+      : "";
+    return (i+1)+". ["+q.section+"] ["+q.type+"] [mutation: "+mut+"]"+graphNote+" Original: "+orig;
   }).join("\n");
   const versionList = labels.join(", ");
 
@@ -4130,7 +4136,10 @@ function buildAllVersionsPrompt(selectedQuestions, mutationType, labels, classSe
 function buildAllSectionsPrompt(selectedQuestions, labels, numClassSections, course="") {
   const lines = selectedQuestions.map((q,i) => {
     const orig = q.type==="Branched" ? q.stem : q.question;
-    return (i+1)+". ["+q.section+"] ["+q.type+"] Original: "+orig;
+    const graphNote = q.hasGraph && q.graphConfig
+      ? ` [HAS GRAPH: distType=${q.graphConfig.distType||q.graphConfig.type}, mu=${q.graphConfig.mu??"-"}, sigma=${q.graphConfig.sigma??"-"}, uMin=${q.graphConfig.uMin??"-"}, uMax=${q.graphConfig.uMax??"-"}, shadeFrom=${q.graphConfig.shadeFrom??"-"}, shadeTo=${q.graphConfig.shadeTo??"-"}]`
+      : "";
+    return (i+1)+". ["+q.section+"] ["+q.type+"]"+graphNote+" Original: "+orig;
   }).join("\n");
   const versionList = labels.join(", ");
 
@@ -6491,6 +6500,22 @@ ${questionsText}`;
                 onClick={() => { setBankSelectMode(!bankSelectMode); setBankSelected(new Set()); }}>
                 {bankSelectMode ? `✕ Cancel Select (${bankSelected.size} selected)` : "☑ Select to Delete"}
               </button>
+              {isAdmin && !bankSelectMode && (
+                <button style={S.ghostBtn("#8b5cf6")} onClick={async () => {
+                  const graphQs = bank.filter(q => q.hasGraph && q.graphConfig && (q.graphConfig.title || q.graphConfig.probability));
+                  if (graphQs.length === 0) { showToast("No titles/labels to clean up ✓"); return; }
+                  if (!window.confirm(`Strip title and probability labels from ${graphQs.length} graph question(s)? This makes them cleaner in Canvas.`)) return;
+                  let cleaned = 0;
+                  for (const q of graphQs) {
+                    const { title, probability, ...cleanConfig } = q.graphConfig;
+                    const updated = { ...q, graphConfig: cleanConfig };
+                    await saveQuestion(updated);
+                    setBank(prev => prev.map(bq => bq.id === q.id ? updated : bq));
+                    cleaned++;
+                  }
+                  showToast(`✓ Cleaned ${cleaned} graph question${cleaned>1?"s":""}`);
+                }}>🧹 Clean graph titles</button>
+              )}
               {bankSelectMode && bankSelected.size > 0 && (
                 <>
                   <button style={S.ghostBtn("#f87171")} onClick={async () => {
