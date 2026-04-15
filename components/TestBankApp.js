@@ -2208,6 +2208,9 @@ function canvasExportConfig(cfg) {
   if (!cfg.exportProbLabel) { delete result.probability; }
   return result;
 }
+
+// expose to window for console testing + export pipeline
+if (typeof window !== "undefined") {
   window.renderGraphToSVG = renderGraphToSVG;
   window.graphToBase64PNG = graphToBase64PNG;
   window.renderStatChartToSVG = renderStatChartToSVG;
