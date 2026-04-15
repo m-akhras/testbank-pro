@@ -6333,7 +6333,7 @@ ${questionsText}`;
                 <span style={{
                   display:"inline-flex", alignItems:"center", gap:"0.3rem",
                   fontSize:"0.75rem", fontWeight:"700", color:"#fff",
-                  background:accent, borderRadius:"999px",
+                  background:"#e11d48", borderRadius:"999px",
                   padding:"0.18rem 0.65rem", alignSelf:"center",
                   boxShadow:"0 1px 4px "+accent+"55"
                 }}>
@@ -6384,8 +6384,8 @@ ${questionsText}`;
                       display:"flex", alignItems:"center", gap:"0.6rem",
                       padding:"0.45rem 0.75rem",
                       borderBottom: qi < filteredBank.length-1 ? "1px solid "+border+"55" : "none",
-                      background: inExam ? accent+"15" : qi%2===0 ? "transparent" : "#ffffff04",
-                      borderLeft: inExam ? "4px solid "+accent : "4px solid transparent",
+                      background: inExam ? "#fff1f2" : qi%2===0 ? "transparent" : "#ffffff04",
+                      borderLeft: inExam ? "4px solid #e11d48" : "4px solid transparent",
                     }}>
                       <span style={{...S.diffTag(q.difficulty||""), flexShrink:0, fontSize:"0.58rem", padding:"0.05rem 0.3rem"}}>{(q.difficulty||"?")[0]}</span>
                       <span style={{fontSize:"0.68rem", color:text3, flexShrink:0, minWidth:"80px", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>{(q.section||"").split(" ").slice(0,3).join(" ")}</span>
@@ -6394,7 +6394,7 @@ ${questionsText}`;
                       </span>
                       {used > 0 && <span style={{fontSize:"0.62rem", color:"#06b6d4", flexShrink:0}}>📋×{used}</span>}
                       {issues.length > 0 && <span style={{fontSize:"0.62rem", color:"#f87171", flexShrink:0}}>⚠</span>}
-                      <button style={{...S.smBtn, flexShrink:0, color:inExam?accent:text3, border:"1px solid "+(inExam?accent+"44":border)}}
+                      <button style={{...S.smBtn, flexShrink:0, color:inExam?"#e11d48":text3, border:"1px solid "+(inExam?"#e11d4844":border)}}
                         onClick={() => setSelectedForExam(p => p.includes(q.id) ? p.filter(id=>id!==q.id) : [...p,q.id])}>
                         {inExam?"✓":"+"}</button>
                       <button style={{...S.smBtn, flexShrink:0, color:"#7C3AED", border:"1px solid #a78bfa33"}}
@@ -6410,10 +6410,10 @@ ${questionsText}`;
               return (
               <div key={q.id} style={{
                 ...S.qCard,
-                borderColor: inExam ? accent : border,
+                borderColor: inExam ? "#e11d48" : border,
                 borderLeftWidth: inExam ? "4px" : "1px",
-                background: inExam ? accent+"0f" : bg1,
-                boxShadow: inExam ? "0 0 0 1px "+accent+"33, 0 2px 8px "+accent+"22" : S.qCard.boxShadow,
+                background: inExam ? "#fff1f2" : bg1,
+                boxShadow: inExam ? "0 0 0 1px #e11d4833, 0 2px 8px #e11d4822" : S.qCard.boxShadow,
               }}>
                 <div style={S.qMeta}>
                   <span style={S.tag(courseColors[q.course])}>{q.course}</span>
@@ -6451,7 +6451,7 @@ ${questionsText}`;
                     onClick={() => { setInlineEditQId(inlineEditQId===q.id ? null : q.id); setGraphEditorQId(null); }}>
                     ✏️ Edit
                   </button>
-                  <button style={{...S.smBtn, color:inExam?accent:text2, border:"1px solid "+(inExam?accent+"44":border)}}
+                  <button style={{...S.smBtn, color:inExam?"#e11d48":text2, border:"1px solid "+(inExam?"#e11d4844":border)}}
                     onClick={() => setSelectedForExam(p => p.includes(q.id) ? p.filter(id => id !== q.id) : [...p, q.id])}>
                     {inExam ? "✓ In exam" : "+ Exam"}
                   </button>
