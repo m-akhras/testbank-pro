@@ -3103,13 +3103,11 @@ async function buildQTIZip(qtiXml, title) {
 
   const zip = new window.JSZip();
 
-  // ── resolve graph placeholders ──
-  // Canvas requires images as web_resources inside the zip
+  // ── resolve graph placeholders — embed as base64 data URIs ──
   const placeholderRe = /GRAPH_PLACEHOLDER_([^"]+)/g;
   const phMatches = [...qtiXml.matchAll(placeholderRe)];
   const seen = new Set();
   let imgIdx = 0;
-  const imgResourceEntries = [];
   for (const m of phMatches) {
     const pid = m[1];
     if (seen.has(pid)) continue;
@@ -3125,13 +3123,9 @@ async function buildQTIZip(qtiXml, title) {
         const _isStatQTI = cfg.type && ["bar","histogram","scatter","discrete_dist","continuous_dist","standard_normal"].includes(cfg.type);
         const b64 = _isStatQTI ? await statChartToBase64PNG(cfg, 480, 280) : await graphToBase64PNG(cfg, 480, 280);
         if (b64) {
-          const imgName = `graph_${imgIdx}.png`;
-          const imgWebPath = `web_resources/${imgName}`;
-          const imgBytes = Uint8Array.from(atob(b64.replace(/^data:image\/png;base64,/, "")), ch => ch.charCodeAt(0));
-          zip.file(imgWebPath, imgBytes);
-          imgResourceEntries.push(imgWebPath);
-          // Canvas resolves $IMS-CC-FILEBASE$ relative to the package root
-          qtiXml = qtiXml.split(`GRAPH_PLACEHOLDER_${pid}`).join(`$IMS-CC-FILEBASE$${imgWebPath}`);
+          // Embed as base64 data URI directly — most reliable across Canvas versions
+          const dataUri = b64.startsWith("data:") ? b64 : `data:image/png;base64,${b64}`;
+          qtiXml = qtiXml.split(`GRAPH_PLACEHOLDER_${pid}`).join(dataUri);
         }
       } catch(e) {
         console.warn("graph png failed", e);
@@ -3142,15 +3136,7 @@ async function buildQTIZip(qtiXml, title) {
     }
   }
 
-  // add image files to manifest resources
-  const imgResources = imgResourceEntries.map((p, i) =>
-    `    <resource identifier="graph_res_${i+1}" type="webcontent" href="${p}"><file href="${p}"/></resource>`
-  ).join("\n");
-
-  // patch manifest to include image resources
-  const patchedManifest = manifest.replace("</resources>", imgResources + "\n  </resources>");
-
-  zip.file("imsmanifest.xml", patchedManifest);
+  zip.file("imsmanifest.xml", manifest);
   zip.file(qtiFile, qtiXml);
   zip.file(metaFile, meta);
 
@@ -3304,8 +3290,37 @@ ${sectionsXml}  </assessment>
 </manifest>`;
 
     const zip = new window.JSZip();
+
+    // ── resolve graph placeholders — embed as base64 data URIs ──
+    let resolvedQtiXml = qtiXml;
+    const phRe = /GRAPH_PLACEHOLDER_([^"]+)/g;
+    const phMatches = [...resolvedQtiXml.matchAll(phRe)];
+    const seenPh = new Set();
+    for (const m of phMatches) {
+      const pid = m[1];
+      if (seenPh.has(pid)) continue;
+      seenPh.add(pid);
+      const cfg = window._qtiGraphConfigs?.[pid];
+      if (cfg) {
+        try {
+          const _isStat = cfg.type && ["bar","histogram","scatter","discrete_dist","continuous_dist","standard_normal"].includes(cfg.type);
+          const b64 = _isStat ? await statChartToBase64PNG(cfg, 480, 280) : await graphToBase64PNG(cfg, 480, 280);
+          if (b64) {
+            const dataUri = b64.startsWith("data:") ? b64 : `data:image/png;base64,${b64}`;
+            resolvedQtiXml = resolvedQtiXml.split(`GRAPH_PLACEHOLDER_${pid}`).join(dataUri);
+          } else {
+            resolvedQtiXml = resolvedQtiXml.split(`GRAPH_PLACEHOLDER_${pid}`).join("");
+          }
+        } catch(e) {
+          resolvedQtiXml = resolvedQtiXml.split(`GRAPH_PLACEHOLDER_${pid}`).join("");
+        }
+      } else {
+        resolvedQtiXml = resolvedQtiXml.split(`GRAPH_PLACEHOLDER_${pid}`).join("");
+      }
+    }
+
     zip.file("imsmanifest.xml", manifest);
-    zip.file(qtiFile, qtiXml);
+    zip.file(qtiFile, resolvedQtiXml);
     zip.file(`${safeTitle}/${safeTitle}_meta.xml`, metaXml);
     blobs[sec] = await zip.generateAsync({type:"blob", mimeType:"application/zip"});
   }
