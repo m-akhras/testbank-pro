@@ -1144,6 +1144,7 @@ function validateQuestion(q) {
       if (!dt) issues.push("Continuous distribution missing distType");
       if ((dt === "normal" || dt === "standard_normal") && gc.sigma !== undefined && gc.sigma <= 0) issues.push("Normal distribution sigma must be > 0");
       if (dt === "exponential" && gc.lambda !== undefined && gc.lambda <= 0) issues.push("Exponential distribution lambda must be > 0");
+      if (dt === "exponential" && gc.mu !== undefined && gc.mu <= 0) issues.push("Exponential distribution mu must be > 0");
       if (dt === "uniform" && gc.uMin !== undefined && gc.uMax !== undefined && gc.uMin >= gc.uMax) issues.push("Uniform distribution uMin must be < uMax");
     }
     if ((gc.xMin !== undefined && gc.xMax !== undefined) && gc.xMin >= gc.xMax) issues.push("Graph xMin must be less than xMax");
@@ -2014,7 +2015,9 @@ function renderStatChartToSVG(chartConfig, width=480, height=300) {
     const isStdNorm = distType === "standard_normal" || (distType === "normal" && cfg.mu === 0 && cfg.sigma === 1);
     const mu     = cfg.mu     ?? 0;
     const sigma  = cfg.sigma  ?? 1;
-    const lambda = cfg.lambda ?? 1;
+    // Exponential: accept mu (mean) or lambda (rate); internally use lambda=1/mu
+    const expMu     = cfg.mu !== undefined && distType === "exponential" ? cfg.mu : (cfg.lambda ? 1/cfg.lambda : 1);
+    const lambda = distType === "exponential" ? 1/expMu : (cfg.lambda ?? 1);
     const uMin   = cfg.uMin   ?? 0;
     const uMax   = cfg.uMax   ?? 1;
 
@@ -2150,6 +2153,14 @@ function renderStatChartToSVG(chartConfig, width=480, height=300) {
       const muLabel = isStdNorm ? "\u03bc=0" : ("\u03bc=" + mu);
       if (sFrom !== mu && sTo !== mu) // don't overlap with boundary label
         axisLabel(muLabel, xScale(mu), iH+58, "middle", 9);
+    }
+    // μ marker for exponential distribution
+    if (distType === "exponential" && xScale(expMu) >= 0 && xScale(expMu) <= iW) {
+      g.append("line").attr("x1",xScale(expMu)).attr("y1",yScale(0))
+        .attr("x2",xScale(expMu)).attr("y2",yScale(pdf(expMu))*0.5)
+        .attr("stroke",COL.muted).attr("stroke-width",1).attr("stroke-dasharray","3,3");
+      if (sFrom !== expMu && sTo !== expMu)
+        axisLabel("\u03bc=" + expMu, xScale(expMu), iH+58, "middle", 9);
     }
   }
 
@@ -3103,29 +3114,35 @@ async function buildQTIZip(qtiXml, title) {
 
   const zip = new window.JSZip();
 
-  // ── resolve graph placeholders — embed as base64 data URIs ──
+  // ── resolve graph placeholders — store PNGs in web_resources/, reference via $IMS-CC-FILEBASE$ ──
   const placeholderRe = /GRAPH_PLACEHOLDER_([^"]+)/g;
   const phMatches = [...qtiXml.matchAll(placeholderRe)];
   const seen = new Set();
   let imgIdx = 0;
+  const webResources = []; // { path, identifier }
   for (const m of phMatches) {
     const pid = m[1];
     if (seen.has(pid)) continue;
     seen.add(pid);
+    imgIdx++;
     let cfg = window._qtiGraphConfigs?.[pid];
     if (!cfg && window._qtiGraphConfigs) {
       const keys = Object.keys(window._qtiGraphConfigs);
-      if (keys.length > 0) cfg = window._qtiGraphConfigs[keys[Math.min(imgIdx, keys.length-1)]];
+      if (keys.length > 0) cfg = window._qtiGraphConfigs[keys[Math.min(imgIdx-1, keys.length-1)]];
     }
-    imgIdx++;
     if (cfg) {
       try {
         const _isStatQTI = cfg.type && ["bar","histogram","scatter","discrete_dist","continuous_dist","standard_normal"].includes(cfg.type);
         const b64 = _isStatQTI ? await statChartToBase64PNG(cfg, 480, 280) : await graphToBase64PNG(cfg, 480, 280);
         if (b64) {
-          // Embed as base64 data URI directly — most reliable across Canvas versions
-          const dataUri = b64.startsWith("data:") ? b64 : `data:image/png;base64,${b64}`;
-          qtiXml = qtiXml.split(`GRAPH_PLACEHOLDER_${pid}`).join(dataUri);
+          const imgName = `graph_${imgIdx}.png`;
+          const imgPath = `web_resources/${imgName}`;
+          const imgBytes = Uint8Array.from(atob(b64.replace(/^data:image\/png;base64,/, "")), ch => ch.charCodeAt(0));
+          zip.file(imgPath, imgBytes);
+          webResources.push({ path: imgPath, identifier: `graph_res_${imgIdx}` });
+          qtiXml = qtiXml.split(`GRAPH_PLACEHOLDER_${pid}`).join(`$IMS-CC-FILEBASE$${imgPath}`);
+        } else {
+          qtiXml = qtiXml.split(`GRAPH_PLACEHOLDER_${pid}`).join("");
         }
       } catch(e) {
         console.warn("graph png failed", e);
@@ -3136,7 +3153,15 @@ async function buildQTIZip(qtiXml, title) {
     }
   }
 
-  zip.file("imsmanifest.xml", manifest);
+  // Add web_resources to manifest so Canvas can resolve them
+  const imgResourcesXml = webResources.map(r =>
+    `    <resource identifier="${r.identifier}" type="webcontent" href="${r.path}"><file href="${r.path}"/></resource>`
+  ).join("\n");
+  const patchedManifest = imgResourcesXml
+    ? manifest.replace("</resources>", imgResourcesXml + "\n  </resources>")
+    : manifest;
+
+  zip.file("imsmanifest.xml", patchedManifest);
   zip.file(qtiFile, qtiXml);
   zip.file(metaFile, meta);
 
@@ -3291,23 +3316,30 @@ ${sectionsXml}  </assessment>
 
     const zip = new window.JSZip();
 
-    // ── resolve graph placeholders — embed as base64 data URIs ──
+    // ── resolve graph placeholders — store PNGs in web_resources/ ──
     let resolvedQtiXml = qtiXml;
     const phRe = /GRAPH_PLACEHOLDER_([^"]+)/g;
     const phMatches = [...resolvedQtiXml.matchAll(phRe)];
     const seenPh = new Set();
+    let secImgIdx = 0;
+    const secWebResources = [];
     for (const m of phMatches) {
       const pid = m[1];
       if (seenPh.has(pid)) continue;
       seenPh.add(pid);
+      secImgIdx++;
       const cfg = window._qtiGraphConfigs?.[pid];
       if (cfg) {
         try {
           const _isStat = cfg.type && ["bar","histogram","scatter","discrete_dist","continuous_dist","standard_normal"].includes(cfg.type);
           const b64 = _isStat ? await statChartToBase64PNG(cfg, 480, 280) : await graphToBase64PNG(cfg, 480, 280);
           if (b64) {
-            const dataUri = b64.startsWith("data:") ? b64 : `data:image/png;base64,${b64}`;
-            resolvedQtiXml = resolvedQtiXml.split(`GRAPH_PLACEHOLDER_${pid}`).join(dataUri);
+            const imgName = `graph_${secImgIdx}.png`;
+            const imgPath = `web_resources/${imgName}`;
+            const imgBytes = Uint8Array.from(atob(b64.replace(/^data:image\/png;base64,/, "")), ch => ch.charCodeAt(0));
+            zip.file(imgPath, imgBytes);
+            secWebResources.push({ path: imgPath, identifier: `graph_res_${secImgIdx}` });
+            resolvedQtiXml = resolvedQtiXml.split(`GRAPH_PLACEHOLDER_${pid}`).join(`$IMS-CC-FILEBASE$${imgPath}`);
           } else {
             resolvedQtiXml = resolvedQtiXml.split(`GRAPH_PLACEHOLDER_${pid}`).join("");
           }
@@ -3319,7 +3351,14 @@ ${sectionsXml}  </assessment>
       }
     }
 
-    zip.file("imsmanifest.xml", manifest);
+    const imgResourcesXml = secWebResources.map(r =>
+      `    <resource identifier="${r.identifier}" type="webcontent" href="${r.path}"><file href="${r.path}"/></resource>`
+    ).join("\n");
+    const patchedManifest = imgResourcesXml
+      ? manifest.replace("</resources>", imgResourcesXml + "\n  </resources>")
+      : manifest;
+
+    zip.file("imsmanifest.xml", patchedManifest);
     zip.file(qtiFile, resolvedQtiXml);
     zip.file(`${safeTitle}/${safeTitle}_meta.xml`, metaXml);
     blobs[sec] = await zip.generateAsync({type:"blob", mimeType:"application/zip"});
@@ -3870,7 +3909,7 @@ Mix these formats naturally across questions. Choose based on what fits the cont
      CRITICAL for uniform: ALWAYS set uMin and uMax to the actual distribution boundaries from the question. Never leave them at defaults.
 
    * Exponential distribution → decaying curve
-     graphConfig: {"type":"continuous_dist","distType":"exponential","lambda":0.5,"shadeFrom":null,"shadeTo":3,"probability":"P(X<3)","title":"Exponential Distribution"}
+     graphConfig: {"type":"continuous_dist","distType":"exponential","mu":2,"shadeFrom":null,"shadeTo":3,"probability":"P(X<3)","title":"Exponential Distribution"}
 
    SHADING RULES for continuous_dist:
    - P(X > a): set shadeFrom=a, shadeTo=null
