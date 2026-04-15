@@ -4004,12 +4004,12 @@ function buildVersionPrompt(selectedQuestions, mutationType, versionLabel) {
     const orig = q.type==="Branched" ? q.stem : q.question;
     return (i+1)+". ["+q.section+"] ["+mut+" mutation] ["+q.type+"] Original: "+orig;
   }).join("\n");
-  return `TESTBANK_VERSION_REQUEST\nVersion: ${versionLabel}\n\nMutate the following questions to create Version ${versionLabel}:\n${lines}\n\nMUTATION RULES:\n- numbers mutation: keep exact same function type and concept, only change coefficients/constants. Same difficulty, same steps.\n- function mutation: change to different but equivalent-difficulty function of same concept. Same difficulty, same steps.\n- For Branched: mutate the shared stem and regenerate ALL parts consistently.\n- ALWAYS regenerate the correct answer key for the mutated version.\n- Keep same question type, section, and difficulty.\n- For Multiple Choice: all 4 choices must be distinct values — no two choices may be identical or equivalent.\n- EXPONENTIAL DISTRIBUTION: always use μ (mu) as the parameter — NEVER λ (lambda). Write "μ = 4" not "λ = 0.25".\n- ${FR_EXPLANATION_RULE}\n\nReturn a JSON array of mutated questions in the SAME order preserving the original structure:\n- Regular: {type, section, difficulty, question, answer, explanation, choices if MC}\n- Formula: {type, section, difficulty, question, variables, answerFormula, answer, explanation}\n- Branched: {type, section, difficulty, stem, parts:[{question,answer,explanation}]}\nReply with ONLY valid JSON array, no markdown.`;
+  return `TESTBANK_VERSION_REQUEST\nVersion: ${versionLabel}\n\nMutate the following questions to create Version ${versionLabel}:\n${lines}\n\nMUTATION RULES:\n- numbers mutation: keep exact same function type and concept, only change coefficients/constants. Same difficulty, same steps.\n- function mutation: change to different but equivalent-difficulty function of same concept. Same difficulty, same steps.\n- For Branched: mutate the shared stem and regenerate ALL parts consistently.\n- ALWAYS regenerate the correct answer key for the mutated version.\n- Keep same question type, section, and difficulty.\n- For Multiple Choice: all 4 choices must be distinct values — no two choices may be identical or equivalent.\n- EXPONENTIAL DISTRIBUTION: always use μ (mu) as the parameter — NEVER λ (lambda). Write "μ = 4" not "λ = 0.25".\n- ${FR_EXPLANATION_RULE}\n\nReturn a JSON array of mutated questions in the SAME order preserving the original structure:\n- Regular: {type, section, difficulty, question, answer, explanation, choices if MC}\n- Formula: {type, section, difficulty, question, variables, answerFormula, answer, explanation}\n- Branched: {type, section, difficulty, stem, parts:[{question,answer,explanation}]}\n- If the original question has hasGraph:true, you MUST include hasGraph:true and an updated graphConfig that matches the new numbers (e.g. updated mu, sigma, uMin, uMax, shadeFrom, shadeTo, probability).\nReply with ONLY valid JSON array, no markdown.`;
 }
 
 
 // Single combined prompt for ALL classroom sections AND versions at once
-function buildAllVersionsPrompt(selectedQuestions, mutationType, labels, classSection=1, numClassSections=1) {
+function buildAllVersionsPrompt(selectedQuestions, mutationType, labels, classSection=1, numClassSections=1, course="") {
   const lines = selectedQuestions.map((q,i) => {
     const orig = q.type==="Branched" ? q.stem : q.question;
     const mut = mutationType[q.id] || "numbers";
@@ -4037,21 +4037,23 @@ function buildAllVersionsPrompt(selectedQuestions, mutationType, labels, classSe
     }
   }
 
+  const isQM = course === "Quantitative Methods I" || course === "Quantitative Methods II";
   const allFunctionFamilies = ["polynomial (e.g. x^3-2x)", "exponential (e.g. e^(2x))", "logarithmic (e.g. ln(x+1))", "trigonometric-sin (e.g. sin(2x))", "trigonometric-cos (e.g. cos(x^2))", "rational (e.g. 1/(x^2+1))", "square root (e.g. sqrt(x^2+1))"];
   const sectionRules = Array.from({length: numClassSections}, (_,i) => {
     const s = i+1;
     if (s === 1) return `- Section 1 versions (S1_A, S1_B, ...): numbers mutation — change ONLY coefficients/constants. Keep same function types as originals.`;
+    if (isQM) return `- Section ${s} versions (S${s}_A, S${s}_B, ...): numbers/direction mutation — keep the SAME distribution type (e.g. normal stays normal, uniform stays uniform, exponential stays exponential). You may change μ, σ, uMin, uMax, or the probability direction (e.g. P(X<4) → P(X>3) or P(a<X<b)). Update graphConfig shadeFrom, shadeTo, probability, and mu/sigma/uMin/uMax to match. NEVER change the distribution type.`;
     return `- Section ${s} versions (S${s}_A, S${s}_B, ...): function mutation — assign each question a DIFFERENT function family. Pick randomly from: polynomial, exponential, logarithmic, sin, cos, rational, sqrt — but NO two questions in the same section may share the same family. For example with 3 questions: Q1 gets polynomial, Q2 gets e^x, Q3 gets ln(x). Must differ from Section 1${s > 2 ? " and all previous sections" : ""}.`;
   }).join("\n");
 
   const exampleKeys = sectionKeys.map(k => `"${k}": [{...}]`).join(",\n  ");
 
-  return `TESTBANK_ALL_SECTIONS_AND_VERSIONS_REQUEST\nClassroom Sections: ${numClassSections}\nVersions per section: ${versionList}\nTotal keys to generate: ${sectionKeys.join(", ")}\n\nFor each key, mutate ALL of the following questions:\n${lines}\n\nMUTATION RULES BY SECTION:\n${sectionRules}\n\nADDITIONAL RULES:\n- Within each section, versions (A, B, C...) must differ from each other by numbers only.\n- Across sections, questions must use completely different function families.\n- Within each section, EVERY question must come from a DIFFERENT function family — polynomial, exponential, logarithmic, sin, cos, rational, sqrt are all separate families. sin and cos count as the same family.\n- Think of it like assigning a unique function family to each question slot: Q1=polynomial, Q2=e^x, Q3=ln, Q4=sin — no repeats.\n- ALWAYS regenerate correct answer keys.\n- Keep same question type, section name, and difficulty throughout.\n- Each version must be a JSON array in the SAME question order.\n- For Multiple Choice: all 4 choices must be distinct values — no two choices may be identical or equivalent.\n- EXPONENTIAL DISTRIBUTION: always use μ (mu) as the parameter — NEVER λ (lambda). Write "μ = 4" not "λ = 0.25".\n- ${FR_EXPLANATION_RULE}\n\nReturn a single JSON object with ALL keys:\n{\n  ${exampleKeys}\n}\nReply with ONLY valid JSON object, no markdown, no explanation.`;
+  return `TESTBANK_ALL_SECTIONS_AND_VERSIONS_REQUEST\nClassroom Sections: ${numClassSections}\nVersions per section: ${versionList}\nTotal keys to generate: ${sectionKeys.join(", ")}\n\nFor each key, mutate ALL of the following questions:\n${lines}\n\nMUTATION RULES BY SECTION:\n${sectionRules}\n\nADDITIONAL RULES:\n- Within each section, versions (A, B, C...) must differ from each other by numbers only.\n${isQM ? "- Across sections: SAME distribution type MUST be kept — only numbers, direction (< vs >) or boundary values may change. NEVER switch distribution types across sections." : "- Across sections, questions must use completely different function families.\n- Within each section, EVERY question must come from a DIFFERENT function family — polynomial, exponential, logarithmic, sin, cos, rational, sqrt are all separate families. sin and cos count as the same family.\n- Think of it like assigning a unique function family to each question slot: Q1=polynomial, Q2=e^x, Q3=ln, Q4=sin — no repeats."}\n- ALWAYS regenerate correct answer keys.\n- Keep same question type, section name, and difficulty throughout.\n- Each version must be a JSON array in the SAME question order.\n- For Multiple Choice: all 4 choices must be distinct values — no two choices may be identical or equivalent.\n- EXPONENTIAL DISTRIBUTION: always use μ (mu) as the parameter — NEVER λ (lambda). Write "μ = 4" not "λ = 0.25".\n- If a question has hasGraph:true, include hasGraph:true and update graphConfig (mu, sigma, uMin, uMax, shadeFrom, shadeTo, probability) to match the new numbers.\n- ${FR_EXPLANATION_RULE}\n\nReturn a single JSON object with ALL keys:\n{\n  ${exampleKeys}\n}\nReply with ONLY valid JSON object, no markdown, no explanation.`;
 }
 
 // Single combined prompt for ALL classroom sections at once
 // Returns one prompt that asks for S1_A, S1_B, S2_A, S2_B etc.
-function buildAllSectionsPrompt(selectedQuestions, labels, numClassSections) {
+function buildAllSectionsPrompt(selectedQuestions, labels, numClassSections, course="") {
   const lines = selectedQuestions.map((q,i) => {
     const orig = q.type==="Branched" ? q.stem : q.question;
     return (i+1)+". ["+q.section+"] ["+q.type+"] Original: "+orig;
@@ -4064,8 +4066,10 @@ function buildAllSectionsPrompt(selectedQuestions, labels, numClassSections) {
     labels.forEach(v => allKeys.push(`S${s}_${v}`));
   }
 
+  const isQM = course === "Quantitative Methods I" || course === "Quantitative Methods II";
   const sectionRules = Array.from({length:numClassSections},(_,i)=>i+1).map(s => {
     if (s === 1) return `- Section 1 versions (S${s}_A, S${s}_B, ...): numbers mutation — change only coefficients/constants, keep same function types.`;
+    if (isQM) return `- Section ${s} versions (S${s}_A, S${s}_B, ...): keep the SAME distribution type. Change μ, σ, uMin, uMax, or probability direction (< vs >). Update graphConfig to match. NEVER change distribution type.`;
     return `- Section ${s} versions (S${s}_A, S${s}_B, ...): function mutation — assign each question a DIFFERENT function family randomly. Available families: polynomial, exponential (e^x), logarithmic (ln), sin, cos, rational, sqrt. NO two questions in the same section may use the same family. Example for 3 questions: Q1→polynomial, Q2→e^x, Q3→ln. Must differ from Section 1${s>2?" and all previous sections":""}.`;
   }).join("\n");
 
@@ -4082,9 +4086,11 @@ ${lines}
 MUTATION RULES BY SECTION:
 ${sectionRules}
 - Within each section: each version (A, B, C...) must differ from other versions by numbers only.
-- Across sections: each section must use different functions entirely.
+- ${isQM ? "Across sections: SAME distribution type MUST be kept. Only numbers (μ, σ, uMin, uMax) or probability direction (< vs >) may change. NEVER switch distribution types." : "Across sections: each section must use different functions entirely."}
 - ALWAYS regenerate a correct answer key for each mutated version.
 - Keep same question type, section name, and difficulty.
+- EXPONENTIAL DISTRIBUTION: always use μ (mu) — NEVER λ (lambda).
+- If a question has hasGraph:true, include hasGraph:true and update graphConfig (mu, sigma, uMin, uMax, shadeFrom, shadeTo, probability) to match the new numbers.
 - ${FR_EXPLANATION_RULE}
 
 Return a JSON object with one key per version label (${allKeys.join(", ")}):
@@ -5063,7 +5069,7 @@ export default function TestBankApp() {
             ...sanitize(q), id: uid(), originalId: selected[i]?.id,
             course: selected[i]?.course || course,
             versionLabel: label, classSection, createdAt: Date.now(),
-            ...(selected[i]?.hasGraph ? { hasGraph: true, graphConfig: selected[i].graphConfig } : {}),
+            ...(selected[i]?.hasGraph ? { hasGraph: true, graphConfig: q.graphConfig || selected[i].graphConfig } : {}),
           }));
           return { label, questions: versioned, classSection };
         });
@@ -5091,7 +5097,7 @@ export default function TestBankApp() {
               ...sanitize(q), id: uid(), originalId: selected[i]?.id,
               course: selected[i]?.course || course,
               versionLabel: label, classSection: s, createdAt: Date.now(),
-              ...(selected[i]?.hasGraph ? { hasGraph: true, graphConfig: selected[i].graphConfig } : {}),
+              ...(selected[i]?.hasGraph ? { hasGraph: true, graphConfig: q.graphConfig || selected[i].graphConfig } : {}),
             }));
             return { label, questions: versioned, classSection: s };
           });
@@ -5137,8 +5143,8 @@ export default function TestBankApp() {
           course: selected[i]?.course || course,
           versionLabel: label,
           createdAt: Date.now(),
-          // carry graph config from original question
-          ...(selected[i]?.hasGraph ? { hasGraph: true, graphConfig: selected[i].graphConfig } : {}),
+          // carry graph config from AI response if present, else fall back to original
+          ...(selected[i]?.hasGraph ? { hasGraph: true, graphConfig: q.graphConfig || selected[i].graphConfig } : {}),
         }));
         const updated = [...allVersions, { label, questions: versioned }];
         if (remaining.length > 0) {
@@ -5204,12 +5210,12 @@ export default function TestBankApp() {
       });
     const labels = VERSIONS.slice(0, versionCount);
     if (numClassSections > 1) {
-      const prompt = buildAllSectionsPrompt(selected, labels, numClassSections);
+      const prompt = buildAllSectionsPrompt(selected, labels, numClassSections, course);
       setGeneratedPrompt(prompt);
       setPendingType("version_all_sections");
       setPendingMeta({ selected, labels, numClassSections });
     } else {
-      const prompt = buildAllVersionsPrompt(selected, mutationType, labels, 1, 1);
+      const prompt = buildAllVersionsPrompt(selected, mutationType, labels, 1, 1, course);
       setGeneratedPrompt(prompt);
       setPendingType("version_all");
       setPendingMeta({ selected, labels, mutationType, classSection: 1 });
@@ -5261,7 +5267,14 @@ export default function TestBankApp() {
     await autoGenerateVersions(prompt, "replace", { vIdx, qIdx });
   }
 
-  function defaultSecCfg() { return { Easy:{count:1,graphType:"normal",tableRows:4,tableCols:2,numText:1,numTable:0}, Medium:{count:1,graphType:"normal",tableRows:5,tableCols:3,numText:1,numTable:0}, Hard:{count:1,graphType:"normal",tableRows:6,tableCols:3,numText:1,numTable:0} }; }
+  function defaultSecCfg() {
+    const defTypeCounts = { normal: 1, table: 0, graph: 0, mix: 0 };
+    return {
+      Easy:   { count:1, graphType:"normal", tableRows:4, tableCols:2, typeCounts: {...defTypeCounts} },
+      Medium: { count:1, graphType:"normal", tableRows:5, tableCols:3, typeCounts: {...defTypeCounts} },
+      Hard:   { count:1, graphType:"normal", tableRows:6, tableCols:3, typeCounts: {...defTypeCounts} },
+    };
+  }
 
   function getSectionConfig(sec) { return sectionConfig[sec] || defaultSecCfg(); }
   function setSectionDiff(sec, difficulty, fields, value) {
@@ -6056,7 +6069,9 @@ ${questionsText}`;
                                                       const newVal = Math.max(0, Number(e.target.value)||0);
                                                       const newTypeCounts = { ...typeCounts, [t]: newVal };
                                                       const newTotal = types.reduce((s,tt) => s + (newTypeCounts[tt]||0), 0);
-                                                      setSectionDiff(sec, d, { typeCounts: newTypeCounts, count: newTotal, graphType: t });
+                                                      // dominant graphType = type with highest count (for prompt fallback)
+                                                      const dominant = types.reduce((a,b) => (newTypeCounts[b]||0) > (newTypeCounts[a]||0) ? b : a, "normal");
+                                                      setSectionDiff(sec, d, { typeCounts: newTypeCounts, count: newTotal, graphType: dominant });
                                                     }}
                                                     style={{width:"36px", ...S.input, padding:"0.1rem 0.25rem", fontSize:"0.75rem", textAlign:"center",
                                                       borderColor: count > 0 ? typeColors[t]+"88" : border}} />
