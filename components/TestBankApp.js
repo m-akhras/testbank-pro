@@ -3742,6 +3742,12 @@ function questionSimilarity(a, b) {
 }
 
 function buildGeneratePrompt(course, selectedSections, sectionCounts, qType, diff, sectionConfig) {
+  const isQM = course === "Quantitative Methods I" || course === "Quantitative Methods II";
+  const isCalc3 = course === "Calculus 3";
+  const isCalc = course === "Calculus 1" || course === "Calculus 2" || isCalc3;
+  const isDiscrete = course === "Discrete Mathematics";
+  const isPrecalc = course === "Precalculus";
+
   const useCfg = sectionConfig && Object.keys(sectionConfig).length > 0;
 
   const totalQ = useCfg
@@ -3754,7 +3760,6 @@ function buildGeneratePrompt(course, selectedSections, sectionCounts, qType, dif
   const breakdown = useCfg
     ? selectedSections.map(s => {
         const c = sectionConfig[s] || { Easy:{count:1,graphType:"normal"}, Medium:{count:1,graphType:"normal"}, Hard:{count:1,graphType:"normal"} };
-        const isQM = course === "Quantitative Methods I" || course === "Quantitative Methods II";
         const types = isQM ? ["normal","table","graph","mix"] : ["normal","graph","mix"];
         const lines = ["Easy","Medium","Hard"]
           .filter(d => (c[d].count||0) > 0)
@@ -3796,210 +3801,6 @@ function buildGeneratePrompt(course, selectedSections, sectionCounts, qType, dif
     });
   });
 
-  const graphInstructions = hasGraphQuestions ? `
-GRAPH/TABLE QUESTIONS:
-- graphType "graph": MUST include hasGraph:true and graphConfig in the JSON. Every question in this group MUST have a statistical chart — no exceptions, no plain text fallback.
-- graphType "table": MUST include a pipe table in the question text. Do NOT include graphConfig.
-- graphType "mix": STRICT DISTRIBUTION REQUIRED — for N questions in this group: ceil(N*0.4) must have hasGraph:true with a chart, ceil(N*0.3) must have a pipe table, the rest can be plain text. Example: 5 questions → 2 charts + 2 tables + 1 text. NEVER generate all tables or all text — charts are mandatory in every mix group.
-- graphType "normal": pure text/calculation only. Do NOT include graphConfig or tables.
-
-CRITICAL — Choose graphConfig type based on how many functions appear in the question:
-- Question mentions 1 function (e.g. f(x) = x²-3) → use type "single", put expression in "fn"
-- Question mentions 2 functions (e.g. f(x) = x+2 and g(x) = x²) → use type "area", put higher curve in "fnTop", lower in "fnBottom", set "shadeFrom" and "shadeTo" to x-intersection points
-- Question is about a region/domain (e.g. y > x², x²+y²≤1) → use type "domain", put boundary in "boundary", set "shadeAbove" true/false
-
-DO NOT include yDomain — it will be auto-calculated from the functions.
-DO include xDomain set to a range that shows the full curve clearly.
-
-graphConfig examples:
-  1 function: {"type":"single","fn":"x^2-3","showAxisNumbers":true,"showGrid":true,"xDomain":[-4,4]}
-  2 functions: {"type":"area","fnTop":"x+2","fnBottom":"x^2","shadeFrom":-1,"shadeTo":2,"showAxisNumbers":true,"showGrid":true,"xDomain":[-3,4]}
-  Domain:     {"type":"domain","boundary":"x^2","shadeAbove":true,"boundaryDashed":true,"boundaryLabel":"y = x²","showAxisNumbers":true,"showGrid":true,"xDomain":[-3,3]}
-
-For limit questions with holes: use "single" and include "holes":[[x,y]] for open circles and "points":[[x,y]] for filled dots.
-Question text must say "Based on the graph above, ..." — never describe the graph in the question text.
-The expressions in graphConfig must EXACTLY match the functions mentioned in the question text.
-
-CHAPTER 15 — MULTIPLE INTEGRALS (these rules override the general rules above for all Ch.15 sections):
-All Chapter 15 graphs show the 2D integration REGION R in the xy-plane — never attempt to graph the 3D surface f(x,y) itself.
-
-15.1 Double Integrals over Rectangles:
-  Region R is always a rectangle [a,b] × [c,d]. Represent it as a shaded horizontal band using type "area".
-  fnTop = constant upper y-bound (e.g. "3"), fnBottom = constant lower y-bound (e.g. "1").
-  shadeFrom = left x-bound (a), shadeTo = right x-bound (b).
-  Set fnTopLabel = "y = d" and fnBottomLabel = "y = c".
-  Set xDomain and yDomain to slightly exceed the rectangle bounds so the region is clearly visible.
-  IMPORTANT — Use a wide variety of rectangle bounds. Do NOT always start from 0. Examples of valid rectangles:
-  R = [1,4]×[1,3], R = [2,5]×[0,4], R = [-1,2]×[1,3], R = [0,2]×[1,4], R = [-2,1]×[-1,2], R = [1,3]×[2,5], R = [0,3]×[2,4].
-  The function f(x,y) being integrated should also vary: use f=x, f=y, f=xy, f=x+y, f=x^2, f=2x+3y, f=xy^2, etc.
-  Examples:
-  R = [1,4]×[1,3]: {"type":"area","fnTop":"3","fnBottom":"1","shadeFrom":1,"shadeTo":4,"fnTopLabel":"y = 3","fnBottomLabel":"y = 1","showAxisNumbers":true,"showGrid":true,"xDomain":[0,5],"yDomain":[0,4]}
-  R = [-1,2]×[1,3]: {"type":"area","fnTop":"3","fnBottom":"1","shadeFrom":-1,"shadeTo":2,"fnTopLabel":"y = 3","fnBottomLabel":"y = 1","showAxisNumbers":true,"showGrid":true,"xDomain":[-2,3],"yDomain":[0,4]}
-  R = [0,2]×[1,4]: {"type":"area","fnTop":"4","fnBottom":"1","shadeFrom":0,"shadeTo":2,"fnTopLabel":"y = 4","fnBottomLabel":"y = 1","showAxisNumbers":true,"showGrid":true,"xDomain":[-0.5,3],"yDomain":[0,5]}
-  R = [2,5]×[0,3]: {"type":"area","fnTop":"3","fnBottom":"0","shadeFrom":2,"shadeTo":5,"fnTopLabel":"y = 3","fnBottomLabel":"y = 0","showAxisNumbers":true,"showGrid":true,"xDomain":[1,6],"yDomain":[-0.5,4]}
-  R = [-2,1]×[-1,2]: {"type":"area","fnTop":"2","fnBottom":"-1","shadeFrom":-2,"shadeTo":1,"fnTopLabel":"y = 2","fnBottomLabel":"y = -1","showAxisNumbers":true,"showGrid":true,"xDomain":[-3,2],"yDomain":[-2,3]}
-
-15.2 Double Integrals over General Regions:
-  Region R is bounded by two curves in the xy-plane. Use type "area".
-  fnTop = upper boundary curve, fnBottom = lower boundary curve.
-  shadeFrom and shadeTo = x-values where the two curves intersect.
-  Example — region between y=x and y=x²: {"type":"area","fnTop":"x","fnBottom":"x^2","shadeFrom":0,"shadeTo":1,"fnTopLabel":"y = x","fnBottomLabel":"y = x²","showAxisNumbers":true,"showGrid":true,"xDomain":[-0.5,1.5]}
-  Example — region between y=sqrt(x) and y=x²: {"type":"area","fnTop":"sqrt(x)","fnBottom":"x^2","shadeFrom":0,"shadeTo":1,"fnTopLabel":"y = √x","fnBottomLabel":"y = x²","showAxisNumbers":true,"showGrid":true,"xDomain":[-0.5,1.5]}
-
-15.3 Double Integrals in Polar Coordinates:
-  Show the polar region boundary in Cartesian form using type "domain" or type "area".
-  For a full disk r ≤ R: use type "domain" with boundary = "sqrt(R^2 - x^2)", shadeAbove:false (shade below the semicircle, i.e. the disk).
-  For an annular region between r=r1 and r=r2: use type "area" with fnTop = "sqrt(r2^2-x^2)", fnBottom = "sqrt(r1^2-x^2)".
-  For a sector/wedge: represent the angular boundaries as straight lines using type "area".
-  Example — quarter disk r ≤ 2, first quadrant: {"type":"domain","boundary":"sqrt(4-x^2)","shadeAbove":false,"boundaryDashed":false,"boundaryLabel":"r = 2","showAxisNumbers":true,"showGrid":true,"xDomain":[-0.5,2.5],"yDomain":[-0.5,2.5]}
-  Example — annulus 1 ≤ r ≤ 2: {"type":"area","fnTop":"sqrt(4-x^2)","fnBottom":"sqrt(1-x^2)","shadeFrom":-1,"shadeTo":1,"fnTopLabel":"r = 2","fnBottomLabel":"r = 1","showAxisNumbers":true,"showGrid":true,"xDomain":[-2.5,2.5]}
-
-15.5 Surface Area:
-  Show the projection region D in the xy-plane over which the surface area is integrated.
-  Use type "area" if D is bounded by two curves, or type "domain" if D is bounded by one curve.
-  Example — D: y=x to y=x²: {"type":"area","fnTop":"x","fnBottom":"x^2","shadeFrom":0,"shadeTo":1,"fnTopLabel":"y = x","fnBottomLabel":"y = x²","showAxisNumbers":true,"showGrid":true,"xDomain":[-0.5,1.5]}
-
-15.6 Triple Integrals:
-  Show the 2D projection of the 3D region onto the xy-plane (the shadow region).
-  Use type "area" for regions bounded by two curves, or type "domain" for regions bounded by one curve.
-  Example — projection of region below z=4-x²-y²: {"type":"domain","boundary":"sqrt(4-x^2)","shadeAbove":false,"boundaryDashed":false,"boundaryLabel":"x²+y²=4","showAxisNumbers":true,"showGrid":true,"xDomain":[-2.5,2.5],"yDomain":[-2.5,2.5]}
-` : "";
-  const typeInstructions = {
-    "Multiple Choice": "4 choices as plain strings. answer = exact text of correct choice.",
-    "True/False": 'choices = ["True","False"]. answer = "True" or "False".',
-    "Free Response": `answer = final answer only (math expression, no prose).
-explanation = FULL worked solution — every step a student needs to show for full marks.
-Write each step on its own line. Each line is one mathematical step, substitution, or simplification.
-Rules:
-- NO English prose. No "Use linearity", "Thus", "Let", "We get", "Therefore", "Applying", "Since".
-- Each line must be a pure math equation or expression.
-- Show ALL intermediate steps — do not skip steps.
-- Start from the original expression, show formula identification, substitutions, algebra, and arrive at the final answer.
-- For fractions: ALWAYS (numerator)/(denominator) — e.g. (10)/(s^3), (1)/((s-3)^2), (8s)/((s^2+4)^2).
-- For Laplace: use L{...} notation, show the formula used then the substitution then the result.
-
-Example for L{t^2*sin(4t)}:
-  L{t^n*f(t)} = (-1)^n * (d^n)/(ds^n) * F(s)
-  L{sin(4t)} = (4)/(s^2+16)
-  L{t*sin(4t)} = (-1) * (d)/(ds) * (4)/(s^2+16) = (8s)/((s^2+16)^2)
-  L{t^2*sin(4t)} = (-1)^2 * (d^2)/(ds^2) * (4)/(s^2+16)
-  = (d)/(ds) * (8s)/((s^2+16)^2)
-  = (8*(3s^2-16))/((s^2+16)^3)`,
-    "Fill in the Blank": "question has blank shown as ___. answer = the missing word or expression.",
-    "Formula": "Include variables array [{name,min,max,precision}] with sensible ranges. Include answerFormula as math expression using variable names. Question text uses [varname] placeholders.",
-    "Branched": "Include stem (shared given info), parts array [{question,answer,explanation}]. Decide number of parts (2-4) based on topic. All parts share the same stem.",
-  };
-
-  const isQM = course === "Quantitative Methods I" || course === "Quantitative Methods II";
-  const isDiscrete = course === "Discrete Mathematics";
-
-  const tableInstructions = isQM ? `
-QUANTITATIVE METHODS — QUESTION FORMAT RULES:
-Mix these formats naturally across questions. Choose based on what fits the content:
-
-1. NORMAL (text/calculation): Pure numeric scenario, no table or chart needed.
-   Example: "A binomial distribution has n=10, p=0.3. Find P(X=4)."
-
-2. TABLE: Present data in a pipe table, ask student to compute from it.
-   Use these table types by section:
-   * Probability/frequency tables → Random Variables, Distributions
-   * Joint probability tables → Conditional Probability, Bivariate
-   * Contingency tables → Bayes Theorem
-   * Payoff/decision tables → Decision Analysis
-   * Regression output tables → Regression sections
-   Table format (pipe tables only). Use the exact tableRows and tableCols specified in the section breakdown above.
-   tableRows = number of DATA rows (not counting the header or separator). tableCols = number of columns.
-   Example for tableRows:4, tableCols:3 — a probability table with 3 columns and 4 data rows:
-   | X | P(X) | Cumulative P |
-   |---|------|--------------|
-   | 0 | 0.10 | 0.10 |
-   | 1 | 0.25 | 0.35 |
-   | 2 | 0.40 | 0.75 |
-   | 3 | 0.25 | 1.00 |
-   NEVER default to a 2-column, 4-row table when a larger size is specified. Always match tableRows and tableCols exactly.
-
-3. CHART (when graphType is "graph" or "mix"): Include hasGraph:true and graphConfig.
-   Choose chart type based on content:
-   * Bar chart → categorical frequency, relative frequency distributions
-     graphConfig: {"type":"bar","labels":["A","B","C"],"values":[10,25,15],"xLabel":"Category","yLabel":"Frequency","title":"Frequency Distribution"}
-   * Histogram → continuous data distributions, class intervals
-     graphConfig: {"type":"histogram","bins":[{"x0":10,"x1":20,"count":5},{"x0":20,"x1":30,"count":12}],"xLabel":"Value","yLabel":"Frequency","title":"Sales Distribution"}
-   * Scatter plot → correlation, regression, bivariate data
-     graphConfig: {"type":"scatter","points":[{"x":1,"y":3},{"x":2,"y":5}],"xLabel":"x","yLabel":"y","title":"Scatter Plot","regressionLine":{"slope":1.8,"intercept":1.2}}
-   * Discrete probability distribution → P(X=x) bar chart
-     graphConfig: {"type":"discrete_dist","data":[{"x":0,"p":0.10},{"x":1,"p":0.35},{"x":2,"p":0.40},{"x":3,"p":0.15}],"title":"Probability Distribution","highlightX":2}
-   * Normal distribution → bell curve with shaded region, actual μ and σ values
-     graphConfig: {"type":"continuous_dist","distType":"normal","mu":50,"sigma":10,"shadeFrom":65,"shadeTo":null,"probability":"P(X>65)","title":"Normal Distribution","xLabel":"x"}
-
-   * Standard normal distribution → z-score curve, always μ=0 σ=1, x-axis shows z values
-     graphConfig: {"type":"continuous_dist","distType":"standard_normal","mu":0,"sigma":1,"shadeFrom":1.5,"shadeTo":null,"probability":"P(Z>1.5)","title":"Standard Normal Distribution"}
-     Use standard_normal when question involves z-scores, z-tables, or standardization.
-     Shade boundaries are z-score values (e.g. shadeFrom:1.28, shadeTo:null for P(Z>1.28)).
-
-   * Uniform distribution → flat rectangle with shading
-     graphConfig: {"type":"continuous_dist","distType":"uniform","uMin":2,"uMax":8,"shadeFrom":4,"shadeTo":7,"probability":"P(4<X<7)","title":"Uniform Distribution"}
-     CRITICAL for uniform: ALWAYS set uMin and uMax to the actual distribution boundaries from the question. Never leave them at defaults.
-
-   * Exponential distribution → decaying curve
-     graphConfig: {"type":"continuous_dist","distType":"exponential","mu":2,"shadeFrom":null,"shadeTo":3,"probability":"P(X<3)","title":"Exponential Distribution"}
-     CRITICAL for exponential: the mu value in graphConfig MUST match the mean stated in the question. If question says mean=6, set mu:6. NEVER mismatch.
-
-   SHADING RULES for continuous_dist:
-   - P(X > a): set shadeFrom=a, shadeTo=null
-   - P(X < b): set shadeFrom=null, shadeTo=b
-   - P(a < X < b): set shadeFrom=a, shadeTo=b
-   - Same rules apply for Z in standard normal
-   - Always include "probability" field as string e.g. "P(Z > 1.5)" — shown inside shaded area
-   - shadeFrom and shadeTo values MUST match the probability asked in the question exactly.
-
-   CRITICAL QUESTION TEXT RULE for ALL distribution questions (uniform, normal, exponential, standard normal):
-   - Question text MUST say "Based on the distribution above, find..." 
-   - NEVER state the parameters (μ, σ, λ, a, b) in the question text — students must read them from the graph
-   - WRONG: "A variable X follows a normal distribution with μ=50 and σ=10. Find P(X>65)."
-   - RIGHT: "Based on the distribution above, find P(X > 65)."
-   - The graph IS the question setup. The text only asks what to find.
-` : isDiscrete ? `
-DISCRETE MATHEMATICS QUESTION GUIDELINES:
-- Base questions on Susanna Epp "Discrete Mathematics with Applications" textbook structure.
-- Questions must follow the exact style and structure of exercises from that book — you may change variable names, propositions, or specific values but keep the question structure identical.
-
-CRITICAL — LOGICAL NOTATION (always use these symbols, never spell out AND/OR/NOT):
-  * NOT p  →  ~p
-  * p AND q  →  p ∧ q
-  * p OR q   →  p ∨ q
-  * p → q    (conditional, "if p then q")
-  * p ↔ q    (biconditional, "p if and only if q")
-  * Use these symbols in question text, table column headers, and answer choices.
-  * Example: write "~p ∧ q" not "(NOT p) AND q"
-  * Column headers in truth tables: "~p", "p ∧ q", "p ∨ ~q", "p → q"
-
-- For Ch.2 Logic sections: MUST include truth table questions. CRITICAL TRUTH TABLE FORMAT:
-  * Show the truth table with ALL input column values (p, q, r) filled in — NEVER hide inputs.
-  * For output columns: fill in MOST values but replace EXACTLY ONE cell with "?" — the one the student must find.
-  * Ask "What is the value of [expression] in the row where [specific input values]?" where the answer matches the "?" cell.
-  * Use True/False (NOT 0/1, NOT T/F).
-  * Example of correct format using proper notation:
-    | p | q | p ∧ q | p ∨ (~q) |
-    |---|---|-------|----------|
-    | True | True | True | True |
-    | True | False | False | True |
-    | False | True | False | ? |
-    | False | False | False | True |
-  Then ask: "In the row where p is False and q is True, what is the truth value of p ∨ (~q)?"
-  The answer would be "False".
-  * NEVER show a complete table with all values filled — that gives away the answer.
-  * For harder questions, you may hide 2-3 cells across different output columns.
-- For 2.1 (Logical Equivalence): Show partial truth tables for two expressions using proper notation, hide one cell in each, ask if they are equivalent.
-- For 2.2 (Conditional Statements): Use → notation; ask for converse, inverse, contrapositive, or truth value for given p and q.
-- For 2.3 (Valid Arguments): Give a specific argument with premises and conclusion using ∧ ∨ ~ → notation; ask if it is valid.
-- For 3.x (Quantifiers): Use specific domains and predicates with concrete values.
-- For 4.x (Proofs): Give specific integer/rational claims; ask to identify proof type or verify a specific step.
-- For 5.x (Induction): Give specific n values; ask to verify base case or inductive step.
-- For 6.x (Sets): Use sets with explicitly listed elements; ask for union, intersection, complement, power set, or cardinality.
-- For 9.x (Counting/Probability): Use specific counting scenarios from the book style.
-- Always use concrete specific values — never ask about abstract symbols without grounding them.
-` : "";
-
   const needsChoices = qType==="Multiple Choice"||qType==="True/False";
   const shape = qType==="Branched"
     ? `{"type":"Branched","section":"...","difficulty":"...","stem":"...","parts":[{"question":"...","answer":"...","explanation":"..."}]}`
@@ -4009,29 +3810,206 @@ CRITICAL — LOGICAL NOTATION (always use these symbols, never spell out AND/OR/
     ? `{"type":"${qType}","section":"...","difficulty":"...","question":"...","choices":[...],"answer":"...","explanation":"..."}`
     : `{"type":"${qType}","section":"...","difficulty":"...","question":"...","answer":"...","explanation":"..."}`;
 
-  const courseText = isQM
-    ? `You are a college business/statistics professor writing a test bank for a Quantitative Methods course (Anderson, Sweeney, Williams textbook).
+  const commonRules = `
+Be rigorous, numerically specific, university-level.
+Each question must have a 'section' field with the exact section name.
+Each question must have a 'difficulty' field.
 
-CRITICAL STYLE RULES — Every question MUST follow these:
-1. REAL-WORLD CONTEXT: Every question must be set in a realistic business, operations, or management scenario. NEVER write abstract math questions like "A continuous random variable X is uniformly distributed on [2, 10]." Instead write: "The time a customer spends waiting at a service counter is uniformly distributed between 2 and 10 minutes."
-2. USE THESE SCENARIO TYPES (rotate variety across questions):
-   - Waiting times (customers, patients, service lines)
-   - Delivery and shipping times
-   - Machine lifetimes and failure rates
-   - Sales amounts and revenue
-   - Employee performance metrics
-   - Manufacturing defects and quality control
-   - Financial returns and investment durations
-   - Call center response times
-   - Project completion times
-3. PHRASING: Start with the scenario, then ask the probability. Example: "The daily demand for a product at a retail store follows a normal distribution with a mean of 150 units and a standard deviation of 20 units. Find the probability that demand exceeds 170 units on a given day."
-4. For graph questions: question text says "Based on the distribution above, find P(...)" — the scenario context is embedded in the graph title, not repeated in the text.
-5. Numbers must be realistic for the scenario (e.g. waiting times in minutes, not hours; salaries in thousands, not single digits).`
-    : isDiscrete
-    ? "You are a college professor writing a test bank for Discrete Mathematics based on Susanna Epp's Discrete Mathematics with Applications. Follow the exact question style and structure from the book — change values but not structure."
-    : "You are a college math professor writing a test bank from Stewart Calculus Early Transcendentals 9th Edition.";
+Reply with ONLY a valid JSON array, no markdown fences, no explanation:
+[${shape}, ...]`;
 
-  return `TESTBANK_GENERATE_REQUEST\nCourse: ${course}\nType: ${qType}\nTotal questions: ${totalQ}\n\nSections, counts, and difficulty/graph config:\n${breakdown}\n\nIMPORTANT: Follow the exact count and difficulty per section strictly.\n\nType instructions: ${typeInstructions[qType]}\n${tableInstructions}${graphInstructions || ''}\n${courseText}\nMATH NOTATION RULES (critical — follow exactly):\n- Exponents: x^2, s^3, (s-3)^2, t^2\n- Fractions: ALWAYS (numerator)/(denominator) — e.g. (10)/(s^3), (1)/((s-3)^2), (8s)/((s^2+4)^2)\n- Never omit parentheses around numerator or denominator\n- Nested denominator: (1)/((s-a)^2) — double parens for compound denominators\n- Never use square brackets: NOT [denominator] — always (denominator)\n- L{f(t)} notation for Laplace, e.g. L{t^2}, L{e^(at)}, L^{-1}{F(s)}\n- EXPONENTIAL DISTRIBUTION: ALWAYS use the Greek symbol μ (not the word "mu") as the parameter. Write "mean μ = 4 minutes" not "mean mu = 4". The PDF is f(x) = (1/μ)e^(-x/μ). Students are taught using μ not λ.\nCALCULUS 3 NOTATION RULES (apply whenever course is Calculus 3):\n- Vectors and gradients MUST use angle bracket notation: <a,b> or <a,b,c> — NEVER parentheses (a,b) for vectors.\n  Correct: <1/sqrt(2), 1/sqrt(2)>   Wrong: (1/sqrt(2), 1/sqrt(2))\n- Unit vectors, gradient vectors, all vector answers: always <...> angle bracket notation.\n- Points in space use parentheses: (2,2) is a point; <2,2> is a vector. Never confuse them.\nCALCULUS 3 CONTENT RULES - 14.7 Maximum and Minimum Values:\\nVARY question types — do NOT repeat the same format. Rotate through these 5 types across questions:\\n\\nTYPE 1 — Find and classify ALL critical points:\\n  Function must have 2-4 critical points. Good functions: x^3+y^3-3x-3y, x^3-3xy+y^3, x^4-2x^2+y^2.\\n  Ask: \"Find all critical points of f(x,y)=... and classify each using the Second Derivative Test.\"\\n  Each choice lists the full set with classifications. Make wrong choices plausible:\\n  - Swap local min/max labels on one point\\n  - Include an extra fake critical point\\n  - Misclassify one saddle point as local min\\n  - Get one coordinate sign wrong, e.g. (-1,1) instead of (1,-1)\\n\\nTYPE 2 — Classify a GIVEN critical point:\\n  Give f(x,y) and state one specific critical point (a,b). Ask: \"Classify the critical point (a,b).\"\\n  Choices: A. Local minimum  B. Local maximum  C. Saddle point  D. Test is inconclusive\\n  Choose functions where classification is non-obvious (D close to boundary, unexpected fxx sign).\\n\\nTYPE 3 — Interpret Second Derivative Test values:\\n  Give computed values at a critical point: fxx=a, fyy=b, fxy=c. Ask what the test concludes.\\n  Compute D=fxx*fyy-fxy^2 and give 4 choices including the correct conclusion and plausible wrong ones.\\n  Example wrong choice: \"saddle point\" when D>0 (common student error).\\n\\nTYPE 4 — Identify which function has a given property at the origin:\\n  Give 4 different functions as choices. Ask which one has a local min / local max / saddle point at (0,0).\\n  Use: f=x^2-y^2 (saddle), f=x^2+y^2 (local min), f=-x^2-y^2 (local max), f=x^3+y^3 (inconclusive).\\n\\nTYPE 5 — How many critical points does f have?:\\n  Give a function and ask how many critical points it has (not classify, just count).\\n  Choices: A.0  B.1  C.2  D.4  — choose functions with interesting counts (0,2,4).\\n\\nPLAUSIBLE DISTRACTORS — this is critical, choices must NOT be obviously wrong:\\n- Wrong choices must use correct-looking coordinates with wrong classification, or correct classification with wrong coordinates\\n- Or correct partial answer missing one critical point\\n- Or sign error on one coordinate: (1,-1) vs (-1,1)\\n- NEVER use absurd coordinates like (100,200) as distractors\\n- For Type 1: all 4 choices must list the same NUMBER of critical points (so student cannot eliminate by counting)\\n\\n- Use D=fxx*fyy-(fxy)^2: D>0 fxx>0 local min; D>0 fxx<0 local max; D<0 saddle; D=0 inconclusive.\\n- For EASY questions: 1 critical point is acceptable — use simple functions like f=x^2+y^2 (local min at origin), f=x^2-y^2 (saddle at origin), f=x^3+y^3 (inconclusive at origin).\\n- For MEDIUM questions: 2 critical points required.\\n- For HARD questions: 3 or 4 critical points required.\\n- NEVER generate only one critical point for Medium or Hard Type 1 questions.\nBe rigorous, numerically specific, university-level.\nEach question must have a 'section' field with the exact section name.\nEach question must have a 'difficulty' field.\n\nReply with ONLY a valid JSON array, no markdown fences, no explanation:\n[${shape}, ...]`;
+  const mathNotationBase = `
+MATH NOTATION RULES:
+- Exponents: x^2, s^3, (s-3)^2
+- Fractions: ALWAYS (numerator)/(denominator) — e.g. (10)/(s^3)
+- Never use square brackets for denominators — always (parentheses)`;
+
+  // ── QM I & QM II ────────────────────────────────────────────────────────────
+  if (isQM) {
+    const tableInstructions = hasGraphQuestions ? `
+QM QUESTION TYPES:
+1. NORMAL: Real-world business scenario, pure numeric calculation.
+2. TABLE: Present data in a pipe table, ask student to compute from it.
+   Table types: probability/frequency, joint probability, contingency, payoff/decision, regression output.
+   Use exact tableRows and tableCols specified. tableRows = DATA rows (not counting header).
+   Example tableRows:4, tableCols:3:
+   | X | P(X) | Cumulative P |
+   |---|------|--------------|
+   | 0 | 0.10 | 0.10 |
+   | 1 | 0.25 | 0.35 |
+   | 2 | 0.40 | 0.75 |
+   | 3 | 0.25 | 1.00 |
+   NEVER default to 2-column 4-row when larger size specified.
+
+3. CHART: Include hasGraph:true and graphConfig (NO title or probability fields):
+   * Bar: {"type":"bar","labels":["A","B","C"],"values":[10,25,15],"xLabel":"Category","yLabel":"Frequency"}
+   * Histogram: {"type":"histogram","bins":[{"x0":10,"x1":20,"count":5}],"xLabel":"Value","yLabel":"Frequency"}
+   * Scatter: {"type":"scatter","points":[{"x":1,"y":3}],"xLabel":"x","yLabel":"y","regressionLine":{"slope":1.8,"intercept":1.2}}
+   * Discrete dist: {"type":"discrete_dist","data":[{"x":0,"p":0.10},{"x":1,"p":0.35}],"highlightX":2}
+   * Normal: {"type":"continuous_dist","distType":"normal","mu":50,"sigma":10,"shadeFrom":65,"shadeTo":null,"probability":"P(X>65)","xLabel":"x"}
+   * Standard normal: {"type":"continuous_dist","distType":"standard_normal","mu":0,"sigma":1,"shadeFrom":1.5,"shadeTo":null,"probability":"P(Z>1.5)"}
+   * Uniform: {"type":"continuous_dist","distType":"uniform","uMin":2,"uMax":8,"shadeFrom":4,"shadeTo":7,"probability":"P(4<X<7)"}
+     CRITICAL: uMin and uMax MUST match actual distribution boundaries. NEVER leave at defaults.
+   * Exponential: {"type":"continuous_dist","distType":"exponential","mu":2,"shadeFrom":null,"shadeTo":3,"probability":"P(X<3)"}
+     CRITICAL: mu MUST match mean in question. NEVER mismatch.
+   SHADING: P(X>a)→shadeFrom=a,shadeTo=null | P(X<b)→shadeFrom=null,shadeTo=b | P(a<X<b)→shadeFrom=a,shadeTo=b
+   GRAPH TEXT: "Based on the distribution above, find P(...)" — never state parameters in text.
+   IMPORTANT: Do NOT include "title" or "probability" as top-level graphConfig fields — omit them entirely.
+` : "";
+
+    return `TESTBANK_GENERATE_REQUEST
+Course: ${course} (Anderson, Sweeney, Williams)
+Type: ${qType}
+Total questions: ${totalQ}
+
+Sections, counts, and config:
+${breakdown}
+
+IMPORTANT: Follow the exact count and difficulty per section strictly.
+Type instructions: ${typeInstructions[qType]}
+${tableInstructions}
+You are a college business/statistics professor (Anderson, Sweeney, Williams textbook).
+
+STYLE RULES — every question MUST follow:
+1. REAL-WORLD CONTEXT: Use realistic business scenarios. NEVER abstract math.
+   WRONG: "A variable X is uniformly distributed on [2,10]."
+   RIGHT: "Customer waiting time is uniformly distributed between 2 and 10 minutes."
+2. SCENARIOS (rotate): waiting times, delivery times, machine lifetimes, sales/revenue, employee metrics, manufacturing defects, financial returns, call center times, project completion.
+3. PHRASING: State scenario first, then ask the probability/calculation.
+4. NUMBERS: Realistic (waiting times in minutes, salaries in thousands).
+5. GRAPH QUESTIONS: "Based on the distribution above, find P(...)" — no parameters in text.
+6. EXPONENTIAL: Use Greek μ symbol. Write "mean μ = 4 minutes" NEVER "mean mu = 4" or "λ = 0.25".
+${mathNotationBase}
+${commonRules}`;
+  }
+
+  // ── Calculus 1, 2, 3 ────────────────────────────────────────────────────────
+  if (isCalc) {
+    const calc3Rules = isCalc3 ? `
+CALCULUS 3 NOTATION:
+- Vectors: MUST use angle brackets <a,b> or <a,b,c> — NEVER parentheses (a,b) for vectors.
+- Points use parentheses: (2,2) is a point. <2,2> is a vector. Never confuse them.
+
+14.7 Maximum and Minimum Values — rotate through 5 types:
+TYPE 1: Find/classify ALL critical points (2-4 points). Functions: x^3+y^3-3x-3y, x^3-3xy+y^3, x^4-2x^2+y^2.
+TYPE 2: Classify a GIVEN critical point (a,b). Choices: local min/max/saddle/inconclusive.
+TYPE 3: Interpret fxx, fyy, fxy values. Compute D=fxx*fyy-(fxy)^2.
+TYPE 4: Which function has given property at origin?
+TYPE 5: How many critical points does f have?
+D>0 fxx>0→local min; D>0 fxx<0→local max; D<0→saddle; D=0→inconclusive.
+Easy: 1 critical point ok. Medium: 2 required. Hard: 3-4 required.
+Distractors: use correct-looking coordinates with wrong classification or sign errors.` : "";
+
+    const calcGraphInstructions = hasGraphQuestions ? `
+GRAPH QUESTIONS:
+- 1 function → type "single", fn = expression. e.g. {"type":"single","fn":"x^2-3","showAxisNumbers":true,"showGrid":true,"xDomain":[-4,4]}
+- 2 functions → type "area", fnTop/fnBottom, shadeFrom/shadeTo at intersections. e.g. {"type":"area","fnTop":"x+2","fnBottom":"x^2","shadeFrom":-1,"shadeTo":2,"showAxisNumbers":true,"showGrid":true,"xDomain":[-3,4]}
+- Region/domain → type "domain". e.g. {"type":"domain","boundary":"x^2","shadeAbove":true,"boundaryDashed":true,"boundaryLabel":"y = x²","showAxisNumbers":true,"showGrid":true,"xDomain":[-3,3]}
+- Holes: "holes":[[x,y]] open circles, "points":[[x,y]] filled dots.
+- NO yDomain (auto-calculated). DO include xDomain.
+- Text: "Based on the graph above, ..." — never describe graph in text.
+- graphConfig expressions MUST exactly match functions in question text.
+
+CHAPTER 15 INTEGRALS — show 2D region R in xy-plane, never the 3D surface:
+15.1 Rectangles: type "area", fnTop=upper y constant, fnBottom=lower y constant, shadeFrom/shadeTo=x bounds.
+  Vary bounds widely. Examples: R=[1,4]x[1,3], R=[-1,2]x[1,3], R=[2,5]x[0,3].
+  {"type":"area","fnTop":"3","fnBottom":"1","shadeFrom":1,"shadeTo":4,"fnTopLabel":"y=3","fnBottomLabel":"y=1","showAxisNumbers":true,"showGrid":true,"xDomain":[0,5],"yDomain":[0,4]}
+15.2 General regions: type "area", fnTop/fnBottom=boundary curves, shadeFrom/shadeTo=intersection x-values.
+15.3 Polar: use type "area" for approximate Cartesian equivalent.` : "";
+
+    return `TESTBANK_GENERATE_REQUEST
+Course: ${course} (Stewart Early Transcendentals 9th Edition)
+Type: ${qType}
+Total questions: ${totalQ}
+
+Sections, counts, and config:
+${breakdown}
+
+IMPORTANT: Follow the exact count and difficulty per section strictly.
+Type instructions: ${typeInstructions[qType]}
+${calcGraphInstructions}
+${calc3Rules}
+You are a college math professor writing exam questions from Stewart Calculus Early Transcendentals 9th Edition. Questions must be rigorous, formally written, and match Stewart style.
+${mathNotationBase}
+- L{f(t)} Laplace notation: L{t^2}, L{e^(at)}, L^{-1}{F(s)}
+- Fractions: (numerator)/(denominator) — e.g. (10)/(s^3), (1)/((s-3)^2)
+- Nested denominator: (1)/((s-a)^2) — double parens
+${commonRules}`;
+  }
+
+  // ── Discrete Mathematics ─────────────────────────────────────────────────────
+  if (isDiscrete) {
+    return `TESTBANK_GENERATE_REQUEST
+Course: ${course} (Susanna Epp — Discrete Mathematics with Applications)
+Type: ${qType}
+Total questions: ${totalQ}
+
+Sections, counts, and config:
+${breakdown}
+
+IMPORTANT: Follow the exact count and difficulty per section strictly.
+Type instructions: ${typeInstructions[qType]}
+
+You are a college professor writing exam questions based on Susanna Epp's Discrete Mathematics with Applications. Follow the book's exact question style — change values but not structure.
+
+LOGICAL NOTATION (always use symbols, never spell out):
+~p (NOT), p ∧ q (AND), p ∨ q (OR), p → q (conditional), p ↔ q (biconditional)
+
+TRUTH TABLE RULES (Ch.2):
+- Show ALL input columns (p,q,r) — never hide inputs.
+- Fill most output values, replace EXACTLY ONE with "?" for student to find.
+- Use True/False (not 0/1, not T/F).
+- NEVER show complete table — gives away answer.
+
+SECTION RULES:
+- 2.1: Partial truth tables, hide one cell per expression.
+- 2.2: → notation; converse, inverse, contrapositive.
+- 2.3: Premises/conclusion with ∧ ∨ ~ → notation; valid/invalid.
+- 3.x: Specific domains and predicates with concrete values.
+- 4.x: Specific integer/rational claims; proof type or step verification.
+- 5.x: Specific n values; base case or inductive step.
+- 6.x: Sets with explicitly listed elements.
+- 9.x: Counting scenarios from book style.
+Always use concrete values — never abstract symbols without grounding.
+${commonRules}`;
+  }
+
+  // ── Precalculus ──────────────────────────────────────────────────────────────
+  if (isPrecalc) {
+    const precalcGraph = hasGraphQuestions ? `
+GRAPH QUESTIONS: Use type "single" for function graphs.
+{"type":"single","fn":"...","showAxisNumbers":true,"showGrid":true,"xDomain":[-5,5]}
+Text: "Based on the graph above, ..." — never describe graph in text.` : "";
+    return `TESTBANK_GENERATE_REQUEST
+Course: ${course} (Standard Precalculus curriculum)
+Type: ${qType}
+Total questions: ${totalQ}
+
+Sections, counts, and config:
+${breakdown}
+
+IMPORTANT: Follow the exact count and difficulty per section strictly.
+Type instructions: ${typeInstructions[qType]}
+${precalcGraph}
+You are a college math professor writing Precalculus exam questions. Questions should be clear, rigorous, appropriate for students transitioning from algebra to calculus.
+${mathNotationBase}
+${commonRules}`;
+  }
+
+  // ── Custom courses (fallback) ────────────────────────────────────────────────
+  return `TESTBANK_GENERATE_REQUEST
+Course: ${course}
+Type: ${qType}
+Total questions: ${totalQ}
+
+Sections, counts, and config:
+${breakdown}
+
+IMPORTANT: Follow the exact count and difficulty per section strictly.
+Type instructions: ${typeInstructions[qType]}
+You are a university professor writing exam questions for ${course}. Be rigorous, numerically specific, university-level.
+${mathNotationBase}
+${commonRules}`;
 }
 
 // Free Response explanation rule — shared across all prompts
@@ -5086,15 +5064,24 @@ export default function TestBankApp() {
       const raw = pasteInput.trim();
 
       // Sanitize any question object from AI — guard null/missing fields
-      const sanitize = (q) => ({
-        ...q,
-        type:       q.type       || "Multiple Choice",
-        difficulty: q.difficulty || "Medium",
-        question:   q.question   || "",
-        answer:     q.answer     || "",
-        choices:    (q.choices   || []).map(c => c ?? ""),
-        explanation: q.explanation || "",
-      });
+      const sanitize = (q) => {
+        // Strip title/probability from graphConfig — cleaner for Canvas exports
+        let graphConfig = q.graphConfig;
+        if (graphConfig) {
+          const { title, ...rest } = graphConfig;
+          graphConfig = rest;
+        }
+        return {
+          ...q,
+          type:       q.type       || "Multiple Choice",
+          difficulty: q.difficulty || "Medium",
+          question:   q.question   || "",
+          answer:     q.answer     || "",
+          choices:    (q.choices   || []).map(c => c ?? ""),
+          explanation: q.explanation || "",
+          ...(graphConfig ? { graphConfig } : {}),
+        };
+      };
 
       // For version_all, parse as object {A:[...], B:[...]}
       if (pendingType === "version_all") {
