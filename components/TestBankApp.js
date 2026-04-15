@@ -3665,7 +3665,7 @@ async function buildDocxCompare(versions, course) {
       if (q.hasGraph && q.graphConfig) {
         try {
           const _isStat = q.graphConfig.type && ["bar","histogram","scatter","discrete_dist","continuous_dist","standard_normal"].includes(q.graphConfig.type);
-          const b64 = _isStat ? await statChartToBase64PNG(canvasExportConfig(q.graphConfig), 480, 280) : await graphToBase64PNG(canvasExportConfig(q.graphConfig), 480, 280);
+          const b64 = _isStat ? await statChartToBase64PNG(q.graphConfig, 480, 280) : await graphToBase64PNG(q.graphConfig, 480, 280);
           if (b64) body += makeDocxImageXml(b64);
         } catch(e) { console.warn("graph png failed", e); }
       }
