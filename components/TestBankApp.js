@@ -530,6 +530,8 @@ function GraphEditor({ initialConfig, onSave, onRemove, onClose }) {
   const [chartTitle,      setChartTitle]      = useState(initialConfig?.title  || "");
   const [chartXLabel,     setChartXLabel]     = useState(initialConfig?.xLabel || "");
   const [chartYLabel,     setChartYLabel]     = useState(initialConfig?.yLabel || "");
+  const [exportTitle,     setExportTitle]     = useState(initialConfig?.exportTitle     ?? false);
+  const [exportProbLabel, setExportProbLabel] = useState(initialConfig?.exportProbLabel ?? false);
   const [holeInput,   setHoleInput]   = useState("");
   const [pointInput,  setPointInput]  = useState("");
   const previewRef = useRef(null);
@@ -562,7 +564,9 @@ function GraphEditor({ initialConfig, onSave, onRemove, onClose }) {
                labelOffsetX: Number(labelOffsetX)||0, labelOffsetY: Number(labelOffsetY)||0,
                title: chartTitle || null,
                xLabel: chartXLabel || null,
-               yLabel: chartYLabel || null };
+               yLabel: chartYLabel || null,
+               exportTitle: exportTitle,
+               exportProbLabel: exportProbLabel };
     }
     return base;
   };
@@ -751,6 +755,16 @@ function GraphEditor({ initialConfig, onSave, onRemove, onClose }) {
           {lbl("y-axis:")}
           <input value={chartYLabel} onChange={e=>setChartYLabel(e.target.value)} placeholder="e.g. f(x)"
             style={{width:"80px",padding:"0.2rem 0.4rem",background:bg2,border:"1px solid "+border,color:text1,borderRadius:"4px",fontSize:"0.78rem"}} />
+          <label style={{display:"flex",alignItems:"center",gap:"4px",fontSize:"0.7rem",color:text2,cursor:"pointer",marginLeft:"0.5rem"}}>
+            <input type="checkbox" checked={exportTitle} onChange={e=>setExportTitle(e.target.checked)}
+              style={{accentColor:"#8b5cf6"}} />
+            Show title in Canvas
+          </label>
+          <label style={{display:"flex",alignItems:"center",gap:"4px",fontSize:"0.7rem",color:text2,cursor:"pointer"}}>
+            <input type="checkbox" checked={exportProbLabel} onChange={e=>setExportProbLabel(e.target.checked)}
+              style={{accentColor:"#8b5cf6"}} />
+            Show P(X) label in Canvas
+          </label>
         </div>
       )}
 
@@ -2186,8 +2200,14 @@ async function statChartToBase64PNG(chartConfig, w=480, h=300) {
   });
 }
 
-// expose to window for console testing + export pipeline
-if (typeof window !== "undefined") {
+// Strip title/probability from graphConfig for Canvas export unless flagged to include
+function canvasExportConfig(cfg) {
+  if (!cfg) return cfg;
+  const result = { ...cfg };
+  if (!cfg.exportTitle) { delete result.title; }
+  if (!cfg.exportProbLabel) { delete result.probability; }
+  return result;
+}
   window.renderGraphToSVG = renderGraphToSVG;
   window.graphToBase64PNG = graphToBase64PNG;
   window.renderStatChartToSVG = renderStatChartToSVG;
@@ -3126,7 +3146,7 @@ async function buildQTIZip(qtiXml, title) {
     if (cfg) {
       try {
         const _isStatQTI = cfg.type && ["bar","histogram","scatter","discrete_dist","continuous_dist","standard_normal"].includes(cfg.type);
-        const b64 = _isStatQTI ? await statChartToBase64PNG(cfg, 480, 280) : await graphToBase64PNG(cfg, 480, 280);
+        const b64 = _isStatQTI ? await statChartToBase64PNG(canvasExportConfig(cfg), 480, 280) : await graphToBase64PNG(canvasExportConfig(cfg), 480, 280);
         if (b64) {
           const imgName = `graph_${imgIdx}.png`;
           const imgPath = `web_resources/${imgName}`;
@@ -3325,7 +3345,7 @@ ${sectionsXml}  </assessment>
       if (cfg) {
         try {
           const _isStat = cfg.type && ["bar","histogram","scatter","discrete_dist","continuous_dist","standard_normal"].includes(cfg.type);
-          const b64 = _isStat ? await statChartToBase64PNG(cfg, 480, 280) : await graphToBase64PNG(cfg, 480, 280);
+          const b64 = _isStat ? await statChartToBase64PNG(canvasExportConfig(cfg), 480, 280) : await graphToBase64PNG(canvasExportConfig(cfg), 480, 280);
           if (b64) {
             const imgName = `graph_${secImgIdx}.png`;
             const imgPath = `web_resources/${imgName}`;
@@ -3645,7 +3665,7 @@ async function buildDocxCompare(versions, course) {
       if (q.hasGraph && q.graphConfig) {
         try {
           const _isStat = q.graphConfig.type && ["bar","histogram","scatter","discrete_dist","continuous_dist","standard_normal"].includes(q.graphConfig.type);
-          const b64 = _isStat ? await statChartToBase64PNG(q.graphConfig, 480, 280) : await graphToBase64PNG(q.graphConfig, 480, 280);
+          const b64 = _isStat ? await statChartToBase64PNG(canvasExportConfig(q.graphConfig), 480, 280) : await graphToBase64PNG(canvasExportConfig(q.graphConfig), 480, 280);
           if (b64) body += makeDocxImageXml(b64);
         } catch(e) { console.warn("graph png failed", e); }
       }
