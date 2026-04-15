@@ -1,11 +1,34 @@
 "use client";
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, Component } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 
 const supabase = createBrowserClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
+
+// ── Error Boundary — prevents full app crash from component errors ─────────────
+class ErrorBoundary extends Component {
+  constructor(props) { super(props); this.state = { hasError: false, error: null }; }
+  static getDerivedStateFromError(error) { return { hasError: true, error }; }
+  componentDidCatch(error, info) { console.error("TestArca error:", error, info); }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{padding:"2rem", textAlign:"center", fontFamily:"system-ui"}}>
+          <div style={{fontSize:"2rem", marginBottom:"1rem"}}>⚠️</div>
+          <div style={{fontWeight:"bold", marginBottom:"0.5rem"}}>Something went wrong</div>
+          <div style={{fontSize:"0.85rem", color:"#666", marginBottom:"1rem"}}>{this.state.error?.message}</div>
+          <button onClick={() => this.setState({ hasError: false, error: null })}
+            style={{padding:"0.5rem 1rem", background:"#2D6A4F", color:"#fff", border:"none", borderRadius:"6px", cursor:"pointer"}}>
+            Try again
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 // ── Theme tokens — Warm Ivory & Forest Green (module-level so all components can use them) ──
 const bg0   = "#F2EDE4";
@@ -3087,6 +3110,30 @@ function dlBlob(blob, name) {
 }
 
 // ─── Wrap QTI XML in Canvas-compatible ZIP ────────────────────────────────────
+// ── Validate versions before QTI export — returns array of warning strings ────
+function validateQTIExport(versionsToCheck) {
+  const warnings = [];
+  versionsToCheck.forEach(v => {
+    (v.questions || []).forEach((q, qi) => {
+      const issues = [];
+      if (q.hasGraph && !q.graphConfig) issues.push("missing graphConfig");
+      if (q.hasGraph && q.graphConfig) {
+        const gc = q.graphConfig;
+        if (gc.distType === "uniform" && (!gc.uMin && gc.uMin !== 0) || (!gc.uMax && gc.uMax !== 0))
+          issues.push("uniform dist missing uMin/uMax");
+        if (gc.distType === "exponential" && !gc.mu && !gc.lambda)
+          issues.push("exponential dist missing mu");
+      }
+      if (!q.question && !q.stem) issues.push("empty question text");
+      if (q.type === "Multiple Choice" && (!q.choices || q.choices.length < 2))
+        issues.push("MC missing choices");
+      if (issues.length > 0)
+        warnings.push(`${v.label} Q${qi+1}: ${issues.join(", ")}`);
+    });
+  });
+  return warnings;
+}
+
 async function buildQTIZip(qtiXml, title) {
   if (!window.JSZip) {
     await new Promise((res, rej) => {
@@ -3740,6 +3787,16 @@ function questionSimilarity(a, b) {
   wordsA.forEach(w => { if (wordsB.has(w)) overlap++; });
   return overlap / Math.min(wordsA.size, wordsB.size);
 }
+
+// ── Question type instructions (used by all prompt builders) ──────────────────
+const typeInstructions = {
+  "Multiple Choice": "Generate Multiple Choice questions with exactly 4 choices (A-D). One correct answer, three plausible distractors. Choices must be distinct — no two may be identical or equivalent. Include 'choices' array and 'answer' matching one choice exactly.",
+  "Free Response": "Generate Free Response questions requiring a full worked solution. Include 'explanation' with complete step-by-step solution. Every step on its own line as a pure math equation.",
+  "True/False": "Generate True/False questions. Answer must be exactly 'True' or 'False'. Include 'choices': ['True', 'False'].",
+  "Fill in the Blank": "Generate Fill in the Blank questions with a single blank. Answer is the exact word, number, or expression that fills the blank.",
+  "Formula": "Generate Formula questions with randomizable variables. Include 'variables' array [{name, min, max, precision}] and 'answerFormula' as a math expression using variable names. Question text uses [varname] placeholders.",
+  "Branched": "Generate Branched questions with a shared stem and 2-4 parts. Include 'stem' (shared given info) and 'parts' array [{question, answer, explanation}]. All parts share the same stem.",
+};
 
 function buildGeneratePrompt(course, selectedSections, sectionCounts, qType, diff, sectionConfig) {
   const isQM = course === "Quantitative Methods I" || course === "Quantitative Methods II";
@@ -4690,6 +4747,11 @@ function SavedExamsScreen({ S, text1, text2, text3, border, onLoad }) {
                 {new Date(exam.created_at).toLocaleDateString()} · {versions.length} version(s)
                 {hasMultipleSections && ` · ${sectionNums.length} sections`}
               </div>
+              {!hasMultipleSections && versions.length > 0 && versions.some(v => v.classSection || v.questions?.[0]?.classSection) && (
+                <div style={{marginTop:"0.3rem", fontSize:"0.68rem", color:"#f59e0b", background:"#451a0322", border:"1px solid #f59e0b44", borderRadius:"4px", padding:"0.2rem 0.5rem"}}>
+                  ⚠ Saved before multi-section fix — re-build and re-save to restore all sections
+                </div>
+              )}
               <button style={{marginTop:"0.4rem", padding:"0.25rem 0.7rem", fontSize:"0.72rem",
                 background:"#2D6A4F", color:"#fff", border:"none", borderRadius:"4px",
                 cursor:"pointer", fontWeight:"600"}}
@@ -4867,7 +4929,7 @@ function SavedExamsScreen({ S, text1, text2, text3, border, onLoad }) {
 }
 
 // ─── Main App ─────────────────────────────────────────────────────────────────
-export default function TestBankApp() {
+function TestBankAppInner() {
   const [screen, setScreen] = useState("home");
   const [exportHighlight, setExportHighlight] = useState(false);
   const [bank, setBank] = useState([]);
@@ -5370,6 +5432,18 @@ export default function TestBankApp() {
     if (aMin !== bMin) return aMin - bMin;
     return (a.createdAt || 0) - (b.createdAt || 0); // within same section: oldest first
   });
+
+  // Detect near-duplicate questions in the bank (same section + high word overlap)
+  const duplicateIds = new Set();
+  for (let i = 0; i < bank.length; i++) {
+    for (let j = i + 1; j < bank.length; j++) {
+      const a = bank[i]; const b = bank[j];
+      if (a.section !== b.section) continue;
+      const sim = questionSimilarity(a, b);
+      if (sim > 0.75) { duplicateIds.add(a.id); duplicateIds.add(b.id); }
+    }
+  }
+  const bankDupCount = duplicateIds.size;
 
   // Available years, months, days from bank
   const availableYears = [...new Set(bank.map(q => String(new Date(q.createdAt).getFullYear())))].sort((a,b) => b-a);
@@ -6059,6 +6133,15 @@ ${questionsText}`;
                                 <span style={S.chk(sel)}>{sel?"✓":""}</span>
                                 {sec}
                               </button>
+                              {(() => {
+                                const existingCount = bank.filter(q => q.section === sec && q.course === course).length;
+                                return existingCount > 0 && (
+                                  <span title={`${existingCount} questions already in bank for this section`}
+                                    style={{fontSize:"0.62rem", color:text3, background:bg2, border:"1px solid "+border, borderRadius:"3px", padding:"0.05rem 0.3rem"}}>
+                                    {existingCount}q
+                                  </span>
+                                );
+                              })()}
                               {sel && (() => {
                                 const cfg = getSectionConfig(sec);
                                 const diffColors = { Easy:"#10b981", Medium:"#f59e0b", Hard:"#f43f5e" };
@@ -6514,6 +6597,11 @@ ${questionsText}`;
                   {filterIssuesOnly ? "⚠ Issues only ✕" : `⚠ Show ${bankIssueCount} with issues`}
                 </button>
               )}
+              {bankDupCount > 0 && (
+                <span style={{fontSize:"0.72rem", color:"#f59e0b", alignSelf:"center", border:"1px solid #f59e0b44", borderRadius:"4px", padding:"0.18rem 0.5rem"}}>
+                  ⚠ {bankDupCount} possible duplicate{bankDupCount>1?"s":""}
+                </span>
+              )}
             </div>
 
             {!bankLoaded && <div style={{color:text2}}>Loading from database…</div>}
@@ -6587,6 +6675,12 @@ ${questionsText}`;
                     <span title={`Used in ${usedInExams[q.id]} saved exam${usedInExams[q.id]>1?"s":""}`}
                       style={{...S.tag(), background:"#06b6d415", color:"#06b6d4", border:"1px solid #06b6d433"}}>
                       📋 ×{usedInExams[q.id]}
+                    </span>
+                  )}
+                  {duplicateIds.has(q.id) && (
+                    <span title="Possible duplicate — similar question exists in same section"
+                      style={{...S.tag(), background:"#f59e0b15", color:"#f59e0b", border:"1px solid #f59e0b44"}}>
+                      ⚠ dup
                     </span>
                   )}
                   {bankSelectMode && (
@@ -7258,6 +7352,15 @@ ${questionsText}`;
                               : "Flat: all question versions listed sequentially — no Canvas grouping."}
                           </div>
                           <div style={{display:"flex", gap:"0.5rem", flexWrap:"wrap"}}>
+                            {(() => {
+                              const allVers = Object.values(classSectionVersions).flat();
+                              const warnings = validateQTIExport(allVers);
+                              return warnings.length > 0 && (
+                                <div style={{width:"100%", fontSize:"0.7rem", color:"#f59e0b", background:"#451a0322", border:"1px solid #f59e0b44", borderRadius:"4px", padding:"0.35rem 0.6rem", marginBottom:"0.35rem"}}>
+                                  ⚠ {warnings.length} issue{warnings.length>1?"s":""} detected before export: {warnings.slice(0,2).join(" · ")}{warnings.length>2?` +${warnings.length-2} more`:""}
+                                </div>
+                              );
+                            })()}
                             {Object.keys(classSectionVersions).sort((a,b)=>Number(a)-Number(b)).map(sec => (
                               <button key={sec} style={S.btn("#8b5cf6", false)} onClick={async () => {
                                 const examTitle = qtiExamName.trim() || versions[0]?.questions[0]?.course || "Exam";
@@ -7666,5 +7769,13 @@ ${questionsText}`;
         );
       })()}
     </div>
+  );
+}
+
+export default function TestBankApp() {
+  return (
+    <ErrorBoundary>
+      <TestBankAppInner />
+    </ErrorBoundary>
   );
 }
