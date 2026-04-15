@@ -5034,6 +5034,8 @@ function TestBankAppInner() {
   const [dupWarnings, setDupWarnings] = useState([]);
   const [saveExamName, setSaveExamName] = useState("");
   const [savingExam, setSavingExam] = useState(false);
+  const [exportLoading, setExportLoading] = useState("");  // label of current export, "" = idle
+  const [showOnboarding, setShowOnboarding] = useState(false);
   const [examSaved, setExamSaved] = useState(false);
   const [generatedPrompt, setGeneratedPrompt] = useState("");
   const [autoGenLoading, setAutoGenLoading] = useState(false);
@@ -5897,6 +5899,17 @@ ${questionsText}`;
         </div>
       )}
 
+      {/* ── Export loading overlay ── */}
+      {exportLoading && (
+        <div style={{position:"fixed", bottom:"1.5rem", left:"50%", transform:"translateX(-50%)", zIndex:99999,
+          padding:"0.65rem 1.4rem", borderRadius:"8px", fontSize:"0.82rem", fontWeight:"600",
+          background:"#1B4332", color:"#86efac", border:"1px solid #22c55e44",
+          boxShadow:"0 4px 20px rgba(0,0,0,0.5)", display:"flex", alignItems:"center", gap:"0.5rem"}}>
+          <span style={{display:"inline-block", animation:"spin 1s linear infinite"}}>⟳</span>
+          {exportLoading}
+        </div>
+      )}
+
       {/* ── Delete confirmation dialog ── */}
       {confirmDelete && (
         <div style={{position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", zIndex:9998,
@@ -5987,6 +6000,39 @@ ${questionsText}`;
                 ))}
               </div>
             </div>
+
+            {/* Onboarding checklist — shown when bank is empty or user hasn't completed steps */}
+            {bank.length === 0 && (
+              <div style={{...S.card, borderColor:"#2D6A4F44", marginBottom:"2rem", background:"#052e1608"}}>
+                <div style={{fontSize:"0.78rem", fontWeight:"700", color:"#2D6A4F", marginBottom:"0.75rem", letterSpacing:"0.08em", textTransform:"uppercase"}}>
+                  🚀 Getting Started
+                </div>
+                {[
+                  { done: course !== null, label:"Select a course", action:() => setScreen("generate"), btn:"Go to Generate" },
+                  { done: bank.length > 0, label:"Generate your first questions", action:() => setScreen("generate"), btn:"Generate" },
+                  { done: savedExams.length > 0, label:"Build and save an exam", action:() => setScreen("versions"), btn:"Build Exam" },
+                ].map((step, i) => (
+                  <div key={i} style={{display:"flex", alignItems:"center", gap:"0.75rem", marginBottom:"0.5rem"}}>
+                    <div style={{width:"20px", height:"20px", borderRadius:"50%", flexShrink:0,
+                      background: step.done ? "#2D6A4F" : bg2,
+                      border: "1.5px solid " + (step.done ? "#2D6A4F" : border),
+                      display:"flex", alignItems:"center", justifyContent:"center",
+                      fontSize:"0.65rem", color:"#fff", fontWeight:"700"}}>
+                      {step.done ? "✓" : i+1}
+                    </div>
+                    <span style={{fontSize:"0.82rem", color: step.done ? text3 : text1, flex:1,
+                      textDecoration: step.done ? "line-through" : "none"}}>{step.label}</span>
+                    {!step.done && (
+                      <button onClick={step.action}
+                        style={{fontSize:"0.72rem", padding:"0.2rem 0.65rem", background:"#2D6A4F",
+                          color:"#fff", border:"none", borderRadius:"4px", cursor:"pointer", fontWeight:"600"}}>
+                        {step.btn} →
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
 
             {/* Stats row — clean metric cards */}
             <div style={{display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:"1rem", marginBottom:"2.5rem"}}>
@@ -6237,6 +6283,16 @@ ${questionsText}`;
                   <span style={{fontSize:"0.85rem", color:text1}}>
                     Generate {selectedSections.reduce((a,s) => a+(sectionCounts[s]||3), 0)} questions?
                   </span>
+                  {(() => {
+                    const qCount = selectedSections.reduce((a,s) => a+(sectionCounts[s]||3), 0);
+                    const estTokens = Math.round(qCount * 350 + 1200);
+                    const estCost = (estTokens / 1000000 * 15).toFixed(3);
+                    return (
+                      <span style={{fontSize:"0.72rem", color:text3}}>
+                        ~{estTokens.toLocaleString()} tokens · ~${estCost}
+                      </span>
+                    );
+                  })()}
                   <button style={S.btn(accent, false)} onClick={async () => {
                     setGenerateConfirm(false);
                     triggerGenerate();
@@ -7257,33 +7313,42 @@ ${questionsText}`;
                       <div id="export-panel" ref={el => { if (el && exportHighlight) el.scrollIntoView({behavior:"smooth", block:"start"}); }}
                         style={{transition:"outline 0.3s", outline: exportHighlight ? "2px solid #185FA555" : "none", borderRadius:"8px", padding: exportHighlight ? "0.5rem" : "0"}}>
                       <div style={{display:"flex", gap:"0.75rem", marginBottom:"1.25rem", flexWrap:"wrap"}}>
-                        <button style={S.btn("#10b981",false)} onClick={async () => {
-                          const cs = v.questions[0]?.classSection || null;
-                          const blob = await buildDocx(v.questions,v.questions[0]?.course||"Calculus",v.label,cs);
-                          const secStr = cs ? `_S${cs}` : "";
-                          dlBlob(blob,`Version_${v.label}${secStr}_Exam.docx`);
-                          if (examSaved && saveExamName) await logExport(saveExamName, "Word", v.label);
+                        <button style={S.btn("#10b981", exportLoading !== "")} disabled={exportLoading !== ""} onClick={async () => {
+                          setExportLoading("Building Word document...");
+                          try {
+                            const cs = v.questions[0]?.classSection || null;
+                            const blob = await buildDocx(v.questions,v.questions[0]?.course||"Calculus",v.label,cs);
+                            const secStr = cs ? `_S${cs}` : "";
+                            dlBlob(blob,`Version_${v.label}${secStr}_Exam.docx`);
+                            if (examSaved && saveExamName) await logExport(saveExamName, "Word", v.label);
+                          } finally { setExportLoading(""); }
                         }}>⬇ Word (.docx)</button>
                         <button style={S.oBtn("#06b6d4")} onClick={() => setShowPrintPreview(true)}>
                           👁 Print Preview
                         </button>
                         {Object.keys(classSectionVersions).length > 1 && (
-                          <button style={S.oBtn("#8b5cf6")} onClick={async () => {
-                            for(const [sec, secVers] of Object.entries(classSectionVersions)){
-                              for(const ver of secVers){
-                                const blob=await buildDocx(ver.questions,ver.questions[0]?.course||"Calculus",ver.label,Number(sec));
-                                dlBlob(blob,`S${sec}_Version_${ver.label}_Exam.docx`);
+                          <button style={S.oBtn("#8b5cf6")} disabled={exportLoading !== ""} onClick={async () => {
+                            setExportLoading("Building all sections Word...");
+                            try {
+                              for(const [sec, secVers] of Object.entries(classSectionVersions)){
+                                for(const ver of secVers){
+                                  const blob=await buildDocx(ver.questions,ver.questions[0]?.course||"Calculus",ver.label,Number(sec));
+                                  dlBlob(blob,`S${sec}_Version_${ver.label}_Exam.docx`);
+                                }
                               }
-                            }
+                            } finally { setExportLoading(""); }
                           }}>⬇ All Sections Word</button>
                         )}
-                        <button style={S.oBtn("#f43f5e")} onClick={async () => {
-                          const allVers = Object.keys(classSectionVersions).length > 1
-                            ? Object.values(classSectionVersions).flat()
-                            : versions;
-                          const course = allVers[0]?.questions[0]?.course || "Exam";
-                          const blob = await buildAnswerKey(allVers, course);
-                          if (blob) dlBlob(blob, `${course.replace(/\s+/g,"_")}_Answer_Key.docx`);
+                        <button style={S.oBtn("#f43f5e")} disabled={exportLoading !== ""} onClick={async () => {
+                          setExportLoading("Building answer key...");
+                          try {
+                            const allVers = Object.keys(classSectionVersions).length > 1
+                              ? Object.values(classSectionVersions).flat()
+                              : versions;
+                            const course = allVers[0]?.questions[0]?.course || "Exam";
+                            const blob = await buildAnswerKey(allVers, course);
+                            if (blob) dlBlob(blob, `${course.replace(/\s+/g,"_")}_Answer_Key.docx`);
+                          } finally { setExportLoading(""); }
                         }}>🔑 Answer Key (.docx)</button>
                         {isAdmin && (
                           <button style={S.btn("#7c3aed", validating)} disabled={validating} onClick={autoValidateAllVersions}>
