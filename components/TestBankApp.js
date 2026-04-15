@@ -5584,7 +5584,7 @@ ${questionsText}`;
             </div>
 
             {/* Onboarding checklist — shown when bank is empty or user hasn't completed steps */}
-            {bank.length === 0 && (
+            {bankLoaded && bank.length === 0 && (
               <div style={{...S.card, borderColor:"#2D6A4F44", marginBottom:"2rem", background:"#052e1608"}}>
                 <div style={{fontSize:"0.78rem", fontWeight:"700", color:"#2D6A4F", marginBottom:"0.75rem", letterSpacing:"0.08em", textTransform:"uppercase"}}>
                   🚀 Getting Started
