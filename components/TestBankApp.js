@@ -5050,7 +5050,7 @@ export default function TestBankApp() {
           }));
           return { label, questions: versioned, classSection };
         });
-        setClassSectionVersions(prev => ({ ...prev, [classSection]: allVersions }));
+        setClassSectionVersions({ [classSection]: allVersions });
         setVersions(allVersions); setActiveVersion(0);
         setActiveClassSection(classSection);
         setPendingType(null); setPasteInput(""); setPendingMeta(null);
