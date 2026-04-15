@@ -3745,12 +3745,8 @@ function buildGeneratePrompt(course, selectedSections, sectionCounts, qType, dif
             const normalSplit = gt === "normal" && (c[d].numTable ?? 0) > 0
               ? ` [REQUIRED: ${c[d].numText ?? count} plain text, ${c[d].numTable} table [tableRows: ${c[d].tableRows||4}, tableCols: ${c[d].tableCols||2}]]`
               : "";
-            const graphSplit = gt === "graph" && (c[d].numGraphText ?? 0) > 0
-              ? ` [REQUIRED: ${c[d].numGraph ?? count} with chart, ${c[d].numGraphText} plain text (no chart)]`
-              : "";
-            const tableSplit = gt === "table" && (c[d].numTableText ?? 0) > 0
-              ? ` [REQUIRED: ${c[d].numTableOnly ?? count} with table, ${c[d].numTableText} plain text (no table) [tableRows: ${c[d].tableRows||4}, tableCols: ${c[d].tableCols||2}]]`
-              : "";
+            const graphSplit = "";
+            const tableSplit = "";
             return `  ${d}: ${count} question(s) [graphType: ${gt}${tableNote}${mixNote}${normalSplit}${graphSplit}${tableSplit}]`;
           });
         return `${s}:\n${lines.join("\n")}`;
@@ -6092,45 +6088,9 @@ ${questionsText}`;
                                             )}
                                           </span>
                                         )}
-                                        {/* Graph type: split into # graph + # text */}
-                                        {cfg[d].graphType === "graph" && (course === "Quantitative Methods I" || course === "Quantitative Methods II") && (
-                                          <span style={{display:"flex", alignItems:"center", gap:"0.25rem", marginLeft:"0.25rem"}}>
-                                            <span style={{fontSize:"0.6rem", color:"#1D9E75"}}>graph</span>
-                                            <input type="number" min={0} max={cfg[d].count||1} value={cfg[d].numGraph ?? cfg[d].count ?? 1}
-                                              onChange={e => {
-                                                const ng = Math.max(0, Math.min(cfg[d].count||1, Number(e.target.value)||0));
-                                                setSectionDiff(sec, d, "numGraph", ng);
-                                                setSectionDiff(sec, d, "numGraphText", Math.max(0, (cfg[d].count||1) - ng));
-                                              }}
-                                              style={{width:"34px", ...S.input, padding:"0.1rem 0.25rem", fontSize:"0.68rem", textAlign:"center"}} />
-                                            <span style={{fontSize:"0.6rem", color:text3}}>text</span>
-                                            <input type="number" min={0} max={cfg[d].count||1} value={cfg[d].numGraphText ?? 0}
-                                              onChange={e => {
-                                                const ngt = Math.max(0, Math.min(cfg[d].count||1, Number(e.target.value)||0));
-                                                setSectionDiff(sec, d, "numGraphText", ngt);
-                                                setSectionDiff(sec, d, "numGraph", Math.max(0, (cfg[d].count||1) - ngt));
-                                              }}
-                                              style={{width:"34px", ...S.input, padding:"0.1rem 0.25rem", fontSize:"0.68rem", textAlign:"center"}} />
-                                          </span>
-                                        )}
+                                        {/* Graph type: no sub-split needed — all questions will have graphs */}
                                         {cfg[d].graphType === "table" && (course === "Quantitative Methods I" || course === "Quantitative Methods II") && (
                                           <span style={{display:"flex", alignItems:"center", gap:"0.25rem", marginLeft:"0.25rem"}}>
-                                            <span style={{fontSize:"0.6rem", color:"#185FA5"}}>table</span>
-                                            <input type="number" min={0} max={cfg[d].count||1} value={cfg[d].numTableOnly ?? cfg[d].count ?? 1}
-                                              onChange={e => {
-                                                const ntbl = Math.max(0, Math.min(cfg[d].count||1, Number(e.target.value)||0));
-                                                setSectionDiff(sec, d, "numTableOnly", ntbl);
-                                                setSectionDiff(sec, d, "numTableText", Math.max(0, (cfg[d].count||1) - ntbl));
-                                              }}
-                                              style={{width:"34px", ...S.input, padding:"0.1rem 0.25rem", fontSize:"0.68rem", textAlign:"center"}} />
-                                            <span style={{fontSize:"0.6rem", color:text3}}>text</span>
-                                            <input type="number" min={0} max={cfg[d].count||1} value={cfg[d].numTableText ?? 0}
-                                              onChange={e => {
-                                                const ntt = Math.max(0, Math.min(cfg[d].count||1, Number(e.target.value)||0));
-                                                setSectionDiff(sec, d, "numTableText", ntt);
-                                                setSectionDiff(sec, d, "numTableOnly", Math.max(0, (cfg[d].count||1) - ntt));
-                                              }}
-                                              style={{width:"34px", ...S.input, padding:"0.1rem 0.25rem", fontSize:"0.68rem", textAlign:"center"}} />
                                             <span style={{fontSize:"0.6rem", color:text3}}>rows</span>
                                             <input type="number" min={2} max={20} value={cfg[d].tableRows||4}
                                               onChange={e => setSectionDiff(sec, d, "tableRows", Math.max(2, Math.min(20, Number(e.target.value)||4)))}
