@@ -4619,16 +4619,6 @@ function SavedExamsScreen({ S, text1, text2, text3, border, onLoad }) {
               </button>
             </div>
             <div style={{display:"flex", gap:"0.5rem", flexWrap:"wrap", alignItems:"center"}}>
-              {/* QTI per version */}
-              {versions.map(v => (
-                <button key={v.label} style={S.oBtn("#8b5cf6")}
-                  onClick={async () => {
-                    dlFile(buildQTI(v.questions, exam.name, v.label), `${exam.name}_V${v.label}.xml`, "text/xml");
-                    await logExport(exam.name, "QTI", v.label);
-                  }}>
-                  ⬇ V{v.label} QTI
-                </button>
-              ))}
             </div>
           </div>
 
@@ -4687,6 +4677,36 @@ function SavedExamsScreen({ S, text1, text2, text3, border, onLoad }) {
                 }}>
                 ⬇ All Versions Word (.zip)
               </button>
+            )}
+          </div>
+
+          {/* QTI Re-export */}
+          <div style={{marginTop:"0.75rem", borderTop:"1px solid #1e2d45", paddingTop:"0.75rem", display:"flex", gap:"0.5rem", flexWrap:"wrap", alignItems:"center"}}>
+            <span style={{fontSize:"0.72rem", color:text3, marginRight:"0.25rem"}}>Canvas QTI:</span>
+            {hasMultipleSections ? (
+              sectionNums.map(sec => (
+                <button key={sec} style={S.oBtn("#8b5cf6")}
+                  onClick={async () => {
+                    const secVersions = versions.filter(v => (v.classSection ?? v.questions?.[0]?.classSection) === sec);
+                    const blobs = await buildClassroomSectionsQTI({[sec]: secVersions}, exam.name, true, 1);
+                    if (blobs[sec]) dlBlob(blobs[sec], `${safeName}_S${sec}_QTI.zip`);
+                    await logExport(exam.name, `QTI S${sec}`, sec);
+                  }}>
+                  ⬇ S{sec} QTI (.zip)
+                </button>
+              ))
+            ) : (
+              versions.map(v => (
+                <button key={v.label} style={S.oBtn("#8b5cf6")}
+                  onClick={async () => {
+                    const xml = buildQTI(v.questions, exam.name, v.label);
+                    const blob = await buildQTIZip(xml, `${exam.name}_V${v.label}`);
+                    dlBlob(blob, `${safeName}_V${v.label}_QTI.zip`);
+                    await logExport(exam.name, "QTI", v.label);
+                  }}>
+                  ⬇ V{v.label} QTI (.zip)
+                </button>
+              ))
             )}
           </div>
 
