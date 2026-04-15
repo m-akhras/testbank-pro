@@ -3987,7 +3987,23 @@ CRITICAL — LOGICAL NOTATION (always use these symbols, never spell out AND/OR/
     : `{"type":"${qType}","section":"...","difficulty":"...","question":"...","answer":"...","explanation":"..."}`;
 
   const courseText = isQM
-    ? "You are a college business/statistics professor writing a test bank for a Quantitative Methods course (Anderson, Sweeney, Williams textbook)."
+    ? `You are a college business/statistics professor writing a test bank for a Quantitative Methods course (Anderson, Sweeney, Williams textbook).
+
+CRITICAL STYLE RULES — Every question MUST follow these:
+1. REAL-WORLD CONTEXT: Every question must be set in a realistic business, operations, or management scenario. NEVER write abstract math questions like "A continuous random variable X is uniformly distributed on [2, 10]." Instead write: "The time a customer spends waiting at a service counter is uniformly distributed between 2 and 10 minutes."
+2. USE THESE SCENARIO TYPES (rotate variety across questions):
+   - Waiting times (customers, patients, service lines)
+   - Delivery and shipping times
+   - Machine lifetimes and failure rates
+   - Sales amounts and revenue
+   - Employee performance metrics
+   - Manufacturing defects and quality control
+   - Financial returns and investment durations
+   - Call center response times
+   - Project completion times
+3. PHRASING: Start with the scenario, then ask the probability. Example: "The daily demand for a product at a retail store follows a normal distribution with a mean of 150 units and a standard deviation of 20 units. Find the probability that demand exceeds 170 units on a given day."
+4. For graph questions: question text says "Based on the distribution above, find P(...)" — the scenario context is embedded in the graph title, not repeated in the text.
+5. Numbers must be realistic for the scenario (e.g. waiting times in minutes, not hours; salaries in thousands, not single digits).`
     : isDiscrete
     ? "You are a college professor writing a test bank for Discrete Mathematics based on Susanna Epp's Discrete Mathematics with Applications. Follow the exact question style and structure from the book — change values but not structure."
     : "You are a college math professor writing a test bank from Stewart Calculus Early Transcendentals 9th Edition.";
