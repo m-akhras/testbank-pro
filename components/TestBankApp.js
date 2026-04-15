@@ -5253,8 +5253,13 @@ export default function TestBankApp() {
   function defaultSecCfg() { return { Easy:{count:1,graphType:"normal",tableRows:4,tableCols:2,numText:1,numTable:0}, Medium:{count:1,graphType:"normal",tableRows:5,tableCols:3,numText:1,numTable:0}, Hard:{count:1,graphType:"normal",tableRows:6,tableCols:3,numText:1,numTable:0} }; }
 
   function getSectionConfig(sec) { return sectionConfig[sec] || defaultSecCfg(); }
-  function setSectionDiff(sec, difficulty, field, value) {
-    setSectionConfig(prev => ({ ...prev, [sec]: { ...getSectionConfig(sec), [difficulty]: { ...getSectionConfig(sec)[difficulty], [field]: value } } }));
+  function setSectionDiff(sec, difficulty, fields, value) {
+    // Accept either (sec, diff, fieldName, value) or (sec, diff, {field:value,...})
+    const updates = typeof fields === "object" ? fields : { [fields]: value };
+    setSectionConfig(prev => {
+      const secCfg = prev[sec] || defaultSecCfg();
+      return { ...prev, [sec]: { ...secCfg, [difficulty]: { ...secCfg[difficulty], ...updates } } };
+    });
   }
 
   function toggleSection(sec) {
@@ -6016,35 +6021,23 @@ ${questionsText}`;
                                           style={{width:"40px", ...S.input, padding:"0.2rem 0.3rem", fontSize:"0.75rem"}}
                                           onChange={e => {
                                             const newCount = Number(e.target.value)||0;
-                                            setSectionDiff(sec, d, "count", newCount);
-                                            // keep numText+numTable = count
+                                            const updates = { count: newCount };
                                             if (cfg[d].graphType === "normal") {
                                               const ntbl = Math.min(cfg[d].numTable ?? 0, newCount);
-                                              setSectionDiff(sec, d, "numTable", ntbl);
-                                              setSectionDiff(sec, d, "numText", newCount - ntbl);
+                                              updates.numTable = ntbl;
+                                              updates.numText = newCount - ntbl;
                                             }
-                                            // keep numGraph+numGraphText = count
-                                            if (cfg[d].graphType === "graph") {
-                                              const ngt = Math.min(cfg[d].numGraphText ?? 0, newCount);
-                                              setSectionDiff(sec, d, "numGraphText", ngt);
-                                              setSectionDiff(sec, d, "numGraph", newCount - ngt);
-                                            }
-                                            // keep numTableOnly+numTableText = count
-                                            if (cfg[d].graphType === "table") {
-                                              const ntt = Math.min(cfg[d].numTableText ?? 0, newCount);
-                                              setSectionDiff(sec, d, "numTableText", ntt);
-                                              setSectionDiff(sec, d, "numTableOnly", newCount - ntt);
-                                            }
+                                            setSectionDiff(sec, d, updates);
                                           }} />
                                         <span style={{fontSize:"0.65rem", color:text3}}>q</span>
                                         {((course === "Quantitative Methods I" || course === "Quantitative Methods II") ? ["normal","table","graph","mix"] : ["normal","graph","mix"]).map(gt => (
                                           <button key={gt} onClick={() => {
-                                            setSectionDiff(sec, d, "graphType", gt);
-                                            // reset numText/numTable when switching
+                                            const updates = { graphType: gt };
                                             if (gt === "normal") {
-                                              setSectionDiff(sec, d, "numText", cfg[d].count || 1);
-                                              setSectionDiff(sec, d, "numTable", 0);
+                                              updates.numText = cfg[d].count || 1;
+                                              updates.numTable = 0;
                                             }
+                                            setSectionDiff(sec, d, updates);
                                           }}
                                             style={{padding:"0.15rem 0.35rem", fontSize:"0.65rem", borderRadius:"3px", cursor:"pointer",
                                               background: cfg[d].graphType===gt
@@ -6062,16 +6055,14 @@ ${questionsText}`;
                                             <input type="number" min={0} max={cfg[d].count||1} value={cfg[d].numText ?? cfg[d].count ?? 1}
                                               onChange={e => {
                                                 const nt = Math.max(0, Math.min(cfg[d].count||1, Number(e.target.value)||0));
-                                                setSectionDiff(sec, d, "numText", nt);
-                                                setSectionDiff(sec, d, "numTable", Math.max(0, (cfg[d].count||1) - nt));
+                                                setSectionDiff(sec, d, { numText: nt, numTable: Math.max(0, (cfg[d].count||1) - nt) });
                                               }}
                                               style={{width:"34px", ...S.input, padding:"0.1rem 0.25rem", fontSize:"0.68rem", textAlign:"center"}} />
                                             <span style={{fontSize:"0.6rem", color:text3}}>table</span>
                                             <input type="number" min={0} max={cfg[d].count||1} value={cfg[d].numTable ?? 0}
                                               onChange={e => {
                                                 const ntbl = Math.max(0, Math.min(cfg[d].count||1, Number(e.target.value)||0));
-                                                setSectionDiff(sec, d, "numTable", ntbl);
-                                                setSectionDiff(sec, d, "numText", Math.max(0, (cfg[d].count||1) - ntbl));
+                                                setSectionDiff(sec, d, { numTable: ntbl, numText: Math.max(0, (cfg[d].count||1) - ntbl) });
                                               }}
                                               style={{width:"34px", ...S.input, padding:"0.1rem 0.25rem", fontSize:"0.68rem", textAlign:"center"}} />
                                             {(cfg[d].numTable ?? 0) > 0 && (
