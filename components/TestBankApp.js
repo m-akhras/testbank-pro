@@ -2145,23 +2145,16 @@ function renderStatChartToSVG(chartConfig, width=480, height=300) {
     // title
     if (cfg.title) axisLabel(cfg.title, iW/2, -12, "middle", 13);
 
-    // μ marker for normal distributions
+    // μ marker for normal distributions only
     if ((distType === "normal" || distType === "standard_normal") && xScale(mu) >= 0 && xScale(mu) <= iW) {
       g.append("line").attr("x1",xScale(mu)).attr("y1",yScale(0))
         .attr("x2",xScale(mu)).attr("y2",yScale(pdf(mu))*0.15)
         .attr("stroke",COL.muted).attr("stroke-width",1).attr("stroke-dasharray","3,3");
       const muLabel = isStdNorm ? "\u03bc=0" : ("\u03bc=" + mu);
-      if (sFrom !== mu && sTo !== mu) // don't overlap with boundary label
+      if (sFrom !== mu && sTo !== mu)
         axisLabel(muLabel, xScale(mu), iH+58, "middle", 9);
     }
-    // μ marker for exponential distribution
-    if (distType === "exponential" && xScale(expMu) >= 0 && xScale(expMu) <= iW) {
-      g.append("line").attr("x1",xScale(expMu)).attr("y1",yScale(0))
-        .attr("x2",xScale(expMu)).attr("y2",yScale(pdf(expMu))*0.5)
-        .attr("stroke",COL.muted).attr("stroke-width",1).attr("stroke-dasharray","3,3");
-      if (sFrom !== expMu && sTo !== expMu)
-        axisLabel("\u03bc=" + expMu, xScale(expMu), iH+58, "middle", 9);
-    }
+    // No mu marker for exponential — y-intercept already shows the rate
   }
 
   return svgNode;
@@ -3749,7 +3742,16 @@ function buildGeneratePrompt(course, selectedSections, sectionCounts, qType, dif
             const mixNote = gt === "mix" && count > 0
               ? ` [REQUIRED: ${Math.ceil(count*0.4)} chart(s), ${Math.ceil(count*0.3)} table(s), rest text]`
               : "";
-            return `  ${d}: ${count} question(s) [graphType: ${gt}${tableNote}${mixNote}]`;
+            const normalSplit = gt === "normal" && (c[d].numTable ?? 0) > 0
+              ? ` [REQUIRED: ${c[d].numText ?? count} plain text, ${c[d].numTable} table [tableRows: ${c[d].tableRows||4}, tableCols: ${c[d].tableCols||2}]]`
+              : "";
+            const graphSplit = gt === "graph" && (c[d].numGraphText ?? 0) > 0
+              ? ` [REQUIRED: ${c[d].numGraph ?? count} with chart, ${c[d].numGraphText} plain text (no chart)]`
+              : "";
+            const tableSplit = gt === "table" && (c[d].numTableText ?? 0) > 0
+              ? ` [REQUIRED: ${c[d].numTableOnly ?? count} with table, ${c[d].numTableText} plain text (no table) [tableRows: ${c[d].tableRows||4}, tableCols: ${c[d].tableCols||2}]]`
+              : "";
+            return `  ${d}: ${count} question(s) [graphType: ${gt}${tableNote}${mixNote}${normalSplit}${graphSplit}${tableSplit}]`;
           });
         return `${s}:\n${lines.join("\n")}`;
       }).join("\n")
@@ -3910,6 +3912,7 @@ Mix these formats naturally across questions. Choose based on what fits the cont
 
    * Exponential distribution → decaying curve
      graphConfig: {"type":"continuous_dist","distType":"exponential","mu":2,"shadeFrom":null,"shadeTo":3,"probability":"P(X<3)","title":"Exponential Distribution"}
+     CRITICAL for exponential: the mu value in graphConfig MUST match the mean stated in the question. If question says mean=6, set mu:6. NEVER mismatch.
 
    SHADING RULES for continuous_dist:
    - P(X > a): set shadeFrom=a, shadeTo=null
@@ -3917,7 +3920,14 @@ Mix these formats naturally across questions. Choose based on what fits the cont
    - P(a < X < b): set shadeFrom=a, shadeTo=b
    - Same rules apply for Z in standard normal
    - Always include "probability" field as string e.g. "P(Z > 1.5)" — shown inside shaded area
-   Question text must say "Based on the distribution above, find..." — never describe the chart in text.
+   - shadeFrom and shadeTo values MUST match the probability asked in the question exactly.
+
+   CRITICAL QUESTION TEXT RULE for ALL distribution questions (uniform, normal, exponential, standard normal):
+   - Question text MUST say "Based on the distribution above, find..." 
+   - NEVER state the parameters (μ, σ, λ, a, b) in the question text — students must read them from the graph
+   - WRONG: "A variable X follows a normal distribution with μ=50 and σ=10. Find P(X>65)."
+   - RIGHT: "Based on the distribution above, find P(X > 65)."
+   - The graph IS the question setup. The text only asks what to find.
 ` : isDiscrete ? `
 DISCRETE MATHEMATICS QUESTION GUIDELINES:
 - Base questions on Susanna Epp "Discrete Mathematics with Applications" textbook structure.
@@ -5244,7 +5254,7 @@ export default function TestBankApp() {
     await autoGenerateVersions(prompt, "replace", { vIdx, qIdx });
   }
 
-  function defaultSecCfg() { return { Easy:{count:1,graphType:"normal",tableRows:4,tableCols:2}, Medium:{count:1,graphType:"normal",tableRows:5,tableCols:3}, Hard:{count:1,graphType:"normal",tableRows:6,tableCols:3} }; }
+  function defaultSecCfg() { return { Easy:{count:1,graphType:"normal",tableRows:4,tableCols:2,numText:1,numTable:0}, Medium:{count:1,graphType:"normal",tableRows:5,tableCols:3,numText:1,numTable:0}, Hard:{count:1,graphType:"normal",tableRows:6,tableCols:3,numText:1,numTable:0} }; }
 
   function getSectionConfig(sec) { return sectionConfig[sec] || defaultSecCfg(); }
   function setSectionDiff(sec, difficulty, field, value) {
@@ -6008,10 +6018,38 @@ ${questionsText}`;
                                         <span style={{fontSize:"0.68rem", color:diffColors[d], fontWeight:"600", minWidth:"46px"}}>{d}</span>
                                         <input type="number" min={0} max={10} value={cfg[d].count}
                                           style={{width:"40px", ...S.input, padding:"0.2rem 0.3rem", fontSize:"0.75rem"}}
-                                          onChange={e => setSectionDiff(sec, d, "count", Number(e.target.value)||0)} />
+                                          onChange={e => {
+                                            const newCount = Number(e.target.value)||0;
+                                            setSectionDiff(sec, d, "count", newCount);
+                                            // keep numText+numTable = count
+                                            if (cfg[d].graphType === "normal") {
+                                              const ntbl = Math.min(cfg[d].numTable ?? 0, newCount);
+                                              setSectionDiff(sec, d, "numTable", ntbl);
+                                              setSectionDiff(sec, d, "numText", newCount - ntbl);
+                                            }
+                                            // keep numGraph+numGraphText = count
+                                            if (cfg[d].graphType === "graph") {
+                                              const ngt = Math.min(cfg[d].numGraphText ?? 0, newCount);
+                                              setSectionDiff(sec, d, "numGraphText", ngt);
+                                              setSectionDiff(sec, d, "numGraph", newCount - ngt);
+                                            }
+                                            // keep numTableOnly+numTableText = count
+                                            if (cfg[d].graphType === "table") {
+                                              const ntt = Math.min(cfg[d].numTableText ?? 0, newCount);
+                                              setSectionDiff(sec, d, "numTableText", ntt);
+                                              setSectionDiff(sec, d, "numTableOnly", newCount - ntt);
+                                            }
+                                          }} />
                                         <span style={{fontSize:"0.65rem", color:text3}}>q</span>
                                         {((course === "Quantitative Methods I" || course === "Quantitative Methods II") ? ["normal","table","graph","mix"] : ["normal","graph","mix"]).map(gt => (
-                                          <button key={gt} onClick={() => setSectionDiff(sec, d, "graphType", gt)}
+                                          <button key={gt} onClick={() => {
+                                            setSectionDiff(sec, d, "graphType", gt);
+                                            // reset numText/numTable when switching
+                                            if (gt === "normal") {
+                                              setSectionDiff(sec, d, "numText", cfg[d].count || 1);
+                                              setSectionDiff(sec, d, "numTable", 0);
+                                            }
+                                          }}
                                             style={{padding:"0.15rem 0.35rem", fontSize:"0.65rem", borderRadius:"3px", cursor:"pointer",
                                               background: cfg[d].graphType===gt
                                                 ? (gt==="graph"?"#1D9E75":gt==="table"?"#185FA5":gt==="mix"?"#8b5cf6":border)
@@ -6021,7 +6059,89 @@ ${questionsText}`;
                                             {gt==="normal"?"Text":gt==="graph"?"Graph":gt==="table"?"Table":"Mix"}
                                           </button>
                                         ))}
-                                        {(cfg[d].graphType === "table" || cfg[d].graphType === "mix") && (course === "Quantitative Methods I" || course === "Quantitative Methods II") && (
+                                        {/* Text type: split into # text + # table */}
+                                        {cfg[d].graphType === "normal" && (course === "Quantitative Methods I" || course === "Quantitative Methods II") && (
+                                          <span style={{display:"flex", alignItems:"center", gap:"0.25rem", marginLeft:"0.25rem"}}>
+                                            <span style={{fontSize:"0.6rem", color:text3}}>text</span>
+                                            <input type="number" min={0} max={cfg[d].count||1} value={cfg[d].numText ?? cfg[d].count ?? 1}
+                                              onChange={e => {
+                                                const nt = Math.max(0, Math.min(cfg[d].count||1, Number(e.target.value)||0));
+                                                setSectionDiff(sec, d, "numText", nt);
+                                                setSectionDiff(sec, d, "numTable", Math.max(0, (cfg[d].count||1) - nt));
+                                              }}
+                                              style={{width:"34px", ...S.input, padding:"0.1rem 0.25rem", fontSize:"0.68rem", textAlign:"center"}} />
+                                            <span style={{fontSize:"0.6rem", color:text3}}>table</span>
+                                            <input type="number" min={0} max={cfg[d].count||1} value={cfg[d].numTable ?? 0}
+                                              onChange={e => {
+                                                const ntbl = Math.max(0, Math.min(cfg[d].count||1, Number(e.target.value)||0));
+                                                setSectionDiff(sec, d, "numTable", ntbl);
+                                                setSectionDiff(sec, d, "numText", Math.max(0, (cfg[d].count||1) - ntbl));
+                                              }}
+                                              style={{width:"34px", ...S.input, padding:"0.1rem 0.25rem", fontSize:"0.68rem", textAlign:"center"}} />
+                                            {(cfg[d].numTable ?? 0) > 0 && (
+                                              <span style={{display:"flex", alignItems:"center", gap:"0.25rem"}}>
+                                                <span style={{fontSize:"0.6rem", color:text3}}>rows</span>
+                                                <input type="number" min={2} max={20} value={cfg[d].tableRows||4}
+                                                  onChange={e => setSectionDiff(sec, d, "tableRows", Math.max(2, Math.min(20, Number(e.target.value)||4)))}
+                                                  style={{width:"34px", ...S.input, padding:"0.1rem 0.25rem", fontSize:"0.68rem", textAlign:"center"}} />
+                                                <span style={{fontSize:"0.6rem", color:text3}}>cols</span>
+                                                <input type="number" min={2} max={8} value={cfg[d].tableCols||2}
+                                                  onChange={e => setSectionDiff(sec, d, "tableCols", Math.max(2, Math.min(8, Number(e.target.value)||2)))}
+                                                  style={{width:"34px", ...S.input, padding:"0.1rem 0.25rem", fontSize:"0.68rem", textAlign:"center"}} />
+                                              </span>
+                                            )}
+                                          </span>
+                                        )}
+                                        {/* Graph type: split into # graph + # text */}
+                                        {cfg[d].graphType === "graph" && (course === "Quantitative Methods I" || course === "Quantitative Methods II") && (
+                                          <span style={{display:"flex", alignItems:"center", gap:"0.25rem", marginLeft:"0.25rem"}}>
+                                            <span style={{fontSize:"0.6rem", color:"#1D9E75"}}>graph</span>
+                                            <input type="number" min={0} max={cfg[d].count||1} value={cfg[d].numGraph ?? cfg[d].count ?? 1}
+                                              onChange={e => {
+                                                const ng = Math.max(0, Math.min(cfg[d].count||1, Number(e.target.value)||0));
+                                                setSectionDiff(sec, d, "numGraph", ng);
+                                                setSectionDiff(sec, d, "numGraphText", Math.max(0, (cfg[d].count||1) - ng));
+                                              }}
+                                              style={{width:"34px", ...S.input, padding:"0.1rem 0.25rem", fontSize:"0.68rem", textAlign:"center"}} />
+                                            <span style={{fontSize:"0.6rem", color:text3}}>text</span>
+                                            <input type="number" min={0} max={cfg[d].count||1} value={cfg[d].numGraphText ?? 0}
+                                              onChange={e => {
+                                                const ngt = Math.max(0, Math.min(cfg[d].count||1, Number(e.target.value)||0));
+                                                setSectionDiff(sec, d, "numGraphText", ngt);
+                                                setSectionDiff(sec, d, "numGraph", Math.max(0, (cfg[d].count||1) - ngt));
+                                              }}
+                                              style={{width:"34px", ...S.input, padding:"0.1rem 0.25rem", fontSize:"0.68rem", textAlign:"center"}} />
+                                          </span>
+                                        )}
+                                        {cfg[d].graphType === "table" && (course === "Quantitative Methods I" || course === "Quantitative Methods II") && (
+                                          <span style={{display:"flex", alignItems:"center", gap:"0.25rem", marginLeft:"0.25rem"}}>
+                                            <span style={{fontSize:"0.6rem", color:"#185FA5"}}>table</span>
+                                            <input type="number" min={0} max={cfg[d].count||1} value={cfg[d].numTableOnly ?? cfg[d].count ?? 1}
+                                              onChange={e => {
+                                                const ntbl = Math.max(0, Math.min(cfg[d].count||1, Number(e.target.value)||0));
+                                                setSectionDiff(sec, d, "numTableOnly", ntbl);
+                                                setSectionDiff(sec, d, "numTableText", Math.max(0, (cfg[d].count||1) - ntbl));
+                                              }}
+                                              style={{width:"34px", ...S.input, padding:"0.1rem 0.25rem", fontSize:"0.68rem", textAlign:"center"}} />
+                                            <span style={{fontSize:"0.6rem", color:text3}}>text</span>
+                                            <input type="number" min={0} max={cfg[d].count||1} value={cfg[d].numTableText ?? 0}
+                                              onChange={e => {
+                                                const ntt = Math.max(0, Math.min(cfg[d].count||1, Number(e.target.value)||0));
+                                                setSectionDiff(sec, d, "numTableText", ntt);
+                                                setSectionDiff(sec, d, "numTableOnly", Math.max(0, (cfg[d].count||1) - ntt));
+                                              }}
+                                              style={{width:"34px", ...S.input, padding:"0.1rem 0.25rem", fontSize:"0.68rem", textAlign:"center"}} />
+                                            <span style={{fontSize:"0.6rem", color:text3}}>rows</span>
+                                            <input type="number" min={2} max={20} value={cfg[d].tableRows||4}
+                                              onChange={e => setSectionDiff(sec, d, "tableRows", Math.max(2, Math.min(20, Number(e.target.value)||4)))}
+                                              style={{width:"34px", ...S.input, padding:"0.1rem 0.25rem", fontSize:"0.68rem", textAlign:"center"}} />
+                                            <span style={{fontSize:"0.6rem", color:text3}}>cols</span>
+                                            <input type="number" min={2} max={8} value={cfg[d].tableCols||2}
+                                              onChange={e => setSectionDiff(sec, d, "tableCols", Math.max(2, Math.min(8, Number(e.target.value)||2)))}
+                                              style={{width:"34px", ...S.input, padding:"0.1rem 0.25rem", fontSize:"0.68rem", textAlign:"center"}} />
+                                          </span>
+                                        )}
+                                        {cfg[d].graphType === "mix" && (course === "Quantitative Methods I" || course === "Quantitative Methods II") && (
                                           <span style={{display:"flex", alignItems:"center", gap:"0.25rem", marginLeft:"0.25rem"}}>
                                             <span style={{fontSize:"0.6rem", color:text3}}>rows</span>
                                             <input type="number" min={2} max={20} value={cfg[d].tableRows||4}
