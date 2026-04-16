@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { createBrowserClient } from "@supabase/ssr";
+import { COURSES, getCourse, typeInstructions } from "../lib/courses/index.js";
 
 const supabase = createBrowserClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -915,86 +916,7 @@ function InlineEditor({ q, onSave, onClose }) {
 // ─── End InlineEditor ─────────────────────────────────────────────────────────
 
 
-// ─── Course data ──────────────────────────────────────────────────────────────
-const COURSES = {
-  "Calculus 1": {
-    color: "#10b981",
-    chapters: [
-      { ch:"1", title:"Functions and Models", sections:["1.1 Four Ways to Represent a Function","1.2 Mathematical Models: A Catalog of Essential Functions","1.3 New Functions from Old Functions","1.4 Exponential Functions","1.5 Inverse Functions and Logarithms"] },
-      { ch:"2", title:"Limits and Derivatives", sections:["2.2 The Limit of a Function","2.3 Calculating Limits Using the Limit Laws","2.5 Continuity","2.6 Limits at Infinity; Horizontal Asymptotes","2.8 The Derivative as a Function"] },
-      { ch:"3", title:"Differentiation Rules", sections:["3.1 Derivatives of Polynomials and Exponential Functions","3.2 The Product and Quotient Rules","3.3 Derivatives of Trigonometric Functions","3.4 The Chain Rule","3.5 Implicit Differentiation","3.6 Derivatives of Logarithmic and Inverse Trigonometric Functions"] },
-      { ch:"4", title:"Applications of Differentiation", sections:["4.1 Maximum and Minimum Values","4.2 The Mean Value Theorem","4.3 What Derivatives Tell Us about the Shape of a Graph","4.4 Indeterminate Forms and l'Hopital's Rule","4.9 Antiderivatives"] },
-      { ch:"5", title:"Integrals", sections:["5.2 The Definite Integral","5.3 The Fundamental Theorem of Calculus","5.4 Indefinite Integrals and the Net Change Theorem","5.5 The Substitution Rule"] },
-    ],
-  },
-  "Calculus 2": {
-    color: "#8b5cf6",
-    chapters: [
-      { ch:"3", title:"Differentiation Rules (cont.)", sections:["3.9 Related Rates","3.10 Linear Approximations and Differentials","3.11 Hyperbolic Functions"] },
-      { ch:"6", title:"Applications of Integration", sections:["6.1 Areas Between Curves","6.2 Volumes","6.3 Volumes by Cylindrical Shells"] },
-      { ch:"7", title:"Techniques of Integration", sections:["7.1 Integration by Parts","7.2 Trigonometric Integrals","7.3 Trigonometric Substitution","7.4 Integration of Rational Functions by Partial Fractions","7.8 Improper Integrals"] },
-      { ch:"8", title:"Further Applications of Integration", sections:["8.1 Arc Length","8.2 Surface Area of Revolution"] },
-      { ch:"11", title:"Sequences, Series, and Power Series", sections:["11.1 Sequences","11.2 Series","11.3 The Integral Test and Estimates of Sums","11.4 The Comparison Tests","11.5 Alternating Series and Absolute Convergence","11.6 The Ratio and Root Tests","11.8 Power Series","11.10 Taylor and Maclaurin Series"] },
-    ],
-  },
-  "Calculus 3": {
-    color: "#f59e0b",
-    chapters: [
-      { ch:"12", title:"Vectors and the Geometry of Space", sections:["12.1 Three-Dimensional Coordinate Systems","12.2 Vectors","12.3 The Dot Product","12.4 The Cross Product","12.5 Equations of Lines and Planes"] },
-      { ch:"14", title:"Partial Derivatives", sections:["14.1 Functions of Several Variables","14.2 Limits and Continuity","14.3 Partial Derivatives","14.4 Tangent Planes and Linear Approximations","14.5 The Chain Rule","14.6 Directional Derivatives and the Gradient Vector","14.7 Maximum and Minimum Values"] },
-      { ch:"15", title:"Multiple Integrals", sections:["15.1 Double Integrals over Rectangles","15.2 Double Integrals over General Regions","15.3 Double Integrals in Polar Coordinates","15.5 Surface Area","15.6 Triple Integrals"] },
-      { ch:"16", title:"Vector Calculus", sections:["16.1 Vector Fields","16.2 Line Integrals"] },
-    ],
-  },
-  "Quantitative Methods I": {
-    color: "#06b6d4",
-    chapters: [
-      { ch:"1", title:"Data and Statistics", sections:["1.1 Applications in Business and Economics","1.2 Data","1.3 Data Sources","1.4 Descriptive Statistics","1.5 Statistical Inference"] },
-      { ch:"2", title:"Descriptive Statistics: Tabular and Graphical Displays", sections:["2.1 Summarizing Data for a Categorical Variable","2.2 Summarizing Data for a Quantitative Variable","2.3 Summarizing Data for Two Variables Using Tables","2.4 Summarizing Data for Two Variables Using Graphical Displays","2.5 Data Visualization: Best Practices"] },
-      { ch:"3", title:"Descriptive Statistics: Numerical Measures", sections:["3.1 Measures of Location","3.2 Measures of Variability","3.3 Measures of Distribution Shape, Relative Location, and Outliers","3.4 Five-Number Summaries and Boxplots","3.5 Measures of Association Between Two Variables","3.6 Data Dashboards and Measures of Performance"] },
-    ],
-  },
-  "Quantitative Methods II": {
-    color: "#f43f5e",
-    chapters: [
-      { ch:"4", title:"Introduction to Probability", sections:["4.1 Experiments, Counting Rules, and Assigning Probabilities","4.2 Events and Their Probabilities","4.3 Some Basic Relationships of Probability","4.4 Conditional Probability","4.5 Bayes Theorem"] },
-      { ch:"5", title:"Discrete Probability Distributions", sections:["5.1 Random Variables","5.2 Developing Discrete Probability Distributions","5.3 Expected Value and Variance","5.4 Bivariate Distributions, Covariance, and Financial Portfolios","5.5 Binomial Probability Distribution","5.6 Poisson Probability Distribution","5.7 Hypergeometric Probability Distribution"] },
-      { ch:"6", title:"Continuous Probability Distributions", sections:["6.1 Uniform Probability Distribution","6.2 Normal Probability Distribution","6.3 Normal Approximation of Binomial Probabilities","6.4 Exponential Probability Distribution"] },
-      { ch:"7", title:"Sampling and Sampling Distributions", sections:["7.1 The Electronics Associates Sampling Problem","7.2 Selecting a Sample","7.3 Point Estimation","7.4 Introduction to Sampling Distributions","7.5 Sampling Distribution of x-bar","7.6 Sampling Distribution of p-bar"] },
-      { ch:"8", title:"Interval Estimation", sections:["8.1 Population Mean: sigma Known","8.2 Population Mean: sigma Unknown","8.3 Determining the Sample Size","8.4 Population Proportion"] },
-      { ch:"9", title:"Hypothesis Tests", sections:["9.1 Developing Null and Alternative Hypotheses","9.2 Type I and Type II Errors","9.3 Population Mean: sigma Known","9.4 Population Mean: sigma Unknown","9.5 Population Proportion","9.6 Hypothesis Testing and Decision Making","9.7 Calculating the Probability of Type II Errors","9.8 Determining the Sample Size for a Hypothesis Test"] },
-      { ch:"14", title:"Simple Linear Regression", sections:["14.1 Simple Linear Regression Model","14.2 Least Squares Method","14.3 Coefficient of Determination","14.4 Model Assumptions","14.5 Testing for Significance","14.6 Using the Estimated Regression Equation for Estimation and Prediction","14.7 Excel and Tools for Regression Analysis","14.8 Residual Analysis: Validating Model Assumptions","14.9 Residual Analysis: Outliers and Influential Observations"] },
-    ],
-  },
-  "Precalculus": {
-    color: "#e879f9",
-    chapters: [
-      { ch:"A", title:"Fundamentals of Algebra", sections:["A.1 Exponents and Radicals","A.2 Polynomials and Factoring","A.3 Rational Expressions","A.4 Solving Equations","A.5 Linear Inequalities in One Variable"] },
-      { ch:"1", title:"Functions and Their Graphs", sections:["1.1 Rectangular Coordinates and Graphs of Equations","1.2 Linear Equations and Functions","1.3 Functions and Their Graphs","1.4 Analyzing Graphs of Functions","1.5 Parent Functions","1.6 Transformations of Functions","1.7 Composite and Inverse Functions"] },
-      { ch:"2", title:"Polynomial and Rational Functions", sections:["2.1 Quadratic Functions","2.2 Polynomial Functions","2.3 Synthetic Division","2.4 Complex Numbers","2.5 Zeros of Polynomial Functions","2.6 Rational Functions"] },
-      { ch:"3", title:"Exponential and Logarithmic Functions", sections:["3.1 Exponential Functions and Their Graphs","3.2 Logarithmic Functions and Their Graphs","3.3 Properties of Logarithms","3.4 Exponential and Logarithmic Equations","3.5 Exponential and Logarithmic Models"] },
-      { ch:"4", title:"Trigonometry", sections:["4.1 Radian and Degree Measure","4.2 The Unit Circle","4.3 Right Triangle Trigonometry","4.4 Trigonometric Functions of Any Angle","4.5 Graphs of Sine and Cosine Functions","4.6 Inverse Trigonometric Functions"] },
-      { ch:"5", title:"Analytic Trigonometry", sections:["5.1 Using Fundamental Identities","5.2 Verifying Trigonometric Identities","5.3 Solving Trigonometric Equations","5.4 Sum and Difference Formulas","5.5 Multiple-Angle and Product-to-Sum Formulas"] },
-    ],
-  },
-    "Discrete Mathematics": {
-    color: "#a855f7",
-    chapters: [
-      { ch:"1", title:"Speaking Mathematically", sections:["1.1 Variables","1.2 The Language of Sets","1.3 The Language of Relations and Functions","1.4 The Language of Graphs"] },
-      { ch:"2", title:"The Logic of Compound Statements", sections:["2.1 Logical Form and Logical Equivalence","2.2 Conditional Statements","2.3 Valid and Invalid Arguments","2.4 Application: Digital Logic Circuits","2.5 Application: Number Systems and Circuits for Addition"] },
-      { ch:"3", title:"The Logic of Quantified Statements", sections:["3.1 Predicates and Quantified Statements I","3.2 Predicates and Quantified Statements II","3.3 Statements with Multiple Quantifiers","3.4 Arguments with Quantified Statements"] },
-      { ch:"4", title:"Elementary Number Theory and Methods of Proof", sections:["4.1 Direct Proof and Counterexample I: Introduction","4.2 Direct Proof and Counterexample II: Writing Advice","4.3 Direct Proof and Counterexample III: Rational Numbers","4.4 Direct Proof and Counterexample IV: Divisibility","4.5 Direct Proof and Counterexample V: Division into Cases","4.6 Direct Proof and Counterexample VI: Floor and Ceiling","4.7 Indirect Argument: Contradiction and Contraposition","4.8 Indirect Argument: Two Classical Theorems","4.9 Application: Algorithms","4.10 Application: Handshaking"] },
-      { ch:"5", title:"Sequences, Mathematical Induction, and Recursion", sections:["5.1 Sequences","5.2 Mathematical Induction I: Proving Formulas","5.3 Mathematical Induction II: Applications","5.4 Strong Mathematical Induction and the Well-Ordering Principle","5.5 Application: Correctness of Algorithms","5.6 Defining Sequences Recursively","5.7 Solving Recurrence Relations by Iteration","5.8 Second-Order Linear Homogeneous Recurrence Relations","5.9 General Recursive Definitions and Structural Induction"] },
-      { ch:"6", title:"Set Theory", sections:["6.1 Set Theory: Definitions and the Element Method of Proof","6.2 Properties of Sets","6.3 Disproofs and Algebraic Proofs","6.4 Boolean Algebras, Russell's Paradox, and the Halting Problem"] },
-      { ch:"7", title:"Properties of Functions", sections:["7.1 Functions Defined on General Sets","7.2 One-to-One, Onto, and Inverse Functions","7.3 Composition of Functions","7.4 Cardinality with Applications to Computability"] },
-      { ch:"8", title:"Properties of Relations", sections:["8.1 Relations on Sets","8.2 Reflexivity, Symmetry, and Transitivity","8.3 Equivalence Relations","8.4 Modular Arithmetic with Applications to Cryptography","8.5 Partial Order Relations"] },
-      { ch:"9", title:"Counting and Probability", sections:["9.1 Introduction to Probability","9.2 Possibility Trees and the Multiplication Rule","9.3 Counting Elements of Disjoint Sets: The Addition Rule","9.4 The Pigeonhole Principle","9.5 Counting Subsets of a Set: Combinations","9.6 r-Combinations with Repetition Allowed","9.7 Pascal's Formula and the Binomial Theorem","9.8 Probability Axioms and Expected Value","9.9 Conditional Probability, Bayes' Formula, and Independent Events"] },
-      { ch:"10", title:"Theory of Graphs and Trees", sections:["10.1 Trails, Paths, and Circuits","10.2 Matrix Representations of Graphs","10.3 Isomorphisms of Graphs","10.4 Trees: Examples and Basic Properties","10.5 Rooted Trees","10.6 Spanning Trees and a Shortest Path Algorithm"] },
-      { ch:"11", title:"Analysis of Algorithm Efficiency", sections:["11.1 Real-Valued Functions of a Real Variable and Their Graphs","11.2 O-, Omega-, and Theta-Notations","11.3 Application: Analysis of Algorithm Efficiency I","11.4 Exponential and Logarithmic Functions: Graphs and Orders","11.5 Application: Analysis of Algorithm Efficiency II"] },
-      { ch:"12", title:"Regular Expressions and Finite-State Automata", sections:["12.1 Formal Languages and Regular Expressions","12.2 Finite-State Automata","12.3 Simplifying Finite-State Automata"] },
-    ],
-  },
-};
+// Course data is imported from lib/courses/index.js
 
 const QTYPES = ["Multiple Choice","Free Response","True/False","Fill in the Blank","Formula","Branched"];
 const DIFFICULTIES = ["Easy","Medium","Hard","Mixed"];
@@ -3764,21 +3686,10 @@ function difficultyPattern(count) {
 }
 
 
-const typeInstructions = {
-  "Multiple Choice": "Generate Multiple Choice questions with exactly 4 choices (A-D). One correct answer, three plausible distractors. Choices must be distinct — no two may be identical or equivalent. Include 'choices' array and 'answer' matching one choice exactly.",
-  "Free Response": "Generate Free Response questions requiring a full worked solution. Include 'explanation' with complete step-by-step solution. Every step on its own line as a pure math equation.",
-  "True/False": "Generate True/False questions. Answer must be exactly 'True' or 'False'. Include 'choices': ['True', 'False'].",
-  "Fill in the Blank": "Generate Fill in the Blank questions with a single blank. Answer is the exact word, number, or expression that fills the blank.",
-  "Formula": "Generate Formula questions with randomizable variables. Include 'variables' array [{name, min, max, precision}] and 'answerFormula' as a math expression using variable names. Question text uses [varname] placeholders.",
-  "Branched": "Generate Branched questions with a shared stem and 2-4 parts. Include 'stem' (shared given info) and 'parts' array [{question, answer, explanation}]. All parts share the same stem.",
-};
+// typeInstructions is imported from lib/courses/index.js
 
 function buildGeneratePrompt(course, selectedSections, sectionCounts, qType, diff, sectionConfig) {
   const isQM = course === "Quantitative Methods I" || course === "Quantitative Methods II";
-  const isCalc3 = course === "Calculus 3";
-  const isCalc = course === "Calculus 1" || course === "Calculus 2" || isCalc3;
-  const isDiscrete = course === "Discrete Mathematics";
-  const isPrecalc = course === "Precalculus";
 
   const useCfg = sectionConfig && Object.keys(sectionConfig).length > 0;
 
@@ -3856,176 +3767,9 @@ MATH NOTATION RULES:
 - Fractions: ALWAYS (numerator)/(denominator) — e.g. (10)/(s^3)
 - Never use square brackets for denominators — always (parentheses)`;
 
-  // ── QM I & QM II ────────────────────────────────────────────────────────────
-  if (isQM) {
-    const tableInstructions = hasGraphQuestions ? `
-QM QUESTION TYPES:
-1. NORMAL: Real-world business scenario, pure numeric calculation.
-2. TABLE: Present data in a pipe table, ask student to compute from it.
-   Table types: probability/frequency, joint probability, contingency, payoff/decision, regression output.
-   Use exact tableRows and tableCols specified. tableRows = DATA rows (not counting header).
-   Example tableRows:4, tableCols:3:
-   | X | P(X) | Cumulative P |
-   |---|------|--------------|
-   | 0 | 0.10 | 0.10 |
-   | 1 | 0.25 | 0.35 |
-   | 2 | 0.40 | 0.75 |
-   | 3 | 0.25 | 1.00 |
-   NEVER default to 2-column 4-row when larger size specified.
-
-3. CHART: Include hasGraph:true and graphConfig (NO title or probability fields):
-   * Bar: {"type":"bar","labels":["A","B","C"],"values":[10,25,15],"xLabel":"Category","yLabel":"Frequency"}
-   * Histogram: {"type":"histogram","bins":[{"x0":10,"x1":20,"count":5}],"xLabel":"Value","yLabel":"Frequency"}
-   * Scatter: {"type":"scatter","points":[{"x":1,"y":3}],"xLabel":"x","yLabel":"y","regressionLine":{"slope":1.8,"intercept":1.2}}
-   * Discrete dist: {"type":"discrete_dist","data":[{"x":0,"p":0.10},{"x":1,"p":0.35}],"highlightX":2}
-   * Normal: {"type":"continuous_dist","distType":"normal","mu":50,"sigma":10,"shadeFrom":65,"shadeTo":null,"probability":"P(X>65)","xLabel":"x"}
-   * Standard normal: {"type":"continuous_dist","distType":"standard_normal","mu":0,"sigma":1,"shadeFrom":1.5,"shadeTo":null,"probability":"P(Z>1.5)"}
-   * Uniform: {"type":"continuous_dist","distType":"uniform","uMin":2,"uMax":8,"shadeFrom":4,"shadeTo":7,"probability":"P(4<X<7)"}
-     CRITICAL: uMin and uMax MUST match actual distribution boundaries. NEVER leave at defaults.
-   * Exponential: {"type":"continuous_dist","distType":"exponential","mu":2,"shadeFrom":null,"shadeTo":3,"probability":"P(X<3)"}
-     CRITICAL: mu MUST match mean in question. NEVER mismatch.
-   SHADING: P(X>a)→shadeFrom=a,shadeTo=null | P(X<b)→shadeFrom=null,shadeTo=b | P(a<X<b)→shadeFrom=a,shadeTo=b
-   GRAPH TEXT: "Based on the distribution above, find P(...)" — never state parameters in text.
-   IMPORTANT: Do NOT include "title" or "probability" as top-level graphConfig fields — omit them entirely.
-` : "";
-
-    return `TESTBANK_GENERATE_REQUEST
-Course: ${course} (Anderson, Sweeney, Williams)
-Type: ${qType}
-Total questions: ${totalQ}
-
-Sections, counts, and config:
-${breakdown}
-
-IMPORTANT: Follow the exact count and difficulty per section strictly.
-Type instructions: ${typeInstructions[qType]}
-${tableInstructions}
-You are a college business/statistics professor (Anderson, Sweeney, Williams textbook).
-
-STYLE RULES — every question MUST follow:
-1. REAL-WORLD CONTEXT: Use realistic business scenarios. NEVER abstract math.
-   WRONG: "A variable X is uniformly distributed on [2,10]."
-   RIGHT: "Customer waiting time is uniformly distributed between 2 and 10 minutes."
-2. SCENARIOS (rotate): waiting times, delivery times, machine lifetimes, sales/revenue, employee metrics, manufacturing defects, financial returns, call center times, project completion.
-3. PHRASING: State scenario first, then ask the probability/calculation.
-4. NUMBERS: Realistic (waiting times in minutes, salaries in thousands).
-5. GRAPH QUESTIONS: "Based on the distribution above, find P(...)" — no parameters in text.
-6. EXPONENTIAL: Use Greek μ symbol. Write "mean μ = 4 minutes" NEVER "mean mu = 4" or "λ = 0.25".
-${mathNotationBase}
-${commonRules}`;
-  }
-
-  // ── Calculus 1, 2, 3 ────────────────────────────────────────────────────────
-  if (isCalc) {
-    const calc3Rules = isCalc3 ? `
-CALCULUS 3 NOTATION:
-- Vectors: MUST use angle brackets <a,b> or <a,b,c> — NEVER parentheses (a,b) for vectors.
-- Points use parentheses: (2,2) is a point. <2,2> is a vector. Never confuse them.
-
-14.7 Maximum and Minimum Values — rotate through 5 types:
-TYPE 1: Find/classify ALL critical points (2-4 points). Functions: x^3+y^3-3x-3y, x^3-3xy+y^3, x^4-2x^2+y^2.
-TYPE 2: Classify a GIVEN critical point (a,b). Choices: local min/max/saddle/inconclusive.
-TYPE 3: Interpret fxx, fyy, fxy values. Compute D=fxx*fyy-(fxy)^2.
-TYPE 4: Which function has given property at origin?
-TYPE 5: How many critical points does f have?
-D>0 fxx>0→local min; D>0 fxx<0→local max; D<0→saddle; D=0→inconclusive.
-Easy: 1 critical point ok. Medium: 2 required. Hard: 3-4 required.
-Distractors: use correct-looking coordinates with wrong classification or sign errors.` : "";
-
-    const calcGraphInstructions = hasGraphQuestions ? `
-GRAPH QUESTIONS:
-- 1 function → type "single", fn = expression. e.g. {"type":"single","fn":"x^2-3","showAxisNumbers":true,"showGrid":true,"xDomain":[-4,4]}
-- 2 functions → type "area", fnTop/fnBottom, shadeFrom/shadeTo at intersections. e.g. {"type":"area","fnTop":"x+2","fnBottom":"x^2","shadeFrom":-1,"shadeTo":2,"showAxisNumbers":true,"showGrid":true,"xDomain":[-3,4]}
-- Region/domain → type "domain". e.g. {"type":"domain","boundary":"x^2","shadeAbove":true,"boundaryDashed":true,"boundaryLabel":"y = x²","showAxisNumbers":true,"showGrid":true,"xDomain":[-3,3]}
-- Holes: "holes":[[x,y]] open circles, "points":[[x,y]] filled dots.
-- NO yDomain (auto-calculated). DO include xDomain.
-- Text: "Based on the graph above, ..." — never describe graph in text.
-- graphConfig expressions MUST exactly match functions in question text.
-
-CHAPTER 15 INTEGRALS — show 2D region R in xy-plane, never the 3D surface:
-15.1 Rectangles: type "area", fnTop=upper y constant, fnBottom=lower y constant, shadeFrom/shadeTo=x bounds.
-  Vary bounds widely. Examples: R=[1,4]x[1,3], R=[-1,2]x[1,3], R=[2,5]x[0,3].
-  {"type":"area","fnTop":"3","fnBottom":"1","shadeFrom":1,"shadeTo":4,"fnTopLabel":"y=3","fnBottomLabel":"y=1","showAxisNumbers":true,"showGrid":true,"xDomain":[0,5],"yDomain":[0,4]}
-15.2 General regions: type "area", fnTop/fnBottom=boundary curves, shadeFrom/shadeTo=intersection x-values.
-15.3 Polar: use type "area" for approximate Cartesian equivalent.` : "";
-
-    return `TESTBANK_GENERATE_REQUEST
-Course: ${course} (Stewart Early Transcendentals 9th Edition)
-Type: ${qType}
-Total questions: ${totalQ}
-
-Sections, counts, and config:
-${breakdown}
-
-IMPORTANT: Follow the exact count and difficulty per section strictly.
-Type instructions: ${typeInstructions[qType]}
-${calcGraphInstructions}
-${calc3Rules}
-You are a college math professor writing exam questions from Stewart Calculus Early Transcendentals 9th Edition. Questions must be rigorous, formally written, and match Stewart style.
-${mathNotationBase}
-- L{f(t)} Laplace notation: L{t^2}, L{e^(at)}, L^{-1}{F(s)}
-- Fractions: (numerator)/(denominator) — e.g. (10)/(s^3), (1)/((s-3)^2)
-- Nested denominator: (1)/((s-a)^2) — double parens
-${commonRules}`;
-  }
-
-  // ── Discrete Mathematics ─────────────────────────────────────────────────────
-  if (isDiscrete) {
-    return `TESTBANK_GENERATE_REQUEST
-Course: ${course} (Susanna Epp — Discrete Mathematics with Applications)
-Type: ${qType}
-Total questions: ${totalQ}
-
-Sections, counts, and config:
-${breakdown}
-
-IMPORTANT: Follow the exact count and difficulty per section strictly.
-Type instructions: ${typeInstructions[qType]}
-
-You are a college professor writing exam questions based on Susanna Epp's Discrete Mathematics with Applications. Follow the book's exact question style — change values but not structure.
-
-LOGICAL NOTATION (always use symbols, never spell out):
-~p (NOT), p ∧ q (AND), p ∨ q (OR), p → q (conditional), p ↔ q (biconditional)
-
-TRUTH TABLE RULES (Ch.2):
-- Show ALL input columns (p,q,r) — never hide inputs.
-- Fill most output values, replace EXACTLY ONE with "?" for student to find.
-- Use True/False (not 0/1, not T/F).
-- NEVER show complete table — gives away answer.
-
-SECTION RULES:
-- 2.1: Partial truth tables, hide one cell per expression.
-- 2.2: → notation; converse, inverse, contrapositive.
-- 2.3: Premises/conclusion with ∧ ∨ ~ → notation; valid/invalid.
-- 3.x: Specific domains and predicates with concrete values.
-- 4.x: Specific integer/rational claims; proof type or step verification.
-- 5.x: Specific n values; base case or inductive step.
-- 6.x: Sets with explicitly listed elements.
-- 9.x: Counting scenarios from book style.
-Always use concrete values — never abstract symbols without grounding.
-${commonRules}`;
-  }
-
-  // ── Precalculus ──────────────────────────────────────────────────────────────
-  if (isPrecalc) {
-    const precalcGraph = hasGraphQuestions ? `
-GRAPH QUESTIONS: Use type "single" for function graphs.
-{"type":"single","fn":"...","showAxisNumbers":true,"showGrid":true,"xDomain":[-5,5]}
-Text: "Based on the graph above, ..." — never describe graph in text.` : "";
-    return `TESTBANK_GENERATE_REQUEST
-Course: ${course} (Standard Precalculus curriculum)
-Type: ${qType}
-Total questions: ${totalQ}
-
-Sections, counts, and config:
-${breakdown}
-
-IMPORTANT: Follow the exact count and difficulty per section strictly.
-Type instructions: ${typeInstructions[qType]}
-${precalcGraph}
-You are a college math professor writing Precalculus exam questions. Questions should be clear, rigorous, appropriate for students transitioning from algebra to calculus.
-${mathNotationBase}
-${commonRules}`;
+  const courseObj = getCourse(course);
+  if (courseObj) {
+    return courseObj.buildPrompt({ course, totalQ, breakdown, hasGraphQuestions, qType, typeInstruction: typeInstructions[qType], commonRules, mathNotationBase });
   }
 
   // ── Custom courses (fallback) ────────────────────────────────────────────────
@@ -5449,7 +5193,7 @@ function TestBankAppInner() {
       return String(d.getFullYear()) === filterYear && String(d.getMonth()) === filterMonth && String(d.getDate()) === filterDay;
     }).map(q => new Date(q.createdAt).toLocaleTimeString("en-US", {hour:"2-digit", minute:"2-digit"}))
   )].sort((a,b) => new Date(`1970/01/01 ${b}`) - new Date(`1970/01/01 ${a}`));
-  const courseColors = { "Calculus 1":"#10b981","Calculus 2":"#8b5cf6","Calculus 3":"#f59e0b","Quantitative Methods I":"#06b6d4","Quantitative Methods II":"#f43f5e","Precalculus":"#e879f9","Discrete Mathematics":"#a855f7" };
+  const courseColors = Object.fromEntries(Object.entries(allCourses).map(([k, v]) => [k, v.color]));
 
   // ── Design tokens — defined at module level above ────────────────────────────
 
