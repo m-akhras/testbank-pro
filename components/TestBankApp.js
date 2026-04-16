@@ -1,34 +1,6 @@
 "use client";
-import { useState, useEffect, useCallback, useRef, Component } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { createBrowserClient } from "@supabase/ssr";
-
-const supabase = createBrowserClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
-
-// ── Error Boundary — prevents full app crash from component errors ─────────────
-class ErrorBoundary extends Component {
-  constructor(props) { super(props); this.state = { hasError: false, error: null }; }
-  static getDerivedStateFromError(error) { return { hasError: true, error }; }
-  componentDidCatch(error, info) { console.error("TestArca error:", error, info); }
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div style={{padding:"2rem", textAlign:"center", fontFamily:"system-ui"}}>
-          <div style={{fontSize:"2rem", marginBottom:"1rem"}}>⚠️</div>
-          <div style={{fontWeight:"bold", marginBottom:"0.5rem"}}>Something went wrong</div>
-          <div style={{fontSize:"0.85rem", color:"#666", marginBottom:"1rem"}}>{this.state.error?.message}</div>
-          <button onClick={() => this.setState({ hasError: false, error: null })}
-            style={{padding:"0.5rem 1rem", background:"#2D6A4F", color:"#fff", border:"none", borderRadius:"6px", cursor:"pointer"}}>
-            Try again
-          </button>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
 
 // ── Theme tokens — Warm Ivory & Forest Green (module-level so all components can use them) ──
 const bg0   = "#F2EDE4";
@@ -7882,9 +7854,5 @@ ${questionsText}`;
 }
 
 export default function TestBankApp() {
-  return (
-    <ErrorBoundary>
-      <TestBankAppInner />
-    </ErrorBoundary>
-  );
+  return <TestBankAppInner />;
 }
