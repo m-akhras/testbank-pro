@@ -43,6 +43,21 @@ function toLatex(raw) {
   s = s.replace(/(?<![<>])<=(?![>=])/g, '≤');
   s = s.replace(/(?<![<>])>=(?![<=])/g, '≥');
 
+  // Ellipsis
+  s = s.replace(/\.\.\./g, "\\(\\ldots\\)");
+
+  // Logical operators (Discrete Math): NOT x, x AND y, x OR y
+  s = s.replace(/\(NOT\s+([^)]+)\)/g, (_,x)=>`\\(\\lnot(${x})\\)`);
+  s = s.replace(/\bNOT\s+([a-z])\b/g, (_,x)=>`\\(\\lnot ${x}\\)`);
+  s = s.replace(/\b([a-z])\s+AND\s+([a-z])\b/g, (_,a,b)=>`\\(${a} \\land ${b}\\)`);
+  s = s.replace(/\b([a-z])\s+OR\s+([a-z])\b/g,  (_,a,b)=>`\\(${a} \\lor ${b}\\)`);
+
+  // lim x->a without "as" — must come before the "lim as" patterns
+  s = s.replace(/\blim(?:it)?\s+(?!as\b)([a-zA-Z,\s]+?)\s*(?:->|→|\\to)\s*([^\s,;.(]+)\s*of\b/gi,
+    (_,v,a)=>`\\(\\lim_{${v.trim()}\\to ${fix(a)}}\\)`);
+  s = s.replace(/\blim(?:it)?\s+(?!as\b)([a-zA-Z,\s]+?)\s*(?:->|→|\\to)\s*([^\s,;.(]+)/gi,
+    (_,v,a)=>`\\(\\lim_{${v.trim()}\\to ${fix(a)}}\\)`);
+
   s = s.replace(/\blim(?:it)?\s+as\s+\(([^)]+)\)\s*(?:->|→)\s*\(([^)]+)\)/gi,
     (_,v,a)=>`\\(\\lim_{(${v})\\to(${fix(a)})}\\)`);
   s = s.replace(/\blim(?:it)?\s+as\s+([a-zA-Z,\s]+?)\s*(?:->|→|\\to)\s*([^\s,;.(]+)\s*of\b/gi,
@@ -51,6 +66,9 @@ function toLatex(raw) {
     (_,v,a)=>`\\(\\lim_{${v.trim()}\\to ${fix(a)}}\\)`);
   s = s.replace(/(?<!\\\()\blim_\{([^}]+)\}/gi,
     (_,sub)=>`\\(\\lim_{${sub.replace(/->/g,'\\to')}}\\)`);
+
+  // Bare -> arrow (remaining after all lim patterns have consumed their arrows)
+  s = s.replace(/(?<![<])->/g, "\\(\\to\\)");
 
   s = s.replace(/\bd\/d([a-z])\s*\[([^\]]+)\]/g, (_,v,f)=>`\\(\\dfrac{d}{d${v}}\\left[${f}\\right]\\)`);
   s = s.replace(/\bd\/d([a-z])\s*\(([^)]+)\)/g,  (_,v,f)=>`\\(\\dfrac{d}{d${v}}\\left(${f}\\right)\\)`);
@@ -62,6 +80,12 @@ function toLatex(raw) {
 
   s = s.replace(/\b(arcsin|arccos|arctan|sinh|cosh|tanh|sin|cos|tan|sec|csc|cot|ln|log)\(([^)]+)\)/g,
     (_,fn,arg)=>`\\(\\${fn}(${innerLatex(arg)})\\)`);
+
+  // Script operators: L{f(t)}, F{...}, Z{...}, L^{-1}{...}
+  s = s.replace(/\b([LFZ])\^\{-1\}\{([^{}]+)\}/g,
+    (_,op,inner)=>`\\(\\mathcal{${op}}^{-1}\\{${innerLatex(inner)}\\}\\)`);
+  s = s.replace(/\b([LFZ])\{([^{}]+)\}/g,
+    (_,op,inner)=>`\\(\\mathcal{${op}}\\{${innerLatex(inner)}\\}\\)`);
 
   const tokens = [];
   function stash(val) { tokens.push(val); return `\x02${tokens.length-1}\x02`; }
@@ -105,6 +129,14 @@ function toLatex(raw) {
   s = s.replace(/\b([a-zA-Z0-9]+\^[0-9]+)\/([a-zA-Z0-9]+(?:\^[0-9]+)?)\b/g, (_,a,b)=>`\\(\\dfrac{${a}}{${b}}\\)`);
   s = s.replace(/\b([0-9]+)\/([0-9]+)\b/g, (_,a,b)=>`\\(\\dfrac{${a}}{${b}}\\)`);
 
+  // Square-bracket fractions: [a]/[b], (a)/[b], n/[b]
+  s = s.replace(/\[([^\[\]]+)\]\/\[([^\[\]]+)\]/g, (_,n,d)=>`\\(\\dfrac{${n}}{${d}}\\)`);
+  s = s.replace(/\(([^()]+)\)\/\[([^\[\]]+)\]/g, (_,n,d)=>`\\(\\dfrac{${n}}{${d}}\\)`);
+  s = s.replace(/\b([a-zA-Z0-9]+)\/\[([^\[\]]+)\]/g, (_,n,d)=>`\\(\\dfrac{${n}}{${d}}\\)`);
+
+  // number/letter fraction: 1/x, 3/n, etc.
+  s = s.replace(/\b([0-9]+)\/([a-zA-Z])\b/g, (_,n,d)=>`\\(\\dfrac{${n}}{${d}}\\)`);
+
   s = s.replace(/\be\^\(([^)]+)\)/g, (_,x)=>`\\(e^{${x}}\\)`);
   s = s.replace(/\be\^(-?[a-zA-Z0-9]+)\b/g, (_,x)=>`\\(e^{${x}}\\)`);
 
@@ -138,6 +170,8 @@ function toLatex(raw) {
   s = s.replace(/\bgamma\b/gi, "\\(\\gamma\\)");
   s = s.replace(/\btimes\b/g, "\\(\\times\\)");
   s = s.replace(/\bcdot\b/g, "\\(\\cdot\\)");
+  s = s.replace(/\bmu\b/gi, "\\(\\mu\\)");
+  s = s.replace(/\*/g, "·");
 
   return s;
 }
