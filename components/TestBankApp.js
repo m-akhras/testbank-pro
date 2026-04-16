@@ -2,6 +2,11 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 
+const supabase = createBrowserClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+);
+
 // ── Theme tokens — Warm Ivory & Forest Green (module-level so all components can use them) ──
 const bg0   = "#F2EDE4";
 const bg1   = "#FDFAF5";
