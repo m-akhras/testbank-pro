@@ -2196,39 +2196,6 @@ async function statChartToBase64PNG(chartConfig, w=480, h=300) {
 }
 
 // Strip title/probability from graphConfig for Canvas export unless flagged to include
-function dlFile(content, name, type) {
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(new Blob([content],{type}));
-  a.download = name; a.click();
-}
-
-function dlBlob(blob, name) {
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = name; a.click();
-}
-
-// ─── Wrap QTI XML in Canvas-compatible ZIP ────────────────────────────────────
-// ── Validate versions before QTI export — returns array of warning strings ────
-function validateQTIExport(versionsToCheck) {
-function canvasExportConfig(cfg) {
-  if (!cfg) return cfg;
-  const result = { ...cfg };
-  if (!cfg.exportTitle) { delete result.title; }
-  if (!cfg.exportProbLabel) { delete result.probability; }
-  return result;
-}
-
-// expose to window for console testing + export pipeline
-if (typeof window !== "undefined") {
-  window.renderGraphToSVG = renderGraphToSVG;
-  window.graphToBase64PNG = graphToBase64PNG;
-  window.renderStatChartToSVG = renderStatChartToSVG;
-  window.statChartToBase64PNG = statChartToBase64PNG;
-}
-// ─── End Graph Engine ──────────────────────────────────────────────────────────
-
-function buildQTI(questions, course, vLabel, useGroups=false, pointsPerQ=1) {
   const canvasQ = questions.filter(q => q.type !== "Branched");
 
   // register graph configs so buildQTIZip can resolve placeholders
@@ -3091,6 +3058,16 @@ function dlBlob(blob, name) {
 }
 
 // ─── Wrap QTI XML in Canvas-compatible ZIP ────────────────────────────────────
+
+// Strip title/probability from graphConfig for Canvas export unless flagged to include
+function canvasExportConfig(cfg) {
+  if (!cfg) return cfg;
+  const result = { ...cfg };
+  if (!cfg.exportTitle) { delete result.title; }
+  if (!cfg.exportProbLabel) { delete result.probability; }
+  return result;
+}
+
 // ── Validate versions before QTI export — returns array of warning strings ────
 function validateQTIExport(versionsToCheck) {
   const warnings = [];
