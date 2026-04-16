@@ -2196,6 +2196,7 @@ async function statChartToBase64PNG(chartConfig, w=480, h=300) {
 }
 
 // Strip title/probability from graphConfig for Canvas export unless flagged to include
+function buildQTI(questions, course, vLabel, useGroups=false, pointsPerQ=1) {
   const canvasQ = questions.filter(q => q.type !== "Branched");
 
   // register graph configs so buildQTIZip can resolve placeholders
