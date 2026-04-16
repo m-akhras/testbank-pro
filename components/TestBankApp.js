@@ -598,6 +598,7 @@ function TestBankAppInner() {
   const [selectedForExam, setSelectedForExam] = useState([]);
   const [mutationType, setMutationType] = useState({});
   const [versionCount, setVersionCount] = useState(2);
+  const [masterLocked, setMasterLocked] = useState(false);
   const [versions, setVersions] = useState([]);
   const [activeVersion, setActiveVersion] = useState(0);
   const [bankSearch, setBankSearch] = useState("");
@@ -811,8 +812,9 @@ function TestBankAppInner() {
           }));
           return { label, questions: versioned, classSection };
         });
-        setClassSectionVersions({ [classSection]: allVersions });
-        setVersions(allVersions); setActiveVersion(0);
+        const finalVersions = masterLocked ? [{ ...versions[0], classSection }, ...allVersions] : allVersions;
+        setClassSectionVersions({ [classSection]: finalVersions });
+        setVersions(finalVersions); setActiveVersion(0);
         setActiveClassSection(classSection);
         setPendingType(null); setPasteInput(""); setPendingMeta(null);
         setExamSaved(false); setSaveExamName("");
@@ -828,7 +830,7 @@ function TestBankAppInner() {
         const { selected, labels, numClassSections: ncs } = pendingMeta;
         const newSectionVersions = {};
         for(let s=1; s<=ncs; s++) {
-          newSectionVersions[s] = labels.map(label => {
+          const sectionVariants = labels.map(label => {
             const key = `S${s}_${label}`;
             const qs = parsed[key] || [];
             const versioned = qs.map((q,i) => ({
@@ -839,6 +841,9 @@ function TestBankAppInner() {
             }));
             return { label, questions: versioned, classSection: s };
           });
+          newSectionVersions[s] = masterLocked
+            ? [{ ...versions[0], classSection: s }, ...sectionVariants]
+            : sectionVariants;
         }
         setClassSectionVersions(newSectionVersions);
         setVersions(newSectionVersions[1]);
@@ -939,14 +944,16 @@ function TestBankAppInner() {
   }
 
   function triggerVersions() {
-    const selected = bank
-      .filter(q => selectedForExam.includes(q.id))
-      .sort((a, b) => {
-        const [aMaj, aMin] = sectionSortKey(a.section);
-        const [bMaj, bMin] = sectionSortKey(b.section);
-        return aMaj !== bMaj ? aMaj - bMaj : aMin - bMin;
-      });
-    const labels = VERSIONS.slice(0, versionCount);
+    const selected = masterLocked
+      ? versions[0].questions
+      : bank
+          .filter(q => selectedForExam.includes(q.id))
+          .sort((a, b) => {
+            const [aMaj, aMin] = sectionSortKey(a.section);
+            const [bMaj, bMin] = sectionSortKey(b.section);
+            return aMaj !== bMaj ? aMaj - bMaj : aMin - bMin;
+          });
+    const labels = masterLocked ? VERSIONS.slice(1, 1 + versionCount) : VERSIONS.slice(0, versionCount);
     if (numClassSections > 1) {
       const prompt = buildAllSectionsPrompt(selected, labels, numClassSections, course);
       setGeneratedPrompt(prompt);
@@ -2788,7 +2795,7 @@ ${questionsText}`;
               </div>
             )}
 
-            {/* ── READY TO BUILD panel — questions selected but not yet built ── */}
+            {/* ── STAGE 1: Questions selected, ready to create master ── */}
             {versions.length === 0 && selectedForExam.length > 0 && (() => {
               const selected = bank
                 .filter(q => selectedForExam.includes(q.id))
@@ -2799,7 +2806,6 @@ ${questionsText}`;
                 });
               return (
                 <div>
-                  {/* Selected questions summary */}
                   <div style={{...S.card, borderColor:accent+"44", marginBottom:"1rem"}}>
                     <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"0.75rem", flexWrap:"wrap", gap:"0.5rem"}}>
                       <div>
@@ -2814,8 +2820,6 @@ ${questionsText}`;
                         ✕ Clear selection
                       </button>
                     </div>
-
-                    {/* Question list */}
                     <div style={{display:"flex", flexDirection:"column", gap:"0.3rem", marginBottom:"1rem"}}>
                       {selected.map((q,i) => (
                         <div key={q.id} style={{display:"flex", alignItems:"center", gap:"0.5rem", padding:"0.35rem 0", borderBottom: i < selected.length-1 ? "1px solid "+border+"44" : "none"}}>
@@ -2829,83 +2833,200 @@ ${questionsText}`;
                         </div>
                       ))}
                     </div>
-
-                    {/* Config row */}
-                    <div style={{display:"flex", gap:"1rem", flexWrap:"wrap", alignItems:"flex-end"}}>
-                      <div>
-                        <div style={S.lbl}>Versions per class</div>
-                        <select style={{...S.sel, width:"120px"}} value={versionCount} onChange={e => setVersionCount(Number(e.target.value))}>
-                          {[1,2,3,4,5].map(n => <option key={n} value={n}>{n} version{n>1?"s":""}</option>)}
-                        </select>
-                      </div>
-                      <div>
-                        <div style={S.lbl}>Classroom sections</div>
-                        <input type="number" min={1} max={10} value={numClassSections}
-                          style={{...S.input, width:"80px"}}
-                          onChange={e => setNumClassSections(Math.max(1, Number(e.target.value)||1))} />
-                      </div>
-                      <button
-                        style={S.btn(accent, false)}
-                        onClick={triggerVersions}>
-                        ✦ {numClassSections > 1 ? `Build All ${numClassSections} Sections (1 prompt)` : "Build Versions"}
-                      </button>
-                    </div>
+                    <button
+                      style={{...S.btn("#10b981", false), fontSize:"0.88rem", padding:"0.55rem 1.4rem"}}
+                      onClick={() => {
+                        setVersions([{ label: "A", questions: selected }]);
+                        setActiveVersion(0);
+                        setMasterLocked(false);
+                      }}>
+                      ❆ Create Master Exam (Version A)
+                    </button>
                   </div>
-
-                  {/* Prompt + paste panel */}
-                  {pendingType === "version_all" && generatedPrompt && (
-                    <>
-                      <div style={{fontSize:"0.78rem", color:accent, fontWeight:"600", marginBottom:"0.5rem"}}>
-                        📋 Copy this prompt — paste to Claude — paste response back:
-                      </div>
-                      <div style={S.promptBox}>{generatedPrompt}</div>
-                      <div style={{display:"flex", gap:"0.75rem", marginBottom:"1rem", flexWrap:"wrap"}}>
-                        <button style={{...S.btn("#10b981", autoGenLoading), minWidth:"160px"}}
-                          disabled={autoGenLoading}
-                          onClick={() => autoGenerateVersions(generatedPrompt, pendingType, pendingMeta)}>
-                          {autoGenLoading ? "⏳ Generating..." : "⚡ Generate Versions"}
-                        </button>
-                        {isAdmin && <button style={S.oBtn(accent)} onClick={() => navigator.clipboard.writeText(generatedPrompt)}>Copy Prompt</button>}
-                      </div>
-                      {autoGenError && <div style={{color:"#f87171", fontSize:"0.78rem", marginBottom:"0.75rem"}}>{autoGenError}</div>}
-                      <PastePanel
-                        label="Paste Claude's JSON response here."
-                        S={S} text2={text2}
-                        pasteInput={pasteInput} setPasteInput={setPasteInput}
-                        pasteError={pasteError} handlePaste={handlePaste}
-                        onCancel={() => { setPendingType(null); setPasteInput(""); setGeneratedPrompt(""); }}
-                      />
-                    </>
-                  )}
-                  {pendingType === "version_all_sections" && generatedPrompt && (
-                    <>
-                      <div style={{fontSize:"0.78rem", color:accent, fontWeight:"600", marginBottom:"0.5rem"}}>
-                        📋 Copy this prompt — generates ALL {pendingMeta?.numClassSections} sections × {pendingMeta?.labels?.join(", ")} versions in one go:
-                      </div>
-                      <div style={S.promptBox}>{generatedPrompt}</div>
-                      <div style={{display:"flex", gap:"0.75rem", marginBottom:"1rem", flexWrap:"wrap"}}>
-                        <button style={{...S.btn("#10b981", autoGenLoading), minWidth:"160px"}}
-                          disabled={autoGenLoading}
-                          onClick={() => autoGenerateVersions(generatedPrompt, pendingType, pendingMeta)}>
-                          {autoGenLoading ? "⏳ Generating..." : "⚡ Generate Versions"}
-                        </button>
-                        {isAdmin && <button style={S.oBtn(accent)} onClick={() => navigator.clipboard.writeText(generatedPrompt)}>Copy Prompt</button>}
-                      </div>
-                      {autoGenError && <div style={{color:"#f87171", fontSize:"0.78rem", marginBottom:"0.75rem"}}>{autoGenError}</div>}
-                      <PastePanel
-                        label="Paste the combined JSON response (all sections + versions)."
-                        S={S} text2={text2}
-                        pasteInput={pasteInput} setPasteInput={setPasteInput}
-                        pasteError={pasteError} handlePaste={handlePaste}
-                        onCancel={() => { setPendingType(null); setPasteInput(""); setGeneratedPrompt(""); }}
-                      />
-                    </>
-                  )}
                 </div>
               );
             })()}
 
-            {versions.length > 0 && (
+            {/* ── STAGE 2: Master Version A created — proof and verify ── */}
+            {versions.length === 1 && !masterLocked && (() => {
+              const v = versions[0];
+              return (
+                <div>
+                  <div style={{background:"#451a0322", border:"1px solid #f59e0b44", borderRadius:"8px", padding:"0.75rem 1rem", marginBottom:"1.25rem", display:"flex", alignItems:"center", gap:"0.75rem", flexWrap:"wrap"}}>
+                    <span style={{fontSize:"1.1rem"}}>⚠️</span>
+                    <div style={{flex:1}}>
+                      <div style={{fontSize:"0.82rem", fontWeight:"600", color:"#f59e0b"}}>Export and proof your master exam before generating variants</div>
+                      <div style={{fontSize:"0.72rem", color:text3, marginTop:"0.2rem"}}>Edit any question below, then click “Master Verified” when you’re satisfied with Version A.</div>
+                    </div>
+                  </div>
+                  <div style={{display:"flex", gap:"0.75rem", marginBottom:"1.25rem", flexWrap:"wrap"}}>
+                    <button style={S.btn("#10b981", exportLoading !== "")} disabled={exportLoading !== ""} onClick={async () => {
+                      setExportLoading("Building Word document...");
+                      try {
+                        const blob = await buildDocx(v.questions, v.questions[0]?.course||"Calculus", v.label, null);
+                        dlBlob(blob, `Version_A_Master_Exam.docx`);
+                      } finally { setExportLoading(""); }
+                    }}>⬇ Word (.docx)</button>
+                    <button style={S.oBtn("#06b6d4")} onClick={() => setShowPrintPreview(true)}>
+                      👁 Print Preview
+                    </button>
+                    <button style={S.oBtn("#f43f5e")} disabled={exportLoading !== ""} onClick={async () => {
+                      setExportLoading("Building answer key...");
+                      try {
+                        const blob = await buildAnswerKey([v], v.questions[0]?.course || "Exam");
+                        if (blob) dlBlob(blob, `Version_A_Answer_Key.docx`);
+                      } finally { setExportLoading(""); }
+                    }}>🔑 Answer Key (.docx)</button>
+                    <button style={S.oBtn("#8b5cf6")} onClick={async () => {
+                      const xml = buildQTI(v.questions, v.questions[0]?.course||"Exam", v.label, qtiUseGroups, qtiPointsPerQ);
+                      const blob = await buildQTIZip(xml, `Version_A`);
+                      dlBlob(blob, `Version_A_Canvas_QTI.zip`);
+                    }}>⬇ QTI (.zip)</button>
+                    {exportLoading && <span style={{fontSize:"0.75rem", color:text3, alignSelf:"center"}}>⏳ {exportLoading}</span>}
+                  </div>
+                  {v.questions.map((q,qi) => (
+                    <div key={q.id||qi} style={S.qCard}>
+                      <div style={S.qMeta}>
+                        <span style={{fontWeight:"bold", color:text1}}>Q{qi+1}</span>
+                        <span style={S.tag("#f43f5e")}>{q.type}</span>
+                        <span style={S.tag()}>{q.section}</span>
+                        <span style={S.tag()}>{q.difficulty}</span>
+                        <div style={{marginLeft:"auto", display:"flex", gap:"0.3rem"}}>
+                          <button style={{...S.smBtn, color: inlineEditQId===`master_${qi}` ? "#60a5fa" : "#a78bfa", border:"1px solid #a78bfa44"}}
+                            onClick={() => setInlineEditQId(inlineEditQId===`master_${qi}` ? null : `master_${qi}`)}>
+                            ✏️
+                          </button>
+                        </div>
+                      </div>
+                      {inlineEditQId === `master_${qi}` && (
+                        <InlineEditor
+                          q={q}
+                          onSave={(updated) => {
+                            setVersions([{ ...v, questions: v.questions.map((vq,vqi) => vqi !== qi ? vq : updated) }]);
+                            setInlineEditQId(null);
+                            showToast("Question updated ✓");
+                          }}
+                          onClose={() => setInlineEditQId(null)}
+                        />
+                      )}
+                      {q.type==="Branched" ? (
+                        <>
+                          <div style={{...S.qText,color:"#f43f5e99"}}>Given: <MathText>{q.stem}</MathText></div>
+                          {(q.parts||[]).map((p,pi) => (
+                            <div key={pi} style={{marginBottom:"0.6rem",paddingLeft:"0.75rem",borderLeft:"2px solid "+border}}>
+                              <div style={{fontSize:"0.7rem",color:text3,marginBottom:"0.2rem"}}>({String.fromCharCode(97+pi)})</div>
+                              <div style={S.qText}><MathText>{p.question}</MathText></div>
+                              {p.answer&&<div style={S.ans}>Answer: <MathText>{p.answer}</MathText></div>}
+                              {p.explanation&&<div style={S.expl}>💡 <MathText>{p.explanation}</MathText></div>}
+                            </div>
+                          ))}
+                        </>
+                      ) : (
+                        <>
+                          <div style={S.qText}><MathText>{q.question}</MathText></div>
+                          {q.choices&&<ul style={S.cList}>{q.choices.map((c,ci)=><li key={ci} style={S.cItem(c===q.answer)}>{String.fromCharCode(65+ci)}. <MathText>{c}</MathText></li>)}</ul>}
+                          {q.answer&&<div style={S.ans}>✓ <MathText>{q.answer}</MathText></div>}
+                          {q.explanation&&<div style={S.expl}>💡 <MathText>{q.explanation}</MathText></div>}
+                        </>
+                      )}
+                    </div>
+                  ))}
+                  <div style={{marginTop:"1.5rem", padding:"1rem", background:"#052e1688", borderRadius:"8px", border:"1px solid #22c55e44", display:"flex", alignItems:"center", gap:"1rem", flexWrap:"wrap"}}>
+                    <div style={{flex:1}}>
+                      <div style={{fontSize:"0.85rem", fontWeight:"600", color:"#4ade80"}}>Ready to generate variants?</div>
+                      <div style={{fontSize:"0.72rem", color:text3, marginTop:"0.2rem"}}>This will lock Version A and let you configure B, C, D variants.</div>
+                    </div>
+                    <button
+                      style={{...S.btn("#10b981", false), fontSize:"0.88rem", padding:"0.55rem 1.4rem"}}
+                      onClick={() => setMasterLocked(true)}>
+                      ✅ Master Verified — Generate Variants
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* ── STAGE 3: Master verified — configure variants ── */}
+            {versions.length === 1 && masterLocked && (
+              <div>
+                <div style={{...S.card, borderColor:"#10b98144", marginBottom:"1rem"}}>
+                  <div style={{fontSize:"0.78rem", color:"#10b981", fontWeight:"700", marginBottom:"0.75rem"}}>
+                    ✅ Version A locked · Now configure variants (B, C, D…)
+                  </div>
+                  <div style={{display:"flex", gap:"1rem", flexWrap:"wrap", alignItems:"flex-end"}}>
+                    <div>
+                      <div style={S.lbl}>Variants to generate</div>
+                      <select style={{...S.sel, width:"160px"}} value={versionCount} onChange={e => setVersionCount(Number(e.target.value))}>
+                        {[1,2,3,4].map(n => {
+                          const lbls = VERSIONS.slice(1, 1+n);
+                          return <option key={n} value={n}>{n} variant{n>1?"s":""} ({lbls.join(", ")})</option>;
+                        })}
+                      </select>
+                    </div>
+                    <div>
+                      <div style={S.lbl}>Classroom sections</div>
+                      <input type="number" min={1} max={10} value={numClassSections}
+                        style={{...S.input, width:"80px"}}
+                        onChange={e => setNumClassSections(Math.max(1, Number(e.target.value)||1))} />
+                    </div>
+                    <button style={S.btn(accent, false)} onClick={triggerVersions}>
+                      ❆ {numClassSections > 1 ? `Generate All ${numClassSections} Sections` : "Generate Variants"}
+                    </button>
+                  </div>
+                </div>
+                {pendingType === "version_all" && generatedPrompt && (
+                  <>
+                    <div style={{fontSize:"0.78rem", color:accent, fontWeight:"600", marginBottom:"0.5rem"}}>
+                      📋 Copy this prompt — paste to Claude — paste response back:
+                    </div>
+                    <div style={S.promptBox}>{generatedPrompt}</div>
+                    <div style={{display:"flex", gap:"0.75rem", marginBottom:"1rem", flexWrap:"wrap"}}>
+                      <button style={{...S.btn("#10b981", autoGenLoading), minWidth:"160px"}}
+                        disabled={autoGenLoading}
+                        onClick={() => autoGenerateVersions(generatedPrompt, pendingType, pendingMeta)}>
+                        {autoGenLoading ? "⏳ Generating..." : "⚡ Generate Variants"}
+                      </button>
+                      {isAdmin && <button style={S.oBtn(accent)} onClick={() => navigator.clipboard.writeText(generatedPrompt)}>Copy Prompt</button>}
+                    </div>
+                    {autoGenError && <div style={{color:"#f87171", fontSize:"0.78rem", marginBottom:"0.75rem"}}>{autoGenError}</div>}
+                    <PastePanel
+                      label="Paste Claude's JSON response here."
+                      S={S} text2={text2}
+                      pasteInput={pasteInput} setPasteInput={setPasteInput}
+                      pasteError={pasteError} handlePaste={handlePaste}
+                      onCancel={() => { setPendingType(null); setPasteInput(""); setGeneratedPrompt(""); }}
+                    />
+                  </>
+                )}
+                {pendingType === "version_all_sections" && generatedPrompt && (
+                  <>
+                    <div style={{fontSize:"0.78rem", color:accent, fontWeight:"600", marginBottom:"0.5rem"}}>
+                      📋 Copy this prompt — generates ALL {pendingMeta?.numClassSections} sections × {pendingMeta?.labels?.join(", ")} versions in one go:
+                    </div>
+                    <div style={S.promptBox}>{generatedPrompt}</div>
+                    <div style={{display:"flex", gap:"0.75rem", marginBottom:"1rem", flexWrap:"wrap"}}>
+                      <button style={{...S.btn("#10b981", autoGenLoading), minWidth:"160px"}}
+                        disabled={autoGenLoading}
+                        onClick={() => autoGenerateVersions(generatedPrompt, pendingType, pendingMeta)}>
+                        {autoGenLoading ? "⏳ Generating..." : "⚡ Generate Variants"}
+                      </button>
+                      {isAdmin && <button style={S.oBtn(accent)} onClick={() => navigator.clipboard.writeText(generatedPrompt)}>Copy Prompt</button>}
+                    </div>
+                    {autoGenError && <div style={{color:"#f87171", fontSize:"0.78rem", marginBottom:"0.75rem"}}>{autoGenError}</div>}
+                    <PastePanel
+                      label="Paste the combined JSON response (all sections + versions)."
+                      S={S} text2={text2}
+                      pasteInput={pasteInput} setPasteInput={setPasteInput}
+                      pasteError={pasteError} handlePaste={handlePaste}
+                      onCancel={() => { setPendingType(null); setPasteInput(""); setGeneratedPrompt(""); }}
+                    />
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* ── STAGE 4: Variants generated — full export and compare flow ── */}
+            {versions.length > 1 && (
               <>
                 {/* Save to DB */}
                 {!examSaved && (
@@ -3406,6 +3527,7 @@ ${questionsText}`;
                 setVersions(vers);
               }
               setActiveVersion(0);
+              setMasterLocked(false);
               setExamSaved(true);
               setSaveExamName(exam.name);
               setCourse(vers[0]?.questions?.[0]?.course || null);
