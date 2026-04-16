@@ -1006,11 +1006,11 @@ function TestBankAppInner() {
   }
 
   function defaultSecCfg() {
-    const defTypeCounts = { normal: 1, table: 0, graph: 0, mix: 0 };
+    const defTypeCounts = { normal: 0, table: 0, graph: 0, mix: 0 };
     return {
-      Easy:   { count:1, graphType:"normal", tableRows:4, tableCols:2, typeCounts: {...defTypeCounts} },
-      Medium: { count:1, graphType:"normal", tableRows:5, tableCols:3, typeCounts: {...defTypeCounts} },
-      Hard:   { count:1, graphType:"normal", tableRows:6, tableCols:3, typeCounts: {...defTypeCounts} },
+      Easy:   { count:0, graphType:"normal", tableRows:4, tableCols:2, typeCounts: {...defTypeCounts} },
+      Medium: { count:0, graphType:"normal", tableRows:5, tableCols:3, typeCounts: {...defTypeCounts} },
+      Hard:   { count:0, graphType:"normal", tableRows:6, tableCols:3, typeCounts: {...defTypeCounts} },
     };
   }
 
