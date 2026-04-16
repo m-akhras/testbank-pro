@@ -2008,7 +2008,11 @@ ${questionsText}`;
               <div style={{display:"flex", gap:"0.5rem", flexShrink:0}}>
                 <button style={{...S.oBtn(text2), fontSize:"0.75rem"}} onClick={() => setScreen("generate")}>← Generate More</button>
                 <button style={{...S.oBtn(accent), fontSize:"0.75rem"}} onClick={() => setScreen("bank")}>Browse Bank →</button>
-                <button style={{...S.btn("#8b5cf6", false), fontSize:"0.75rem"}} onClick={() => setScreen("versions")}>Build Exam →</button>
+                <button style={{...S.btn("#8b5cf6", false), fontSize:"0.75rem"}} onClick={() => {
+                  const ids = lastGenerated.map(q => q.id).filter(Boolean);
+                  if (ids.length) setSelectedForExam(prev => [...new Set([...prev, ...ids])]);
+                  setScreen("versions");
+                }}>Build Exam →</button>
               </div>
             </div>
             {lastGenerated.length === 0 && (
@@ -2109,7 +2113,11 @@ ${questionsText}`;
                   }}>🧹 Clean Explanations</button>
                 )}
                 <button style={{...S.oBtn(text2), fontSize:"0.75rem"}} onClick={() => setScreen("generate")}>+ Generate More</button>
-                <button style={{...S.btn("#8b5cf6", false), fontSize:"0.75rem"}} onClick={() => setScreen("versions")}>Build Exam →</button>
+                <button style={{...S.btn("#8b5cf6", false), fontSize:"0.75rem"}} onClick={() => {
+                  const ids = lastGenerated.map(q => q.id).filter(Boolean);
+                  if (ids.length) setSelectedForExam(prev => [...new Set([...prev, ...ids])]);
+                  setScreen("versions");
+                }}>Build Exam →</button>
               </div>
             </div>
 
