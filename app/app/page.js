@@ -1,4 +1,5 @@
-import TestBankApp from "../../components/TestBankApp";
-export default function AppPage() {
-  return <TestBankApp />;
+import { redirect } from "next/navigation";
+
+export default function AppIndexPage() {
+  redirect("/app/dashboard");
 }
