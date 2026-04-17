@@ -3394,6 +3394,9 @@ ${questionsText}`;
                               onClose={() => setInlineEditQId(null)}
                             />
                           )}
+                          {q.hasGraph && q.graphConfig && (
+                            <GraphDisplay graphConfig={q.graphConfig} authorMode={false} />
+                          )}
                           {q.type==="Branched" ? (
                             <>
                               <div style={{...S.qText,color:"#f43f5e99"}}>Given: <MathText>{q.stem}</MathText></div>
@@ -3543,6 +3546,9 @@ ${questionsText}`;
                                   <span style={{background:vc+"22", color:vc, border:`1px solid ${vc}44`, borderRadius:"4px", padding:"0.15rem 0.5rem", fontSize:"0.7rem", fontWeight:"bold"}}>Version {v.label}</span>
                                   <span style={S.tag()}>{q.type}</span>
                                 </div>
+                                {q.hasGraph && q.graphConfig && (
+                                  <GraphDisplay graphConfig={q.graphConfig} authorMode={false} />
+                                )}
                                 {q.type==="Branched" ? (
                                   <>
                                     <div style={{...S.qText,color:vc+"cc"}}>Given: <MathText>{q.stem}</MathText></div>
