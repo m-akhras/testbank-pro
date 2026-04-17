@@ -31,6 +31,9 @@ function toLatex(raw) {
 
   if (s.includes("\\(")) return s;
 
+  // \in set-membership — only recognise with backslash prefix, never bare "in"
+  s = s.replace(/\\in(?![a-zA-Z])/g, "\\(\\in\\)");
+
   const inf = "\\infty";
   const fix = x => x.replace(/\binf(inity)?\b/gi, inf).trim();
 

@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import { COURSES, getCourse, typeInstructions } from "../lib/courses/index.js";
 import { isPipeTable, normalizePipeTable, splitTableBlocks, mathStepsOnly } from "../lib/exports/helpers.js";
-import { evalFn, graphToBase64PNG } from "../lib/exports/graphRendering.js";
+import { evalFn, graphToBase64PNG, statChartToBase64PNG } from "../lib/exports/graphRendering.js";
 import { buildQTI, buildQTIZip, buildClassroomSectionsQTI, buildQTICompare, buildQTIAllSectionsMerged, canvasExportConfig, validateQTIExport } from "../lib/exports/qti.js";
 import { buildAnswerKey, buildDocx, buildDocxCompare } from "../lib/exports/docx.js";
 import { dlFile, dlBlob } from "../lib/exports/utils.js";
@@ -39,7 +39,7 @@ const green3 = "#52B788";
 
 const QTYPES = ["Multiple Choice","Free Response","True/False","Fill in the Blank","Formula","Branched"];
 const DIFFICULTIES = ["Easy","Medium","Hard","Mixed"];
-const VERSIONS = ["A","B","C","D","E"];
+const VERSIONS = ["A","B","C","D","E","F","G","H"];
 
 // ─── Supabase DB helpers ──────────────────────────────────────────────────────
 async function loadBank() {
@@ -597,6 +597,7 @@ function TestBankAppInner() {
   const [lastGenerated, setLastGenerated] = useState([]);
   const [selectedForExam, setSelectedForExam] = useState([]);
   const [mutationType, setMutationType] = useState({});
+  const [versionMutationType, setVersionMutationType] = useState({});
   const [versionCount, setVersionCount] = useState(2);
   const [masterLocked, setMasterLocked] = useState(false);
   const [versions, setVersions] = useState([]);
@@ -671,7 +672,7 @@ function TestBankAppInner() {
         try {
           const isStatChart = q.graphConfig?.type && ["bar","histogram","scatter","discrete_dist","continuous_dist","standard_normal"].includes(q.graphConfig.type);
           const b64 = isStatChart
-            ? await (window.statChartToBase64PNG ? window.statChartToBase64PNG(q.graphConfig, 480, 280) : null)
+            ? await statChartToBase64PNG(q.graphConfig, 480, 280)
             : await graphToBase64PNG(q.graphConfig, 480, 280);
           if (b64) cache[q.id || q.question] = b64;
         } catch(e) { console.warn("print graph failed", e); }
@@ -955,15 +956,15 @@ function TestBankAppInner() {
           });
     const labels = masterLocked ? VERSIONS.slice(1, 1 + versionCount) : VERSIONS.slice(0, versionCount);
     if (numClassSections > 1) {
-      const prompt = buildAllSectionsPrompt(selected, labels, numClassSections, course);
+      const prompt = buildAllSectionsPrompt(selected, labels, numClassSections, course, versionMutationType);
       setGeneratedPrompt(prompt);
       setPendingType("version_all_sections");
-      setPendingMeta({ selected, labels, numClassSections });
+      setPendingMeta({ selected, labels, numClassSections, versionMutationType });
     } else {
-      const prompt = buildAllVersionsPrompt(selected, mutationType, labels, 1, 1, course);
+      const prompt = buildAllVersionsPrompt(selected, mutationType, labels, 1, 1, course, versionMutationType);
       setGeneratedPrompt(prompt);
       setPendingType("version_all");
-      setPendingMeta({ selected, labels, mutationType, classSection: 1 });
+      setPendingMeta({ selected, labels, mutationType, classSection: 1, versionMutationType });
     }
     setPasteInput(""); setPasteError("");
   }
@@ -2595,7 +2596,7 @@ ${questionsText}`;
                   <div style={{display:"flex", alignItems:"center", gap:"0.5rem"}}>
                     <span style={{fontSize:"0.72rem", color:text2}}>Versions per class:</span>
                     <select style={{...S.sel, width:"130px", padding:"0.4rem 0.6rem"}} value={versionCount} onChange={e => setVersionCount(Number(e.target.value))}>
-                      {[1,2,3,4,5].map(n => <option key={n} value={n}>{n} version{n>1?"s":""}</option>)}
+                      {[1,2,3,4,5,6,7,8].map(n => <option key={n} value={n}>{n} version{n>1?"s":""}</option>)}
                     </select>
                   </div>
                   <div style={{display:"flex", alignItems:"center", gap:"0.5rem"}}>
@@ -2957,7 +2958,7 @@ ${questionsText}`;
                     <div>
                       <div style={S.lbl}>Variants to generate</div>
                       <select style={{...S.sel, width:"160px"}} value={versionCount} onChange={e => setVersionCount(Number(e.target.value))}>
-                        {[1,2,3,4].map(n => {
+                        {[1,2,3,4,5,6,7].map(n => {
                           const lbls = VERSIONS.slice(1, 1+n);
                           return <option key={n} value={n}>{n} variant{n>1?"s":""} ({lbls.join(", ")})</option>;
                         })}
@@ -2973,6 +2974,29 @@ ${questionsText}`;
                       ❆ {numClassSections > 1 ? `Generate All ${numClassSections} Sections` : "Generate Variants"}
                     </button>
                   </div>
+                  <div style={{marginTop:"0.75rem"}}>
+                    <div style={S.lbl}>Mutation type per version</div>
+                    <div style={{display:"flex", gap:"0.5rem", flexWrap:"wrap", marginTop:"0.3rem"}}>
+                      {VERSIONS.slice(1, 1 + versionCount).map(lbl => {
+                        const mut = versionMutationType[lbl] || "numbers";
+                        return (
+                          <div key={lbl} style={{display:"flex", alignItems:"center", gap:"0.3rem"}}>
+                            <span style={{fontSize:"0.72rem", color:text1, fontWeight:"600"}}>Ver {lbl}:</span>
+                            <button
+                              style={{...S.smBtn, background: mut==="numbers" ? accent+"22" : "transparent", color: mut==="numbers" ? accent : text2, border:"1px solid "+(mut==="numbers" ? accent+"66" : border)}}
+                              onClick={() => setVersionMutationType(p => ({...p, [lbl]: "numbers"}))}>
+                              numbers
+                            </button>
+                            <button
+                              style={{...S.smBtn, background: mut==="function" ? "#8b5cf622" : "transparent", color: mut==="function" ? "#8b5cf6" : text2, border:"1px solid "+(mut==="function" ? "#8b5cf666" : border)}}
+                              onClick={() => setVersionMutationType(p => ({...p, [lbl]: "function"}))}>
+                              function
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
                 {pendingType === "version_all" && generatedPrompt && (
                   <>
@@ -2980,6 +3004,12 @@ ${questionsText}`;
                       📋 Copy this prompt — paste to Claude — paste response back:
                     </div>
                     <div style={S.promptBox}>{generatedPrompt}</div>
+                    {(() => {
+                      const numQ = pendingMeta?.selected?.length || 0;
+                      const numV = pendingMeta?.labels?.length || 0;
+                      const cost = (numQ * numV * 400 * 3 / 1_000_000) + (numQ * numV * 350 * 15 / 1_000_000);
+                      return <div style={{fontSize:"0.72rem", color:text3, marginBottom:"0.5rem"}}>Estimated cost: ~${cost.toFixed(3)} ({numQ} questions × {numV} versions)</div>;
+                    })()}
                     <div style={{display:"flex", gap:"0.75rem", marginBottom:"1rem", flexWrap:"wrap"}}>
                       <button style={{...S.btn("#10b981", autoGenLoading), minWidth:"160px"}}
                         disabled={autoGenLoading}
@@ -3004,6 +3034,12 @@ ${questionsText}`;
                       📋 Copy this prompt — generates ALL {pendingMeta?.numClassSections} sections × {pendingMeta?.labels?.join(", ")} versions in one go:
                     </div>
                     <div style={S.promptBox}>{generatedPrompt}</div>
+                    {(() => {
+                      const numQ = pendingMeta?.selected?.length || 0;
+                      const numV = pendingMeta?.labels?.length || 0;
+                      const cost = (numQ * numV * 400 * 3 / 1_000_000) + (numQ * numV * 350 * 15 / 1_000_000);
+                      return <div style={{fontSize:"0.72rem", color:text3, marginBottom:"0.5rem"}}>Estimated cost: ~${cost.toFixed(3)} ({numQ} questions × {numV} versions)</div>;
+                    })()}
                     <div style={{display:"flex", gap:"0.75rem", marginBottom:"1rem", flexWrap:"wrap"}}>
                       <button style={{...S.btn("#10b981", autoGenLoading), minWidth:"160px"}}
                         disabled={autoGenLoading}
