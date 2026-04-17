@@ -2610,8 +2610,8 @@ ${questionsText}`;
 
                 {/* Per-section build buttons */}
                 <div style={{display:"flex", gap:"0.5rem", flexWrap:"wrap", marginBottom:"0.5rem"}}>
-                  <button style={S.btn(accent, false)} onClick={() => triggerVersions()}>
-                    ✦ {numClassSections > 1 ? `Build All ${numClassSections} Sections (1 prompt)` : "Build Versions"}
+                  <button style={S.btn(accent, false)} onClick={() => setScreen("versions")}>
+                    ✦ Build Exam →
                   </button>
                   {Object.keys(classSectionVersions).length > 0 && (
                     <button style={{...S.oBtn("#10b981")}} onClick={() => setScreen("versions")}>
