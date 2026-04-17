@@ -2977,7 +2977,24 @@ ${questionsText}`;
                         style={{...S.input, width:"80px"}}
                         onChange={e => setNumClassSections(Math.max(1, Number(e.target.value)||1))} />
                     </div>
-                    <button style={S.btn(accent, false)} onClick={triggerVersions}>
+                    <button style={S.btn(accent, false)} onClick={() => {
+                      // Stage 3: always use Version A questions directly — never re-query bank
+                      const masterQs = versions[0].questions;
+                      console.log("Stage3 triggerVariants masterQs", masterQs.map(q => ({id:q.id, hasGraph:q.hasGraph, hasGC:!!q.graphConfig})));
+                      const varLabels = VERSIONS.slice(1, 1 + versionCount);
+                      if (numClassSections > 1) {
+                        const prompt = buildAllSectionsPrompt(masterQs, varLabels, numClassSections, course, versionMutationType);
+                        setGeneratedPrompt(prompt);
+                        setPendingType("version_all_sections");
+                        setPendingMeta({ selected: masterQs, labels: varLabels, numClassSections, versionMutationType });
+                      } else {
+                        const prompt = buildAllVersionsPrompt(masterQs, mutationType, varLabels, 1, 1, course, versionMutationType);
+                        setGeneratedPrompt(prompt);
+                        setPendingType("version_all");
+                        setPendingMeta({ selected: masterQs, labels: varLabels, mutationType, classSection: 1, versionMutationType });
+                      }
+                      setPasteInput(""); setPasteError("");
+                    }}>
                       ❆ {numClassSections > 1 ? `Generate All ${numClassSections} Sections` : "Generate Variants"}
                     </button>
                   </div>
@@ -3014,8 +3031,11 @@ ${questionsText}`;
                     {(() => {
                       const numQ = pendingMeta?.selected?.length || 0;
                       const numV = pendingMeta?.labels?.length || 0;
-                      const cost = (numQ * numV * 400 * 3 / 1_000_000) + (numQ * numV * 350 * 15 / 1_000_000);
-                      return <div style={{fontSize:"0.72rem", color:text3, marginBottom:"0.5rem"}}>Estimated cost: ~${cost.toFixed(3)} ({numQ} questions × {numV} versions)</div>;
+                      const ncs = pendingMeta?.numClassSections || 1;
+                      const totalVersions = numV * ncs;
+                      const cost = (numQ * totalVersions * 400 * 3 / 1_000_000) + (numQ * totalVersions * 350 * 15 / 1_000_000);
+                      const label = ncs > 1 ? `${numQ} questions × ${numV} versions × ${ncs} sections` : `${numQ} questions × ${numV} versions`;
+                      return <div style={{fontSize:"0.72rem", color:text3, marginBottom:"0.5rem"}}>Estimated cost: ~${cost.toFixed(3)} ({label})</div>;
                     })()}
                     <div style={{display:"flex", gap:"0.75rem", marginBottom:"1rem", flexWrap:"wrap"}}>
                       <button style={{...S.btn("#10b981", autoGenLoading), minWidth:"160px"}}
@@ -3045,8 +3065,11 @@ ${questionsText}`;
                     {(() => {
                       const numQ = pendingMeta?.selected?.length || 0;
                       const numV = pendingMeta?.labels?.length || 0;
-                      const cost = (numQ * numV * 400 * 3 / 1_000_000) + (numQ * numV * 350 * 15 / 1_000_000);
-                      return <div style={{fontSize:"0.72rem", color:text3, marginBottom:"0.5rem"}}>Estimated cost: ~${cost.toFixed(3)} ({numQ} questions × {numV} versions)</div>;
+                      const ncs = pendingMeta?.numClassSections || 1;
+                      const totalVersions = numV * ncs;
+                      const cost = (numQ * totalVersions * 400 * 3 / 1_000_000) + (numQ * totalVersions * 350 * 15 / 1_000_000);
+                      const label = ncs > 1 ? `${numQ} questions × ${numV} versions × ${ncs} sections` : `${numQ} questions × ${numV} versions`;
+                      return <div style={{fontSize:"0.72rem", color:text3, marginBottom:"0.5rem"}}>Estimated cost: ~${cost.toFixed(3)} ({label})</div>;
                     })()}
                     <div style={{display:"flex", gap:"0.75rem", marginBottom:"1rem", flexWrap:"wrap"}}>
                       <button style={{...S.btn("#10b981", autoGenLoading), minWidth:"160px"}}
