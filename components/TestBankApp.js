@@ -774,6 +774,7 @@ function TestBankAppInner() {
 
   async function handlePaste() {
     setPasteError("");
+    console.log("handlePaste pendingMeta.selected", pendingMeta?.selected?.map(q => ({id:q.id, hasGraph:q.hasGraph})));
     try {
       const raw = pasteInput.trim();
 
@@ -809,7 +810,10 @@ function TestBankAppInner() {
             ...sanitize(q), id: uid(), originalId: selected[i]?.id,
             course: selected[i]?.course || course,
             versionLabel: label, classSection, createdAt: Date.now(),
-            ...(selected[i]?.hasGraph ? { hasGraph: true, graphConfig: q.graphConfig || selected[i].graphConfig } : {}),
+            ...(selected[i]?.hasGraph ? {
+              hasGraph: true,
+              graphConfig: q.graphConfig ? { ...selected[i].graphConfig, ...q.graphConfig } : selected[i].graphConfig,
+            } : {}),
           }));
           return { label, questions: versioned, classSection };
         });
@@ -838,7 +842,10 @@ function TestBankAppInner() {
               ...sanitize(q), id: uid(), originalId: selected[i]?.id,
               course: selected[i]?.course || course,
               versionLabel: label, classSection: s, createdAt: Date.now(),
-              ...(selected[i]?.hasGraph ? { hasGraph: true, graphConfig: q.graphConfig || selected[i].graphConfig } : {}),
+              ...(selected[i]?.hasGraph ? {
+                hasGraph: true,
+                graphConfig: q.graphConfig ? { ...selected[i].graphConfig, ...q.graphConfig } : selected[i].graphConfig,
+              } : {}),
             }));
             return { label, questions: versioned, classSection: s };
           });
@@ -3019,6 +3026,7 @@ ${questionsText}`;
                       {isAdmin && <button style={S.oBtn(accent)} onClick={() => navigator.clipboard.writeText(generatedPrompt)}>Copy Prompt</button>}
                     </div>
                     {autoGenError && <div style={{color:"#f87171", fontSize:"0.78rem", marginBottom:"0.75rem"}}>{autoGenError}</div>}
+                    <button id="auto-submit-paste" style={{display:"none"}} onClick={handlePaste} />
                     <PastePanel
                       label="Paste Claude's JSON response here."
                       S={S} text2={text2}
@@ -3049,6 +3057,7 @@ ${questionsText}`;
                       {isAdmin && <button style={S.oBtn(accent)} onClick={() => navigator.clipboard.writeText(generatedPrompt)}>Copy Prompt</button>}
                     </div>
                     {autoGenError && <div style={{color:"#f87171", fontSize:"0.78rem", marginBottom:"0.75rem"}}>{autoGenError}</div>}
+                    <button id="auto-submit-paste" style={{display:"none"}} onClick={handlePaste} />
                     <PastePanel
                       label="Paste the combined JSON response (all sections + versions)."
                       S={S} text2={text2}
