@@ -600,6 +600,10 @@ function TestBankAppInner() {
   const [versionMutationType, setVersionMutationType] = useState({});
   const [versionCount, setVersionCount] = useState(2);
   const [masterLocked, setMasterLocked] = useState(false);
+  const [masterName, setMasterName] = useState("");
+  const [savedMasters, setSavedMasters] = useState([]);
+  const [savingMaster, setSavingMaster] = useState(false);
+  const [mastersLoading, setMastersLoading] = useState(false);
   const [versions, setVersions] = useState([]);
   const [activeVersion, setActiveVersion] = useState(0);
   const [bankSearch, setBankSearch] = useState("");
@@ -734,7 +738,65 @@ function TestBankAppInner() {
     loadBank().then(q => { setBank(q); setBankLoaded(true); });
     loadCustomCourses();
     loadExams().then(e => setSavedExams(e));
+    loadSavedMasters();
   }, []);
+
+  async function loadSavedMasters() {
+    setMastersLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("exams")
+        .select("id, name, master_questions, settings, created_at")
+        .eq("is_master", true)
+        .order("created_at", { ascending: false });
+      if (!error && data) setSavedMasters(data);
+    } catch(e) { console.error("loadSavedMasters error:", e); }
+    finally { setMastersLoading(false); }
+  }
+
+  async function saveMaster() {
+    if (!masterName.trim()) { showToast("Enter a master name first", "error"); return; }
+    setSavingMaster(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const { error } = await supabase.from("exams").insert({
+        name: masterName.trim(),
+        is_master: true,
+        versions: [],
+        master_questions: versions[0].questions,
+        settings: { versionCount, numClassSections, versionMutationType, course },
+        user_id: user.id,
+        created_at: new Date().toISOString(),
+      });
+      if (error) throw error;
+      showToast("Master saved ✓");
+      setMasterName("");
+      loadSavedMasters();
+    } catch(e) {
+      showToast("Save failed: " + e.message, "error");
+    } finally { setSavingMaster(false); }
+  }
+
+  async function deleteSavedMaster(id) {
+    await supabase.from("exams").delete().eq("id", id);
+    setSavedMasters(p => p.filter(m => m.id !== id));
+    showToast("Master deleted");
+  }
+
+  function loadMaster(master) {
+    const { master_questions = [], settings = {} } = master;
+    // Resolve each question: prefer live bank version, fall back to saved snapshot
+    const resolved = master_questions.map(sq => bank.find(q => q.id === sq.id) || sq);
+    setVersions([{ label: "A", questions: resolved }]);
+    setMasterLocked(false);
+    if (settings.versionCount)      setVersionCount(settings.versionCount);
+    if (settings.numClassSections)  setNumClassSections(settings.numClassSections);
+    if (settings.versionMutationType) setVersionMutationType(settings.versionMutationType);
+    if (settings.course)            setCourse(settings.course);
+    setActiveVersion(0);
+    setScreen("versions");
+    showToast(`Loaded "${master.name}" ✓`);
+  }
 
   async function loadCustomCourses() {
     try {
@@ -2790,17 +2852,55 @@ ${questionsText}`;
             )}
 
             {versions.length === 0 && selectedForExam.length === 0 && (
-              <div style={{...S.card, textAlign:"center", padding:"3rem 2rem"}}>
-                <div style={{fontSize:"2.5rem", marginBottom:"1rem"}}>📋</div>
-                <div style={{fontSize:"1rem", fontWeight:"600", color:text1, marginBottom:"0.5rem"}}>No exam built yet</div>
-                <div style={{fontSize:"0.82rem", color:text2, marginBottom:"1.5rem", lineHeight:1.6}}>
-                  Select questions from the bank, then click Build Exam here to create multiple versions.
+              <>
+                <div style={{...S.card, textAlign:"center", padding:"3rem 2rem"}}>
+                  <div style={{fontSize:"2.5rem", marginBottom:"1rem"}}>📋</div>
+                  <div style={{fontSize:"1rem", fontWeight:"600", color:text1, marginBottom:"0.5rem"}}>No exam built yet</div>
+                  <div style={{fontSize:"0.82rem", color:text2, marginBottom:"1.5rem", lineHeight:1.6}}>
+                    Select questions from the bank, then click Build Exam here to create multiple versions.
+                  </div>
+                  <div style={{display:"flex", gap:"0.75rem", justifyContent:"center", flexWrap:"wrap"}}>
+                    <button style={S.btn(accent, false)} onClick={() => setScreen("bank")}>▦ Browse Question Bank</button>
+                    <button style={S.oBtn(text2)} onClick={() => setScreen("generate")}>✦ Generate Questions</button>
+                  </div>
                 </div>
-                <div style={{display:"flex", gap:"0.75rem", justifyContent:"center", flexWrap:"wrap"}}>
-                  <button style={S.btn(accent, false)} onClick={() => setScreen("bank")}>▦ Browse Question Bank</button>
-                  <button style={S.oBtn(text2)} onClick={() => setScreen("generate")}>✦ Generate Questions</button>
-                </div>
-              </div>
+
+                {/* ── Saved Masters ── */}
+                {(mastersLoading || savedMasters.length > 0) && (
+                  <div style={{...S.card, marginTop:"1rem"}}>
+                    <div style={{fontSize:"0.82rem", fontWeight:"700", color:text1, marginBottom:"0.75rem", display:"flex", alignItems:"center", gap:"0.5rem"}}>
+                      💾 Saved Masters
+                      <button onClick={loadSavedMasters} style={{...S.smBtn, marginLeft:"auto", fontSize:"0.68rem"}}>↻ Refresh</button>
+                    </div>
+                    {mastersLoading && <div style={{fontSize:"0.78rem", color:text3, textAlign:"center", padding:"1rem"}}>Loading…</div>}
+                    {!mastersLoading && savedMasters.map(m => (
+                      <div key={m.id} style={{display:"flex", alignItems:"center", gap:"0.6rem", padding:"0.6rem 0", borderBottom:"1px solid "+border+"44", flexWrap:"wrap"}}>
+                        <div style={{flex:1, minWidth:"150px"}}>
+                          <div style={{fontSize:"0.85rem", fontWeight:"600", color:text1}}>{m.name}</div>
+                          <div style={{fontSize:"0.68rem", color:text3, marginTop:"0.15rem"}}>
+                            {new Date(m.created_at).toLocaleDateString()} · {(m.master_questions||[]).length} questions
+                            {m.settings?.course ? ` · ${m.settings.course}` : ""}
+                            {m.settings?.versionCount ? ` · ${m.settings.versionCount} variants` : ""}
+                          </div>
+                        </div>
+                        <button
+                          style={{...S.btn("#10b981", false), fontSize:"0.78rem", padding:"0.3rem 0.8rem"}}
+                          onClick={() => loadMaster(m)}>
+                          ▶ Load
+                        </button>
+                        <button
+                          style={{...S.ghostBtn("#f87171"), fontSize:"0.78rem", padding:"0.3rem 0.7rem"}}
+                          onClick={() => deleteSavedMaster(m.id)}>
+                          🗑
+                        </button>
+                      </div>
+                    ))}
+                    {!mastersLoading && savedMasters.length === 0 && (
+                      <div style={{fontSize:"0.78rem", color:text3, textAlign:"center", padding:"0.75rem"}}>No saved masters yet.</div>
+                    )}
+                  </div>
+                )}
+              </>
             )}
 
             {/* ── STAGE 1: Questions selected, ready to create master ── */}
@@ -2948,6 +3048,23 @@ ${questionsText}`;
                       style={{...S.btn("#10b981", false), fontSize:"0.88rem", padding:"0.55rem 1.4rem"}}
                       onClick={() => setMasterLocked(true)}>
                       ✅ Master Verified — Generate Variants
+                    </button>
+                  </div>
+
+                  {/* ── Save Master ── */}
+                  <div style={{marginTop:"0.75rem", padding:"0.85rem 1rem", background:bg2, borderRadius:"8px", border:"1px solid "+border, display:"flex", alignItems:"center", gap:"0.6rem", flexWrap:"wrap"}}>
+                    <span style={{fontSize:"0.75rem", color:text2, fontWeight:"600", whiteSpace:"nowrap"}}>💾 Save Master</span>
+                    <input
+                      value={masterName}
+                      onChange={e => setMasterName(e.target.value)}
+                      placeholder="Master name (e.g. Quiz 02 MAT116)"
+                      onKeyDown={e => e.key === "Enter" && saveMaster()}
+                      style={{flex:1, minWidth:"200px", padding:"0.35rem 0.6rem", background:bg1, border:"1px solid "+border, color:text1, borderRadius:"6px", fontSize:"0.82rem", fontFamily:"inherit"}} />
+                    <button
+                      onClick={saveMaster}
+                      disabled={savingMaster}
+                      style={{...S.btn("#4f46e5", savingMaster), fontSize:"0.8rem", padding:"0.35rem 0.9rem", opacity: savingMaster ? 0.6 : 1}}>
+                      {savingMaster ? "Saving…" : "💾 Save Master"}
                     </button>
                   </div>
                 </div>
