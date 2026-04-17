@@ -1,7 +1,18 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "Bash(node *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(grep -n \"tokenize\\\\|\\\\\\\\\\\\\\\\in\\\\b\\\\| in \\\\|set membership\" components/TestBankApp.js)",
+      "Bash(grep -n \"tokenize\\\\|\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\in\\\\|'in'\\\\|\\\\\"in\\\\\"\" components/TestBankApp.js)",
+      "Bash(grep -rn \"tokenize\\\\|\\\\\\\\\\\\\\\\in\\\\b\" lib/prompts/)",
+      "Bash(grep -n \"function tokenize\\\\|\\\\\\\\\\\\\\\\bin\\\\\\\\\\\\\\\\b\\\\|\\\\\\\\bin\\\\b\\\\|\\\\\"in\\\\\"\\\\|'in'\" components/TestBankApp.js)",
+      "Bash(grep -n \"tokenize\\\\|\\\\\\\\\\\\\\\\in\\\\b\\\\|\\\\\\\\bin\\\\b\" components/display/MathTextInline.js)",
+      "Bash(grep *)",
+      "Bash(git commit *)"
     ]
   }
 }
