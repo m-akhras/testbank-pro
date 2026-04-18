@@ -269,7 +269,12 @@ export function useGenerate({
         }
         setPendingType(null); setPasteInput(""); setPendingMeta(null);
       }
-    } catch (e) { setPasteError("Error: " + e.message); }
+    } catch (e) {
+      const msg = e instanceof SyntaxError
+        ? "Response was too large or cut off. Try fewer versions at a time (recommended: max 4 versions × 2 sections)."
+        : "Error: " + e.message;
+      setPasteError(msg);
+    }
   }
 
   return {
