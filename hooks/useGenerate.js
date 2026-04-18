@@ -1,11 +1,19 @@
 "use client";
 import { useState } from "react";
+import { createBrowserClient } from "@supabase/ssr";
 import { uid, questionSimilarity } from "../lib/utils/questions.js";
 import {
   buildGeneratePrompt,
   buildVersionPrompt,
   buildReplacePrompt,
 } from "../lib/prompts/index.js";
+
+function getSupabase() {
+  return createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  );
+}
 
 /**
  * Cross-hook dependencies accepted as parameters:
@@ -206,9 +214,17 @@ export function useGenerate({
         for (const q of tagged) {
           // saveQuestion is in useBank — caller must wire this if needed
         }
+        const supabase = getSupabase();
+        for (const q of tagged) {
+          try {
+            await supabase.from("questions").upsert({
+              id: q.id, course: q.course, section: q.section, type: q.type, difficulty: q.difficulty, data: q,
+            });
+          } catch (e) { console.error("persist generated question error:", e); }
+        }
         setBank(prev => [...tagged, ...prev]);
         setPendingType(null); setPasteInput(""); setPendingMeta(null);
-        setScreen("bank");
+        setScreen("review");
       } else if (pendingType === "version") {
         const { selected, label, allVersions, remaining, mutationType: mt } = pendingMeta;
         const versioned = sanitized.map((q, i) => ({

@@ -63,12 +63,7 @@ export default function GeneratePage() {
   );
 
   const autoGenerateWrapped = async (prompt, onSuccess) => {
-    await generate.autoGenerate(prompt, (result) => {
-      onSuccess(result);
-      setTimeout(() => {
-        if (generate.pendingType === "generate") router.push("/app/bank");
-      }, 300);
-    });
+    await generate.autoGenerate(prompt, onSuccess);
   };
 
   return (

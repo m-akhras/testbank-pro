@@ -447,7 +447,13 @@ export default function BankScreen({
                   setGeneratedPrompt(prompt);
                   setPendingType("bank_replace"); setPendingMeta({qId: q.id}); setPasteInput(""); setPasteError("");
                 }}
-                noneOfAbove={false}
+                noneOfAbove={q.noneOfAbove || false}
+                onNoneOfAboveChange={async (id, value) => {
+                  const target = bank.find(bq => bq.id === id);
+                  if (!target) return;
+                  const updated = { ...target, noneOfAbove: value };
+                  await saveQuestion(updated);
+                }}
               >
                 {/* Extra tags (used in exams, duplicates, bankSelectMode) */}
                 {usedInExams[q.id] > 0 && (
