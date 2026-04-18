@@ -31,6 +31,7 @@ export function useExamBuilder({
   setPendingMeta = () => {},
   setPasteInput = () => {},
   setPasteError = () => {},
+  courseObject = null,
 } = {}) {
   const [versions, setVersions] = useState([]);
   const [activeVersion, setActiveVersion] = useState(0);
@@ -157,12 +158,12 @@ export function useExamBuilder({
           });
     const labels = masterLocked ? VERSIONS.slice(1, 1 + versionCount) : VERSIONS.slice(0, versionCount);
     if (numClassSections > 1) {
-      const prompt = buildAllSectionsPrompt(selected, labels, numClassSections, course, versionMutationType);
+      const prompt = buildAllSectionsPrompt(selected, labels, numClassSections, course, versionMutationType, courseObject);
       setGeneratedPrompt(prompt);
       setPendingType("version_all_sections");
       setPendingMeta({ selected, labels, numClassSections, versionMutationType });
     } else {
-      const prompt = buildAllVersionsPrompt(selected, mutationType, labels, 1, 1, course, versionMutationType);
+      const prompt = buildAllVersionsPrompt(selected, mutationType, labels, 1, 1, course, versionMutationType, courseObject);
       setGeneratedPrompt(prompt);
       setPendingType("version_all");
       setPendingMeta({ selected, labels, mutationType, classSection: 1, versionMutationType });

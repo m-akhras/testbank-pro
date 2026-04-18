@@ -34,6 +34,7 @@ export function useGenerate({
   setSaveExamName = () => {},
   showToast = () => {},
   setScreen = () => {},
+  courseObject = null,
 } = {}) {
   const [pendingType, setPendingType] = useState(null);
   const [pendingMeta, setPendingMeta] = useState(null);
@@ -80,7 +81,7 @@ export function useGenerate({
   }
 
   function triggerGenerate() {
-    const prompt = buildGeneratePrompt(course, selectedSections, sectionCounts, qType, diff, sectionConfig);
+    const prompt = buildGeneratePrompt(course, selectedSections, sectionCounts, qType, diff, sectionConfig, courseObject);
     setGeneratedPrompt(prompt);
     setPendingType("generate");
     setPendingMeta({ course });

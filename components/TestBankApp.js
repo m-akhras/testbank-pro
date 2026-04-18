@@ -15,6 +15,9 @@ import PastePanel from "./panels/PastePanel.js";
 import GraphEditor from "./editors/GraphEditor.js";
 import InlineEditor from "./editors/InlineEditor.js";
 import CustomCourseBuilder from "./editors/CustomCourseBuilder.js";
+import CoursesScreen from "./screens/CoursesScreen.jsx";
+import { useCourses } from "../hooks/useCourses.js";
+import { seedBuiltinCourses } from "../lib/supabase/seedCourses.js";
 
 const supabase = createBrowserClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -731,6 +734,9 @@ function TestBankAppInner() {
 
   const [customCourses, setCustomCourses] = useState({});
 
+  const { courses: dbCourses, saveCourse: saveDbCourse, deleteCourse: deleteDbCourse } = useCourses();
+  const courseObject = course ? (dbCourses.find(c => c.name === course) || null) : null;
+
   const allCourses = { ...COURSES, ...customCourses };
   const accent = course ? (allCourses[course]?.color || "#2D6A4F") : "#2D6A4F";
 
@@ -739,6 +745,7 @@ function TestBankAppInner() {
     loadCustomCourses();
     loadExams().then(e => setSavedExams(e));
     loadSavedMasters();
+    seedBuiltinCourses().catch(e => console.error("seedBuiltinCourses error:", e));
   }, []);
 
   async function loadSavedMasters() {
@@ -1000,7 +1007,7 @@ function TestBankAppInner() {
   }
 
   function triggerGenerate() {
-    const prompt = buildGeneratePrompt(course, selectedSections, sectionCounts, qType, diff, sectionConfig);
+    const prompt = buildGeneratePrompt(course, selectedSections, sectionCounts, qType, diff, sectionConfig, courseObject);
     setGeneratedPrompt(prompt);
     setPendingType("generate"); setPendingMeta({ course }); setPasteInput(""); setPasteError("");
   }
@@ -1025,12 +1032,12 @@ function TestBankAppInner() {
           });
     const labels = masterLocked ? VERSIONS.slice(1, 1 + versionCount) : VERSIONS.slice(0, versionCount);
     if (numClassSections > 1) {
-      const prompt = buildAllSectionsPrompt(selected, labels, numClassSections, course, versionMutationType);
+      const prompt = buildAllSectionsPrompt(selected, labels, numClassSections, course, versionMutationType, courseObject);
       setGeneratedPrompt(prompt);
       setPendingType("version_all_sections");
       setPendingMeta({ selected, labels, numClassSections, versionMutationType });
     } else {
-      const prompt = buildAllVersionsPrompt(selected, mutationType, labels, 1, 1, course, versionMutationType);
+      const prompt = buildAllVersionsPrompt(selected, mutationType, labels, 1, 1, course, versionMutationType, courseObject);
       setGeneratedPrompt(prompt);
       setPendingType("version_all");
       setPendingMeta({ selected, labels, mutationType, classSection: 1, versionMutationType });
@@ -1430,6 +1437,9 @@ function TestBankAppInner() {
     { label: "Exam Builder", items: [
       { id:"versions", icon:"⊞", label:"Build & Export" },
       { id:"saved",    icon:"◈", label:"Saved Exams" },
+    ]},
+    { label: "Settings", items: [
+      { id:"courses",  icon:"🎓", label:"Courses", badge: dbCourses.length || null },
     ]},
   ];
 
@@ -2021,7 +2031,7 @@ ${questionsText}`;
                   <button style={S.btn(accent, false)} onClick={async () => {
                     setGenerateConfirm(false);
                     triggerGenerate();
-                    const prompt = buildGeneratePrompt(course, selectedSections, sectionCounts, qType, diff, sectionConfig);
+                    const prompt = buildGeneratePrompt(course, selectedSections, sectionCounts, qType, diff, sectionConfig, courseObject);
                     await autoGenerate(prompt, (result) => {
                       setPasteInput(result);
                       setTimeout(() => { document.getElementById("auto-paste-trigger")?.click(); }, 100);
@@ -2261,7 +2271,7 @@ ${questionsText}`;
                     });
                     const sections = Object.keys(secCfg);
                     const qType = selectedQs[0].type || "Multiple Choice";
-                    const prompt = buildGeneratePrompt(course, sections, {}, qType, null, secCfg);
+                    const prompt = buildGeneratePrompt(course, sections, {}, qType, null, secCfg, courseObject);
                     setBulkReplacePrompt(prompt);
                     setBulkReplaceIds(new Set(bankSelected));
                     setBulkReplacePaste(""); setBulkReplaceError("");
@@ -3100,12 +3110,12 @@ ${questionsText}`;
                       console.log("Stage3 triggerVariants masterQs", masterQs.map(q => ({id:q.id, hasGraph:q.hasGraph, hasGC:!!q.graphConfig})));
                       const varLabels = VERSIONS.slice(1, 1 + versionCount);
                       if (numClassSections > 1) {
-                        const prompt = buildAllSectionsPrompt(masterQs, varLabels, numClassSections, course, versionMutationType);
+                        const prompt = buildAllSectionsPrompt(masterQs, varLabels, numClassSections, course, versionMutationType, courseObject);
                         setGeneratedPrompt(prompt);
                         setPendingType("version_all_sections");
                         setPendingMeta({ selected: masterQs, labels: varLabels, numClassSections, versionMutationType });
                       } else {
-                        const prompt = buildAllVersionsPrompt(masterQs, mutationType, varLabels, 1, 1, course, versionMutationType);
+                        const prompt = buildAllVersionsPrompt(masterQs, mutationType, varLabels, 1, 1, course, versionMutationType, courseObject);
                         setGeneratedPrompt(prompt);
                         setPendingType("version_all");
                         setPendingMeta({ selected: masterQs, labels: varLabels, mutationType, classSection: 1, versionMutationType });
@@ -3725,6 +3735,25 @@ ${questionsText}`;
               setSelectedForExam([]);
               setScreen("versions");
             }}
+          />
+        )}
+
+        {/* COURSES */}
+        {screen === "courses" && (
+          <CoursesScreen
+            courses={dbCourses}
+            saveCourse={saveDbCourse}
+            deleteCourse={deleteDbCourse}
+            setScreen={setScreen}
+            isAdmin={isAdmin}
+            S={S}
+            text1={text1}
+            text2={text2}
+            text3={text3}
+            border={border}
+            accent={accent}
+            bg1={bg1}
+            bg2={bg2}
           />
         )}
 
