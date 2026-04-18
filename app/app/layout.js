@@ -3,6 +3,8 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createBrowserClient } from "@supabase/ssr";
 import Sidebar from "../../components/layout/Sidebar.jsx";
+import { AppProvider } from "../../context/AppContext.js";
+import { ExportProvider } from "../../context/ExportContext.js";
 
 const ADMIN_EMAIL = "mohammadalakhrass@yahoo.com";
 
@@ -41,11 +43,15 @@ export default function AppLayout({ children }) {
   const isAdmin = user?.email === ADMIN_EMAIL;
 
   return (
-    <div style={{ minHeight: "100vh", background: "#F2EDE4", color: "#1C1A16", display: "flex", fontFamily: "system-ui, -apple-system, sans-serif" }}>
-      <Sidebar user={user} isAdmin={isAdmin} />
-      <main style={{ flex: 1, minWidth: 0, padding: "2.5rem 3rem", maxWidth: "1400px", margin: "0 auto" }}>
-        {children}
-      </main>
-    </div>
+    <AppProvider>
+      <ExportProvider>
+        <div style={{ minHeight: "100vh", background: "#F2EDE4", color: "#1C1A16", display: "flex", fontFamily: "system-ui, -apple-system, sans-serif" }}>
+          <Sidebar user={user} isAdmin={isAdmin} />
+          <main style={{ flex: 1, minWidth: 0, padding: "2.5rem 3rem", maxWidth: "1400px", margin: "0 auto", overflow: "auto" }}>
+            {children}
+          </main>
+        </div>
+      </ExportProvider>
+    </AppProvider>
   );
 }
