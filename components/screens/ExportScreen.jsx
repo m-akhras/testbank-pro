@@ -4,6 +4,7 @@ import MathText from "../display/MathText.js";
 import GraphDisplay from "../display/GraphDisplay.js";
 import InlineEditor from "../editors/InlineEditor.js";
 import PastePanel from "../panels/PastePanel.js";
+import { useExportFunctions } from "../../context/ExportFunctionsContext.js";
 
 export default function ExportScreen({
   // Versions state
@@ -43,17 +44,17 @@ export default function ExportScreen({
   exportHighlight,
   logExport,
 
-  // Export helpers (passed from TestBankApp)
-  buildDocx,
-  buildDocxCompare,
-  buildAnswerKey,
-  buildQTI,
-  buildQTIZip,
-  buildQTICompare,
-  buildClassroomSectionsQTI,
-  buildQTIAllSectionsMerged,
-  validateQTIExport,
-  dlBlob,
+  // Export helpers — now resolved from ExportFunctionsContext; props kept as fallback
+  buildDocx: buildDocxProp,
+  buildDocxCompare: buildDocxCompareProp,
+  buildAnswerKey: buildAnswerKeyProp,
+  buildQTI: buildQTIProp,
+  buildQTIZip: buildQTIZipProp,
+  buildQTICompare: buildQTICompareProp,
+  buildClassroomSectionsQTI: buildClassroomSectionsQTIProp,
+  buildQTIAllSectionsMerged: buildQTIAllSectionsMergedProp,
+  validateQTIExport: validateQTIExportProp,
+  dlBlob: dlBlobProp,
 
   // Print preview
   showPrintPreview,
@@ -103,6 +104,18 @@ export default function ExportScreen({
   bg1,
   bg2,
 }) {
+  const exportFns = useExportFunctions() || {};
+  const buildDocx                 = exportFns.buildDocx                 || buildDocxProp;
+  const buildDocxCompare          = exportFns.buildDocxCompare          || buildDocxCompareProp;
+  const buildAnswerKey            = exportFns.buildAnswerKey            || buildAnswerKeyProp;
+  const buildQTI                  = exportFns.buildQTI                  || buildQTIProp;
+  const buildQTIZip               = exportFns.buildQTIZip               || buildQTIZipProp;
+  const buildQTICompare           = exportFns.buildQTICompare           || buildQTICompareProp;
+  const buildClassroomSectionsQTI = exportFns.buildClassroomSectionsQTI || buildClassroomSectionsQTIProp;
+  const buildQTIAllSectionsMerged = exportFns.buildQTIAllSectionsMerged || buildQTIAllSectionsMergedProp;
+  const validateQTIExport         = exportFns.validateQTIExport         || validateQTIExportProp;
+  const dlBlob                    = exportFns.dlBlob                    || dlBlobProp;
+
   if (!versions || versions.length === 0) {
     return (
       <div>
@@ -302,7 +315,23 @@ export default function ExportScreen({
                 🔑 Answer Key (.docx)
               </button>
               {isAdmin && (
-                <button style={S.btn("#7c3aed", validating)} disabled={validating} onClick={autoValidateAllVersions}>
+                <button
+                  style={S.btn("#7c3aed", validating)}
+                  disabled={validating}
+                  onClick={() => {
+                    if (!autoValidateAllVersions) return;
+                    const allVers = Object.keys(classSectionVersions || {}).length > 1
+                      ? Object.values(classSectionVersions).flat()
+                      : versions;
+                    const questionCount = allVers.reduce((sum, v) => sum + v.questions.length, 0);
+                    const estimatedCost = (questionCount * 300 * 3 / 1_000_000) + (questionCount * 200 * 15 / 1_000_000);
+                    const confirmed = window.confirm(
+                      `Auto Validate will check ${questionCount} questions across all versions.\n\nEstimated cost: ~$${estimatedCost.toFixed(4)}\n\nProceed?`
+                    );
+                    if (!confirmed) return;
+                    autoValidateAllVersions();
+                  }}
+                >
                   {validating ? "⏳ Validating..." : "✅ Auto Validate"}
                 </button>
               )}
