@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { createBrowserClient } from "@supabase/ssr";
+import { seedBuiltinCourses, migrateCustomCourses } from "../../lib/supabase/seedCourses.js";
 
 const ADMIN_EMAIL = "mohammadalakhrass@yahoo.com";
 const DEFAULT_MONTHLY_LIMIT = 500;
@@ -22,6 +23,8 @@ export default function AdminPage() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [editingLimit, setEditingLimit] = useState(null);
   const [limitInput, setLimitInput] = useState("");
+  const [seedRunning, setSeedRunning] = useState(false);
+  const [migrateRunning, setMigrateRunning] = useState(false);
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -114,6 +117,32 @@ export default function AdminPage() {
     setSuccess(`Limit updated for ${email}.`);
     setEditingLimit(null);
     loadData();
+  }
+
+  async function handleSeedBuiltins() {
+    setError(""); setSuccess("");
+    setSeedRunning(true);
+    try {
+      const result = await seedBuiltinCourses();
+      setSuccess(`Seed complete — inserted ${result.inserted}, skipped ${result.skipped} already-present.`);
+    } catch (e) {
+      setError(`Seed failed: ${e.message}`);
+    } finally {
+      setSeedRunning(false);
+    }
+  }
+
+  async function handleMigrateCustom() {
+    setError(""); setSuccess("");
+    setMigrateRunning(true);
+    try {
+      const result = await migrateCustomCourses();
+      setSuccess(`Migration complete — inserted ${result.inserted} of ${result.total} rows (${result.skipped} already present).`);
+    } catch (e) {
+      setError(`Migration failed: ${e.message}`);
+    } finally {
+      setMigrateRunning(false);
+    }
   }
 
   async function loadUserHistory(email) {
@@ -224,9 +253,12 @@ export default function AdminPage() {
 
         {/* Tabs */}
         <div style={S.tabs}>
-          {["overview", "add", "history"].map(tab => (
+          {["overview", "add", "history", "data"].map(tab => (
             <button key={tab} style={S.tab(activeTab === tab)} onClick={() => setActiveTab(tab)}>
-              {tab === "overview" ? "👥 Users & Usage" : tab === "add" ? "➕ Add User" : `📋 History${selectedUser ? ` — ${selectedUser.split("@")[0]}` : ""}`}
+              {tab === "overview" ? "👥 Users & Usage"
+                : tab === "add" ? "➕ Add User"
+                : tab === "data" ? "🗄 Data Setup"
+                : `📋 History${selectedUser ? ` — ${selectedUser.split("@")[0]}` : ""}`}
             </button>
           ))}
         </div>
@@ -354,6 +386,52 @@ export default function AdminPage() {
                 {adding ? "Adding..." : "+ Add User"}
               </button>
             </form>
+          </div>
+        )}
+
+        {/* DATA SETUP TAB */}
+        {activeTab === "data" && (
+          <div style={S.card}>
+            <div style={S.cardTitle}>Data Setup</div>
+            <div style={{ fontSize: "0.82rem", color: "#94a3b8", marginBottom: "1.25rem", lineHeight: 1.5 }}>
+              One-time operations for the <code style={{ color: "#e8e8e0" }}>courses</code> table. Both are safe to run
+              repeatedly — rows already present are skipped.
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "1rem", padding: "0.85rem 0", borderBottom: "1px solid #0f1e35" }}>
+                <div>
+                  <div style={{ fontSize: "0.88rem", color: "#e8e8e0", fontWeight: "600" }}>Seed Built-in Courses</div>
+                  <div style={{ fontSize: "0.75rem", color: "#475569", marginTop: "0.2rem" }}>
+                    Inserts Calculus 1-3, QM I/II, Precalculus, Discrete Math with <code>is_builtin: true</code>.
+                  </div>
+                </div>
+                <button
+                  disabled={seedRunning}
+                  onClick={handleSeedBuiltins}
+                  style={{ ...S.btn("#10b981"), opacity: seedRunning ? 0.6 : 1, whiteSpace: "nowrap" }}
+                >
+                  {seedRunning ? "Seeding…" : "🌱 Seed Built-ins"}
+                </button>
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "1rem", padding: "0.85rem 0" }}>
+                <div>
+                  <div style={{ fontSize: "0.88rem", color: "#e8e8e0", fontWeight: "600" }}>Migrate Custom Courses</div>
+                  <div style={{ fontSize: "0.75rem", color: "#475569", marginTop: "0.2rem" }}>
+                    Copies all rows from legacy <code>custom_courses</code> into <code>courses</code> with
+                    {" "}<code>is_builtin: false</code>. The old table is left intact.
+                  </div>
+                </div>
+                <button
+                  disabled={migrateRunning}
+                  onClick={handleMigrateCustom}
+                  style={{ ...S.btn("#3b82f6"), opacity: migrateRunning ? 0.6 : 1, whiteSpace: "nowrap" }}
+                >
+                  {migrateRunning ? "Migrating…" : "📦 Migrate Custom"}
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
