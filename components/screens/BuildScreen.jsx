@@ -107,7 +107,6 @@ export default function BuildScreen({
   bg2,
   courseColors,
 }) {
-  const [configuring, setConfiguring] = useState(false);
   const [inlineEditQId, setInlineEditQId] = useState(null);
   const [orderedSelected, setOrderedSelected] = useState(null);
 
@@ -142,17 +141,17 @@ export default function BuildScreen({
   }
 
   // ── STAGE 1 ── Review Selection ──────────────────────────────────────────
-  if (selectedForExam.length > 0 && versions.length === 0 && !masterLocked && !configuring) {
+  if (selectedForExam.length > 0 && versions.length === 0 && !masterLocked) {
     const selected = selectedQuestions;
     return (
       <div>
         <div style={{ ...S.pageHeader, display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "1rem", flexWrap: "wrap" }}>
           <div>
             <h1 style={S.h1}>Build Exam · Stage 1: Review Selection</h1>
-            <p style={S.sub}>Reorder your questions by dragging, remove any you don't want, then continue to configure.</p>
+            <p style={S.sub}>Reorder by dragging, remove any you don't want, then create the master.</p>
           </div>
           <div style={{ display: "flex", gap: "0.5rem", flexShrink: 0 }}>
-            <a href="/app/bank" style={{ ...S.oBtn(text2), fontSize: "0.75rem", textDecoration: "none", display: "inline-flex", alignItems: "center" }}>← Add More</a>
+            <button style={{ ...S.oBtn(text2), fontSize: "0.75rem" }} onClick={() => setScreen && setScreen("bank")}>← Back to Bank</button>
           </div>
         </div>
 
@@ -201,117 +200,12 @@ export default function BuildScreen({
 
           <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
             <button
-              style={{ ...S.btn(accent, selected.length === 0), fontSize: "0.88rem", padding: "0.55rem 1.4rem" }}
+              style={{ ...S.btn("#10b981", selected.length === 0), fontSize: "0.88rem", padding: "0.55rem 1.4rem" }}
               disabled={selected.length === 0}
               onClick={() => {
-                // Lock the current order into selectedForExam (by id) so downstream uses it
                 setSelectedForExam(selected.map(q => q.id));
-                setConfiguring(true);
-              }}
-            >
-              Continue to Configure →
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // ── STAGE 2 ── Configure ─────────────────────────────────────────────────
-  if (configuring && versions.length === 0 && !masterLocked) {
-    const selected = selectedQuestions;
-    const numQ = selected.length;
-    const totalVersions = versionCount * numClassSections;
-    const overLimit = numQ * totalVersions > 15;
-    const estTokens = Math.round(numQ * totalVersions * 400 + 1500);
-    const estCost = ((numQ * totalVersions * 400 * 3) / 1_000_000 + (numQ * totalVersions * 350 * 15) / 1_000_000).toFixed(3);
-    const variantLabels = VERSIONS.slice(1, 1 + versionCount);
-
-    return (
-      <div>
-        <div style={{ ...S.pageHeader, display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "1rem", flexWrap: "wrap" }}>
-          <div>
-            <h1 style={S.h1}>Build Exam · Stage 2: Configure</h1>
-            <p style={S.sub}>Choose how many variants to generate and how each should mutate the master.</p>
-          </div>
-          <button style={{ ...S.oBtn(text2), fontSize: "0.75rem" }} onClick={() => setConfiguring(false)}>← Back to Review</button>
-        </div>
-
-        <div style={{ ...S.card, borderColor: "#10b98144" }}>
-          <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap", alignItems: "flex-end" }}>
-            <div>
-              <div style={S.lbl}>Variants to generate (after Version A)</div>
-              <select style={{ ...S.sel, width: "200px" }} value={versionCount} onChange={e => setVersionCount(Number(e.target.value))}>
-                {[1, 2, 3, 4, 5, 6, 7].map(n => (
-                  <option key={n} value={n}>
-                    {n} variant{n > 1 ? "s" : ""} ({VERSIONS.slice(1, 1 + n).join(", ")})
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <div style={S.lbl}>Classroom sections</div>
-              <input
-                type="number"
-                min={1}
-                max={10}
-                value={numClassSections}
-                style={{ ...S.input, width: "80px" }}
-                onChange={e => setNumClassSections(Math.max(1, Number(e.target.value) || 1))}
-              />
-            </div>
-          </div>
-
-          <div style={{ marginTop: "0.9rem" }}>
-            <div style={S.lbl}>Mutation type per variant</div>
-            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginTop: "0.3rem" }}>
-              {variantLabels.map(lbl => {
-                const mut = versionMutationType[lbl] || "numbers";
-                return (
-                  <div key={lbl} style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
-                    <span style={{ fontSize: "0.72rem", color: text1, fontWeight: "600" }}>Ver {lbl}:</span>
-                    <button
-                      style={{ ...S.smBtn, background: mut === "numbers" ? accent + "22" : "transparent", color: mut === "numbers" ? accent : text2, border: "1px solid " + (mut === "numbers" ? accent + "66" : border) }}
-                      onClick={() => setVersionMutationType(p => ({ ...p, [lbl]: "numbers" }))}
-                    >
-                      numbers
-                    </button>
-                    <button
-                      style={{ ...S.smBtn, background: mut === "function" ? "#8b5cf622" : "transparent", color: mut === "function" ? "#8b5cf6" : text2, border: "1px solid " + (mut === "function" ? "#8b5cf666" : border) }}
-                      onClick={() => setVersionMutationType(p => ({ ...p, [lbl]: "function" }))}
-                    >
-                      function
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          <div style={{ marginTop: "1rem", padding: "0.75rem 0.9rem", background: bg2, borderRadius: "8px", border: "1px solid " + border }}>
-            <div style={{ fontSize: "0.78rem", color: text1, fontWeight: "600", marginBottom: "0.3rem" }}>Estimated cost</div>
-            <div style={{ fontSize: "0.75rem", color: text2 }}>
-              {numQ} questions × {versionCount} variant{versionCount > 1 ? "s" : ""}
-              {numClassSections > 1 ? ` × ${numClassSections} sections` : ""} = {numQ * totalVersions} generated items
-            </div>
-            <div style={{ fontSize: "0.75rem", color: text2, marginTop: "0.2rem" }}>
-              ~{estTokens.toLocaleString()} tokens · ~${estCost}
-            </div>
-            {overLimit && (
-              <div style={{ fontSize: "0.75rem", color: "#f59e0b", marginTop: "0.45rem", padding: "0.4rem 0.6rem", background: "#451a0322", borderRadius: "6px", border: "1px solid #f59e0b44" }}>
-                ⚠ {numQ * totalVersions} items may exceed Claude's output — consider fewer questions or fewer versions at once.
-              </div>
-            )}
-          </div>
-
-          <div style={{ marginTop: "1.1rem", display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-            <button
-              style={{ ...S.btn("#10b981", false), fontSize: "0.88rem", padding: "0.55rem 1.4rem" }}
-              onClick={() => {
-                // Create master Version A from the ordered selection
                 setVersions([{ label: "A", questions: selected }]);
                 setMasterLocked(true);
-                setConfiguring(false);
               }}
             >
               🏗 Create Master Version A →
@@ -322,7 +216,7 @@ export default function BuildScreen({
     );
   }
 
-  // ── STAGE 3 ── Master Review ─────────────────────────────────────────────
+  // ── STAGE 2 ── Master Review + Configure ─────────────────────────────────
   if (masterLocked && versions.length === 1) {
     const v = versions[0];
 
@@ -334,28 +228,35 @@ export default function BuildScreen({
       const q = v.questions[qi];
       if (!q.choices) return;
       const last = q.choices[q.choices.length - 1];
-      const hasNone = /none of the above/i.test(last || "");
-      const nextChoices = hasNone ? q.choices.slice(0, -1) : [...q.choices, "None of the above"];
+      const hasNone = /none of (these|the above)/i.test(last || "");
+      const nextChoices = hasNone ? q.choices.slice(0, -1) : [...q.choices, "None of these"];
       updateMasterQuestion({ ...q, choices: nextChoices });
     };
+
+    const numQ = v.questions.length;
+    const totalVersions = versionCount * numClassSections;
+    const overLimit = numQ * totalVersions > 15;
+    const estTokens = Math.round(numQ * totalVersions * 400 + 1500);
+    const estCost = ((numQ * totalVersions * 400 * 3) / 1_000_000 + (numQ * totalVersions * 350 * 15) / 1_000_000).toFixed(3);
+    const variantLabels = VERSIONS.slice(1, 1 + versionCount);
 
     return (
       <div>
         <div style={{ ...S.pageHeader, display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "1rem", flexWrap: "wrap" }}>
           <div>
-            <h1 style={S.h1}>Build Exam · Stage 3: Master Review</h1>
-            <p style={S.sub}>Review Version A, edit or swap out questions, then generate variants.</p>
+            <h1 style={S.h1}>Build Exam · Stage 2: Master Review + Configure</h1>
+            <p style={S.sub}>Review Version A, edit or swap out questions, configure variants, then generate.</p>
           </div>
           <div style={{ display: "flex", gap: "0.5rem", flexShrink: 0, flexWrap: "wrap" }}>
             <button
-              style={{ ...S.oBtn(text2), fontSize: "0.75rem" }}
+              style={{ ...S.oBtn("#f87171"), fontSize: "0.75rem" }}
               onClick={() => {
                 setMasterLocked(false);
                 setVersions([]);
-                setConfiguring(true);
+                setOrderedSelected(null);
               }}
             >
-              ← Reconfigure
+              ✕ Discard Master & Start Over
             </button>
           </div>
         </div>
@@ -364,7 +265,7 @@ export default function BuildScreen({
           <span style={{ fontSize: "1.1rem" }}>✅</span>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: "0.82rem", fontWeight: "600", color: "#4ade80" }}>Master Version A locked · {v.questions.length} question{v.questions.length !== 1 ? "s" : ""}</div>
-            <div style={{ fontSize: "0.72rem", color: text3, marginTop: "0.2rem" }}>Click ✏️ to edit, ↻ to replace, or toggle "None of the above" per MCQ.</div>
+            <div style={{ fontSize: "0.72rem", color: text3, marginTop: "0.2rem" }}>Click ✏️ to edit, ↻ to replace, or toggle "None of these" per MCQ.</div>
           </div>
         </div>
 
@@ -389,7 +290,7 @@ export default function BuildScreen({
 
         {v.questions.map((q, qi) => {
           const issues = validateQuestion ? validateQuestion(q) : [];
-          const hasNone = q.choices && /none of the above/i.test(q.choices[q.choices.length - 1] || "");
+          const hasNone = q.choices && /none of (these|the above)/i.test(q.choices[q.choices.length - 1] || "");
           return (
             <div key={q.id || qi} style={S.qCard}>
               <div style={S.qMeta}>
@@ -411,7 +312,7 @@ export default function BuildScreen({
                         onChange={() => toggleNoneOfAbove(qi)}
                         style={{ accentColor: accent, width: "12px", height: "12px" }}
                       />
-                      None of the above
+                      None of these
                     </label>
                   )}
                   <button
@@ -498,7 +399,78 @@ export default function BuildScreen({
           );
         })}
 
-        <div style={{ marginTop: "1.5rem", padding: "1rem", background: "#052e1688", borderRadius: "8px", border: "1px solid #22c55e44", display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
+        {/* Configure variants */}
+        <div style={{ marginTop: "1.5rem", ...S.card, borderColor: "#8b5cf644" }}>
+          <div style={{ fontSize: "0.88rem", fontWeight: "600", color: text1, marginBottom: "0.75rem" }}>⚙ Configure Variants</div>
+
+          <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap", alignItems: "flex-end" }}>
+            <div>
+              <div style={S.lbl}>Variants to generate (after Version A)</div>
+              <select style={{ ...S.sel, width: "200px" }} value={versionCount} onChange={e => setVersionCount(Number(e.target.value))}>
+                {[1, 2, 3, 4, 5, 6, 7].map(n => (
+                  <option key={n} value={n}>
+                    {n} variant{n > 1 ? "s" : ""} ({VERSIONS.slice(1, 1 + n).join(", ")})
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <div style={S.lbl}>Classroom sections</div>
+              <input
+                type="number"
+                min={1}
+                max={10}
+                value={numClassSections}
+                style={{ ...S.input, width: "80px" }}
+                onChange={e => setNumClassSections(Math.max(1, Number(e.target.value) || 1))}
+              />
+            </div>
+          </div>
+
+          <div style={{ marginTop: "0.9rem" }}>
+            <div style={S.lbl}>Mutation type per variant</div>
+            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginTop: "0.3rem" }}>
+              {variantLabels.map(lbl => {
+                const mut = versionMutationType[lbl] || "numbers";
+                return (
+                  <div key={lbl} style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
+                    <span style={{ fontSize: "0.72rem", color: text1, fontWeight: "600" }}>Ver {lbl}:</span>
+                    <button
+                      style={{ ...S.smBtn, background: mut === "numbers" ? accent + "22" : "transparent", color: mut === "numbers" ? accent : text2, border: "1px solid " + (mut === "numbers" ? accent + "66" : border) }}
+                      onClick={() => setVersionMutationType(p => ({ ...p, [lbl]: "numbers" }))}
+                    >
+                      numbers
+                    </button>
+                    <button
+                      style={{ ...S.smBtn, background: mut === "function" ? "#8b5cf622" : "transparent", color: mut === "function" ? "#8b5cf6" : text2, border: "1px solid " + (mut === "function" ? "#8b5cf666" : border) }}
+                      onClick={() => setVersionMutationType(p => ({ ...p, [lbl]: "function" }))}
+                    >
+                      function
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div style={{ marginTop: "1rem", padding: "0.75rem 0.9rem", background: bg2, borderRadius: "8px", border: "1px solid " + border }}>
+            <div style={{ fontSize: "0.78rem", color: text1, fontWeight: "600", marginBottom: "0.3rem" }}>Estimated cost</div>
+            <div style={{ fontSize: "0.75rem", color: text2 }}>
+              {numQ} questions × {versionCount} variant{versionCount > 1 ? "s" : ""}
+              {numClassSections > 1 ? ` × ${numClassSections} sections` : ""} = {numQ * totalVersions} generated items
+            </div>
+            <div style={{ fontSize: "0.75rem", color: text2, marginTop: "0.2rem" }}>
+              ~{estTokens.toLocaleString()} tokens · ~${estCost}
+            </div>
+            {overLimit && (
+              <div style={{ fontSize: "0.75rem", color: "#f59e0b", marginTop: "0.45rem", padding: "0.4rem 0.6rem", background: "#451a0322", borderRadius: "6px", border: "1px solid #f59e0b44" }}>
+                ⚠ {numQ * totalVersions} items may exceed Claude's output — consider fewer questions or fewer versions at once.
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div style={{ marginTop: "1rem", padding: "1rem", background: "#052e1688", borderRadius: "8px", border: "1px solid #22c55e44", display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: "0.85rem", fontWeight: "600", color: "#4ade80" }}>Ready to generate variants?</div>
             <div style={{ fontSize: "0.72rem", color: text3, marginTop: "0.2rem" }}>

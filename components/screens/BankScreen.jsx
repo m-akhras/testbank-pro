@@ -125,6 +125,28 @@ export default function BankScreen({
 }) {
   return (
     <div>
+      {selectedForExam.length > 0 && (
+        <div style={{
+          position:"sticky", top:0, zIndex:10,
+          background:"#10b981", color:"#052e16",
+          padding:"0.6rem 1rem", marginBottom:"0.75rem",
+          borderRadius:"8px",
+          display:"flex", justifyContent:"space-between", alignItems:"center",
+          gap:"0.75rem", flexWrap:"wrap",
+          boxShadow:"0 2px 6px rgba(16,185,129,0.35)"
+        }}>
+          <span style={{fontWeight:"600", fontSize:"0.85rem"}}>
+            ✓ {selectedForExam.length} question{selectedForExam.length === 1 ? "" : "s"} selected
+          </span>
+          <button
+            style={{background:"#052e16", color:"#d1fae5", border:"none", borderRadius:"6px",
+              padding:"0.4rem 0.9rem", fontSize:"0.8rem", fontWeight:"600", cursor:"pointer"}}
+            onClick={() => setScreen && setScreen("build")}
+          >
+            ✓ Done — Back to Build →
+          </button>
+        </div>
+      )}
       <div style={{...S.pageHeader, display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:"1rem", flexWrap:"wrap"}}>
         <div>
           <h1 style={S.h1}>Question Bank</h1>

@@ -27,8 +27,11 @@ export default function BankPage() {
   const bankIssueCount = bank.bank.filter(q => validateQuestion(q).length > 0).length;
   const bankDupCount = bank.duplicateIds.size;
 
-  // Derived filter options
-  const availableSections = [...new Set(bank.bank.map(q => q.section).filter(Boolean))]
+  // Derived filter options — section list scoped to selected course
+  const sectionPool = bank.filterCourse === "All"
+    ? bank.bank
+    : bank.bank.filter(q => q.course === bank.filterCourse);
+  const availableSections = [...new Set(sectionPool.map(q => q.section).filter(Boolean))]
     .sort((a, b) => {
       const [aMaj, aMin] = sectionSortKey(a);
       const [bMaj, bMin] = sectionSortKey(b);

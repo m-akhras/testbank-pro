@@ -96,7 +96,7 @@ export default function QuestionCard({
               ))}
             </ul>
           )}
-          {/* None of the above toggle for MCQ */}
+          {/* "None of these" toggle for MCQ */}
           {q.type === "Multiple Choice" && (
             <label style={{ fontSize: "0.7rem", color: text2, display: "flex", alignItems: "center", gap: "0.4rem", cursor: "pointer", marginBottom: "0.35rem" }}>
               <input
@@ -104,7 +104,7 @@ export default function QuestionCard({
                 checked={noneOfAbove || false}
                 onChange={e => onNoneOfAboveChange && onNoneOfAboveChange(q.id, e.target.checked)}
               />
-              E. None of the above
+              E. None of these
             </label>
           )}
           {q.answer && <div style={S.ans}>✓ <MathText>{q.answer}</MathText></div>}

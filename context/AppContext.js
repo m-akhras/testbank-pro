@@ -1,5 +1,6 @@
 "use client";
 import { createContext, useContext, useRef, useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { createBrowserClient } from "@supabase/ssr";
 import { useBank } from "../hooks/useBank";
 import { useGenerate } from "../hooks/useGenerate";
@@ -7,6 +8,13 @@ import { useExamBuilder } from "../hooks/useExamBuilder";
 import { useExport } from "../hooks/useExport";
 import { useCourses } from "../hooks/useCourses";
 import { COURSES, getCourse } from "../lib/courses/index.js";
+
+const SCREEN_ROUTES = {
+  dashboard: "/app/dashboard", home: "/app/dashboard",
+  generate: "/app/generate", review: "/app/review", bank: "/app/bank",
+  versions: "/app/build", build: "/app/build", export: "/app/export",
+  exams: "/app/exams", saved: "/app/exams", courses: "/app/courses", admin: "/app/admin",
+};
 
 const ADMIN_EMAIL = "mohammadalakhrass@yahoo.com";
 
@@ -38,6 +46,7 @@ function useAuth() {
 export function AppProvider({ children }) {
   const auth = useAuth();
   const { toast, showToast } = useToast();
+  const router = useRouter();
 
   // useGenerate ↔ useExamBuilder setters are mutually required. We bridge with refs:
   // each hook receives setters that delegate through the latest ref snapshot.
@@ -50,15 +59,15 @@ export function AppProvider({ children }) {
   // Bank has no cross-hook deps.
   const bankHook = useBank();
 
-  // Compose a setScreen that no-ops in routed mode — screens call setScreen("bank")
-  // but the route page overrides this with a real router.push wrapper.
-  const setScreenNoop = () => {};
+  // Real router-backed setScreen so hooks like useGenerate.handlePaste can route
+  // on success (e.g. setScreen("review") after a completed generate).
+  const setScreen = (s) => { if (SCREEN_ROUTES[s]) router.push(SCREEN_ROUTES[s]); };
 
   const examBuilderHook = useExamBuilder({
     bank: bankHook.bank,
     get course() { return generateRef.current.course ?? null; },
     showToast,
-    setScreen: setScreenNoop,
+    setScreen,
     setGeneratedPrompt: (...a) => generateRef.current.setGeneratedPrompt?.(...a),
     setPendingType:     (...a) => generateRef.current.setPendingType?.(...a),
     setPendingMeta:     (...a) => generateRef.current.setPendingMeta?.(...a),
@@ -82,7 +91,7 @@ export function AppProvider({ children }) {
     setExamSaved:            examBuilderHook.setExamSaved,
     setSaveExamName:         examBuilderHook.setSaveExamName,
     showToast,
-    setScreen: setScreenNoop,
+    setScreen,
     courseObject: null, // set post-render
   });
   generateRef.current = generateHook;

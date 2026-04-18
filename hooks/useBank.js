@@ -67,7 +67,7 @@ export function useBank() {
         data: q,
       });
       if (error) throw error;
-      setBank(prev => prev.map(bq => bq.id === q.id ? { ...bq, ...q } : bq));
+      setBank(prev => prev.map(bq => bq.id === q.id ? q : bq));
     } catch (e) { console.error("saveQuestion error:", e); }
   }
 
