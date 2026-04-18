@@ -36,6 +36,7 @@ export default function ExamsPage() {
       setCourse={generate.setCourse}
       setSelectedForExam={examBuilder.setSelectedForExam}
       setScreen={setScreen}
+      showToast={ctx.showToast}
       S={S}
       text1={text1} text2={text2} text3={text3} border={border} accent={accent} bg1={bg1} bg2={bg2}
     />

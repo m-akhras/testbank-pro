@@ -53,6 +53,30 @@ function SortableRow({ id, children, S, border, text3 }) {
   );
 }
 
+function SortableMasterCard({ id, children, S, text3 }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  const style = {
+    ...S.qCard,
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    position: "relative",
+  };
+  return (
+    <div ref={setNodeRef} style={style}>
+      <span
+        {...attributes}
+        {...listeners}
+        style={{ position: "absolute", top: "0.5rem", left: "-1.4rem", cursor: "grab", color: text3, fontSize: "1rem", padding: "0 0.25rem", userSelect: "none" }}
+        title="Drag to reorder"
+      >
+        ⋮⋮
+      </span>
+      {children}
+    </div>
+  );
+}
+
 export default function BuildScreen({
   // State
   bank,
@@ -217,11 +241,25 @@ export default function BuildScreen({
   }
 
   // ── STAGE 2 ── Master Review + Configure ─────────────────────────────────
-  if (masterLocked && versions.length === 1) {
+  if (masterLocked === true && versions.length > 0 && versions[0].questions.length > 0) {
     const v = versions[0];
 
     const updateMasterQuestion = updatedQ => {
       setVersions([{ ...v, questions: v.questions.map((q, i) => (q.id === updatedQ.id ? updatedQ : q)) }]);
+    };
+
+    const removeMasterQuestion = (qid) => {
+      setVersions([{ ...v, questions: v.questions.filter(q => q.id !== qid) }]);
+      setSelectedForExam(p => p.filter(id => id !== qid));
+    };
+
+    const handleMasterDragEnd = (event) => {
+      const { active, over } = event;
+      if (!over || active.id === over.id) return;
+      const oldIdx = v.questions.findIndex(q => q.id === active.id);
+      const newIdx = v.questions.findIndex(q => q.id === over.id);
+      if (oldIdx < 0 || newIdx < 0) return;
+      setVersions([{ ...v, questions: arrayMove(v.questions, oldIdx, newIdx) }]);
     };
 
     const toggleNoneOfAbove = (qi) => {
@@ -288,11 +326,13 @@ export default function BuildScreen({
           </button>
         </div>
 
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleMasterDragEnd}>
+          <SortableContext items={v.questions.map(q => q.id)} strategy={verticalListSortingStrategy}>
         {v.questions.map((q, qi) => {
           const issues = validateQuestion ? validateQuestion(q) : [];
           const hasNone = q.choices && /none of (these|the above)/i.test(q.choices[q.choices.length - 1] || "");
           return (
-            <div key={q.id || qi} style={S.qCard}>
+            <SortableMasterCard key={q.id || qi} id={q.id} S={S} text3={text3}>
               <div style={S.qMeta}>
                 <span style={{ fontWeight: "bold", color: text1 }}>Q{qi + 1}</span>
                 <span style={S.tag("#f43f5e")}>{q.type}</span>
@@ -327,6 +367,13 @@ export default function BuildScreen({
                     onClick={() => setInlineEditQId(inlineEditQId === `master_${qi}` ? null : `master_${qi}`)}
                   >
                     ✏️
+                  </button>
+                  <button
+                    style={{ ...S.smBtn, color: "#f87171", border: "1px solid #f8717144" }}
+                    onClick={() => removeMasterQuestion(q.id)}
+                    title="Remove from master"
+                  >
+                    ✕
                   </button>
                 </div>
               </div>
@@ -395,9 +442,11 @@ export default function BuildScreen({
                   )}
                 </>
               )}
-            </div>
+            </SortableMasterCard>
           );
         })}
+          </SortableContext>
+        </DndContext>
 
         {/* Configure variants */}
         <div style={{ marginTop: "1.5rem", ...S.card, borderColor: "#8b5cf644" }}>

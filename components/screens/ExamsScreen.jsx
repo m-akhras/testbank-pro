@@ -1,7 +1,9 @@
 "use client";
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { createBrowserClient } from "@supabase/ssr";
 import { loadExams, loadExportHistory } from "../../lib/supabase/exams.js";
+import { useAppContext } from "../../context/AppContext.js";
 
 function getClient() {
   return createBrowserClient(
@@ -30,6 +32,8 @@ export default function ExamsScreen({
 
   // Navigation
   setScreen,
+  // Toast (optional, not from prev wiring)
+  showToast,
 
   // Styles
   S,
@@ -41,6 +45,9 @@ export default function ExamsScreen({
   bg1,
   bg2,
 }) {
+  const router = useRouter();
+  const { examBuilder, bank: bankHook } = useAppContext();
+
   const [tab, setTab] = useState("exams");
   const [exams, setExams] = useState([]);
   const [examsLoading, setExamsLoading] = useState(true);
@@ -104,16 +111,20 @@ export default function ExamsScreen({
   }
 
   function hydrateAndGoBuild(master) {
-    // Resolve each master question against the current bank (refresh edits), fall back to stored copy
-    const { master_questions = [], settings = {} } = master;
-    const resolved = master_questions.map(sq => (bank || []).find(q => q.id === sq.id) || sq);
-    setVersions && setVersions([{ label: "A", questions: resolved }]);
-    setMasterLocked && setMasterLocked(true);
-    if (setActiveVersion) setActiveVersion(0);
-    // Restore config settings
-    if (loadMaster) loadMaster(master);
-    else setScreen && setScreen("build");
-    setScreen && setScreen("build");
+    const resolvedQuestions = (master.master_questions || []).map(mq => {
+      const fresh = bankHook.bank.find(b => b.id === mq.id);
+      return fresh || mq;
+    });
+
+    examBuilder.setVersions([{ label: "A", questions: resolvedQuestions }]);
+    examBuilder.setMasterLocked(true);
+    examBuilder.setSelectedForExam(resolvedQuestions.map(q => q.id));
+    examBuilder.setVersionCount(master.settings?.versionCount || 2);
+    examBuilder.setNumClassSections(master.settings?.numClassSections || 1);
+    examBuilder.setVersionMutationType(master.settings?.versionMutationType || {});
+
+    router.push("/app/build");
+    if (showToast) showToast(`Loaded "${master.name}" ✓`);
   }
 
   const tabBtn = (key, label, count) => (
