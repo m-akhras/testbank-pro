@@ -172,7 +172,7 @@ export async function POST(req) {
       },
       body: JSON.stringify({
         model: "claude-opus-4-5",
-        max_tokens: 16000,
+        max_tokens: 32000,
         messages: [{ role: "user", content: messageContent }],
       }),
     });

@@ -149,13 +149,15 @@ export function useGenerate({
           return { label, questions: versioned, classSection };
         });
         const finalVersions = masterLocked ? [{ ...versions[0], classSection }, ...allVersions] : allVersions;
+        // Persist to shared state BEFORE navigating. Do NOT clear pendingType/versions
+        // — ExportScreen reads versions straight from examBuilder state.
         setClassSectionVersions({ [classSection]: finalVersions });
         setVersions(finalVersions);
         setActiveVersion(0);
         setActiveClassSection(classSection);
-        setPendingType(null); setPasteInput(""); setPendingMeta(null);
+        setPasteInput("");
         setExamSaved(false); setSaveExamName("");
-        setScreen("versions");
+        setScreen("export");
         return;
       }
 
@@ -184,12 +186,13 @@ export function useGenerate({
             ? [{ ...versions[0], classSection: s }, ...sectionVariants]
             : sectionVariants;
         }
+        // Persist to shared state BEFORE navigating. Do NOT clear pendingType/versions.
         setClassSectionVersions(newSectionVersions);
         setVersions(newSectionVersions[1]);
         setActiveVersion(0); setActiveClassSection(1);
-        setPendingType(null); setPasteInput(""); setPendingMeta(null);
+        setPasteInput("");
         setExamSaved(false); setSaveExamName("");
-        setScreen("versions");
+        setScreen("export");
         return;
       }
 
