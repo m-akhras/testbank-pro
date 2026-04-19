@@ -3518,6 +3518,23 @@ ${questionsText}`;
                                 setInlineEditQId(null);
                                 showToast("Question updated ✓");
                               }}
+                              onSaveAll={(updated) => {
+                                const updVers = versions.map(v => ({
+                                  ...v, questions: v.questions.map((vq,vqi) => vqi !== qi ? vq : { ...vq, question: updated.question, choices: updated.choices })
+                                }));
+                                setVersions(updVers);
+                                setClassSectionVersions(prev => {
+                                  const next = {...prev};
+                                  Object.keys(next).forEach(sec => {
+                                    next[sec] = next[sec].map(v => ({
+                                      ...v, questions: v.questions.map((vq,vqi) => vqi !== qi ? vq : { ...vq, question: updated.question, choices: updated.choices })
+                                    }));
+                                  });
+                                  return next;
+                                });
+                                setInlineEditQId(null);
+                                showToast("Pushed to all versions ✓");
+                              }}
                               onClose={() => setInlineEditQId(null)}
                             />
                           )}

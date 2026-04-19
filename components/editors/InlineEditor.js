@@ -7,7 +7,7 @@ const text1  = "#1C1A16";
 const text2  = "#6B6355";
 const text3  = "#A89E8E";
 
-export default function InlineEditor({ q, onSave, onClose }) {
+export default function InlineEditor({ q, onSave, onSaveAll, onClose }) {
   const [question,  setQuestion]  = useState(q.question  || "");
   const [stem,      setStem]      = useState(q.stem      || "");
   const [choices,   setChoices]   = useState(q.choices   ? [...q.choices] : []);
@@ -112,6 +112,13 @@ export default function InlineEditor({ q, onSave, onClose }) {
             cursor:saving?"not-allowed":"pointer", opacity:saving?0.7:1}}>
           {saving ? "Saving…" : "✓ Save Changes"}
         </button>
+        {onSaveAll && (
+          <button onClick={() => onSaveAll({question, choices, answer, explanation, stem, parts})}
+            style={{padding:"0.35rem 0.9rem", background:"#8b5cf6", color:"#fff",
+              border:"none", borderRadius:"6px", fontSize:"0.78rem", fontWeight:"600", cursor:"pointer"}}>
+            Push to All Versions
+          </button>
+        )}
         <button onClick={onClose}
           style={{padding:"0.35rem 0.8rem", background:"transparent", color:text2,
             border:"1px solid #D9D0C0", borderRadius:"6px", fontSize:"0.78rem", cursor:"pointer"}}>
