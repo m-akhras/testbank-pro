@@ -3758,9 +3758,31 @@ ${questionsText}`;
         {/* COURSES */}
         {screen === "courses" && (
           <CoursesScreen
-            courses={dbCourses}
-            saveCourse={saveDbCourse}
-            deleteCourse={deleteDbCourse}
+            courses={[
+              ...Object.entries(customCourses).map(([name, c]) => ({
+                id: c.id,
+                name,
+                color: c.color,
+                chapters: c.chapters || [],
+                textbook_name: c.textbook || "",
+                is_builtin: false,
+              })),
+              ...dbCourses.filter(c => c.is_builtin),
+            ]}
+            saveCourse={async (courseData) => {
+              await saveCustomCourse({
+                id: courseData.id,
+                name: courseData.name,
+                color: courseData.color,
+                chapters: courseData.chapters || [],
+                textbook: courseData.textbook_name || courseData.textbook || "",
+              });
+            }}
+            deleteCourse={async (id) => {
+              const entry = Object.entries(customCourses).find(([, c]) => c.id === id);
+              if (entry) await deleteCustomCourse(entry[0]);
+              else await deleteDbCourse(id);
+            }}
             setScreen={setScreen}
             isAdmin={isAdmin}
             S={S}
