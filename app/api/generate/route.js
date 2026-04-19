@@ -163,7 +163,7 @@ export async function POST(req) {
       messageContent = prompt;
     }
 
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
+    const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -172,35 +172,63 @@ export async function POST(req) {
       },
       body: JSON.stringify({
         model: "claude-opus-4-5",
-        max_tokens: 32000,
+        max_tokens: 16000,
+        stream: true,
         messages: [{ role: "user", content: messageContent }],
       }),
     });
 
-    if (!res.ok) {
-      const err = await res.text();
-      return Response.json({ error: err }, { status: res.status });
+    if (!anthropicRes.ok) {
+      const err = await anthropicRes.text();
+      return Response.json({ error: err }, { status: anthropicRes.status });
     }
 
-    const data = await res.json();
+    // Accumulate the full streamed text on the server, then return as normal JSON.
+    let fullText = "";
+    let stopReason = "";
+    const decoder = new TextDecoder();
+    const reader = anthropicRes.body.getReader();
 
-    if (data.stop_reason === "max_tokens") {
-      // Try to salvage partial JSON by truncating to last complete object
-      const rawText = data.content?.[0]?.text || "";
-      const repaired = repairTruncatedJSON(rawText);
-      if (repaired) {
-        // Replace text with repaired version and warn
-        const repairedData = {
-          ...data,
-          content: [{ type: "text", text: repaired }],
-          warning: "Response was truncated — some questions were recovered. Try generating fewer questions at once for best results."
-        };
-        return Response.json(repairedData);
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const chunk = decoder.decode(value, { stream: true });
+      for (const line of chunk.split("\n")) {
+        if (!line.startsWith("data: ")) continue;
+        const data = line.slice(6).trim();
+        if (data === "[DONE]") break;
+        try {
+          const evt = JSON.parse(data);
+          if (evt.type === "content_block_delta" && evt.delta?.type === "text_delta") {
+            fullText += evt.delta.text;
+          }
+          if (evt.type === "message_delta" && evt.delta?.stop_reason) {
+            stopReason = evt.delta.stop_reason;
+          }
+        } catch {}
       }
-      return Response.json({ ...data, warning: "Response was truncated — try fewer questions per generation." });
     }
 
-    return Response.json(data);
+    if (stopReason === "max_tokens") {
+      const repaired = repairTruncatedJSON(fullText);
+      if (repaired) {
+        return Response.json({
+          content: [{ type: "text", text: repaired }],
+          stop_reason: "max_tokens",
+          warning: "Response was truncated — some questions were recovered. Try generating fewer questions at once for best results."
+        });
+      }
+      return Response.json({
+        content: [{ type: "text", text: fullText }],
+        stop_reason: "max_tokens",
+        warning: "Response was truncated — try fewer questions per generation."
+      });
+    }
+
+    return Response.json({
+      content: [{ type: "text", text: fullText }],
+      stop_reason: stopReason,
+    });
   } catch (e) {
     return Response.json({ error: e.message }, { status: 500 });
   }

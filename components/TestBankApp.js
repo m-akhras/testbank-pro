@@ -2996,7 +2996,7 @@ ${questionsText}`;
                       } finally { setExportLoading(""); }
                     }}>🔑 Answer Key (.docx)</button>
                     <button style={S.oBtn("#8b5cf6")} onClick={async () => {
-                      const xml = buildQTI(v.questions, v.questions[0]?.course||"Exam", v.label, qtiUseGroups, qtiPointsPerQ);
+                      const xml = buildQTI(v.questions, v.questions[0]?.course||"Exam", v.label, qtiUseGroups, parseFloat(qtiPointsPerQ) || 1);
                       const blob = await buildQTIZip(xml, `Version_A`);
                       dlBlob(blob, `Version_A_Canvas_QTI.zip`);
                     }}>⬇ QTI (.zip)</button>
@@ -3394,9 +3394,9 @@ ${questionsText}`;
                             </label>
                             <label style={{display:"flex", alignItems:"center", gap:"0.4rem", fontSize:"0.78rem", color:text2}}>
                               Points per question:
-                              <input type="number" min={1} max={100} value={qtiPointsPerQ}
-                                onChange={e => setQtiPointsPerQ(Number(e.target.value)||1)}
-                                style={{width:"52px", ...S.input, padding:"0.25rem 0.4rem", fontSize:"0.78rem"}} />
+                              <input type="number" min={0.25} max={100} step={0.25} value={qtiPointsPerQ}
+                                onChange={e => setQtiPointsPerQ(e.target.value)}
+                                style={{width:"60px", ...S.input, padding:"0.25rem 0.4rem", fontSize:"0.78rem"}} />
                             </label>
                           </div>
                           <div style={{fontSize:"0.72rem", color:text3, marginBottom:"0.75rem"}}>
@@ -3419,7 +3419,7 @@ ${questionsText}`;
                                 const examTitle = qtiExamName.trim() || versions[0]?.questions[0]?.course || "Exam";
                                 const blobs = await buildClassroomSectionsQTI(
                                   {[sec]: classSectionVersions[sec]},
-                                  examTitle, qtiUseGroups, qtiPointsPerQ
+                                  examTitle, qtiUseGroups, parseFloat(qtiPointsPerQ) || 1
                                 );
                                 const safeName = (qtiExamName.trim() || "Section").replace(/[^a-zA-Z0-9]/g,"_");
                                 dlBlob(blobs[sec], `${safeName}_S${sec}_QTI.zip`);
@@ -3428,7 +3428,7 @@ ${questionsText}`;
                             <button style={S.btn("#10b981", false)} onClick={async () => {
                               const examTitle = qtiExamName.trim() || versions[0]?.questions[0]?.course || "Exam";
                               const blobs = await buildClassroomSectionsQTI(
-                                classSectionVersions, examTitle, qtiUseGroups, qtiPointsPerQ
+                                classSectionVersions, examTitle, qtiUseGroups, parseFloat(qtiPointsPerQ) || 1
                               );
                               const safeName = (qtiExamName.trim() || "Section").replace(/[^a-zA-Z0-9]/g,"_");
                               for(const [sec, blob] of Object.entries(blobs)){
@@ -3448,21 +3448,21 @@ ${questionsText}`;
                             </label>
                             <label style={{display:"flex", alignItems:"center", gap:"0.4rem", fontSize:"0.78rem", color:text2}}>
                               Points per question:
-                              <input type="number" min={1} max={100} value={qtiPointsPerQ}
-                                onChange={e => setQtiPointsPerQ(Number(e.target.value)||1)}
-                                style={{width:"52px", ...S.input, padding:"0.25rem 0.4rem", fontSize:"0.78rem"}} />
+                              <input type="number" min={0.25} max={100} step={0.25} value={qtiPointsPerQ}
+                                onChange={e => setQtiPointsPerQ(e.target.value)}
+                                style={{width:"60px", ...S.input, padding:"0.25rem 0.4rem", fontSize:"0.78rem"}} />
                             </label>
                           </div>
                           <div style={{display:"flex", gap:"0.5rem", flexWrap:"wrap"}}>
                             {versions.map(v => (
                               <button key={v.label} style={S.oBtn("#8b5cf6")} onClick={async () => {
-                                const xml = buildQTI(v.questions, v.questions[0]?.course||"Exam", v.label, qtiUseGroups, qtiPointsPerQ);
+                                const xml = buildQTI(v.questions, v.questions[0]?.course||"Exam", v.label, qtiUseGroups, parseFloat(qtiPointsPerQ) || 1);
                                 const blob = await buildQTIZip(xml, `Version_${v.label}`);
                                 dlBlob(blob, `Version_${v.label}_Canvas_QTI.zip`);
                               }}>⬇ V{v.label} QTI (.zip)</button>
                             ))}
                             <button style={S.btn("#8b5cf6", false)} onClick={async () => {
-                              const xml = buildQTICompare(versions, versions[0]?.questions[0]?.course || "Exam", qtiUseGroups, qtiPointsPerQ);
+                              const xml = buildQTICompare(versions, versions[0]?.questions[0]?.course || "Exam", qtiUseGroups, parseFloat(qtiPointsPerQ) || 1);
                               const blob = await buildQTIZip(xml, "AllVersions");
                               dlBlob(blob, "AllVersions_Canvas_QTI.zip");
                             }}>⬇ All Versions QTI (.zip)</button>
@@ -3625,9 +3625,9 @@ ${questionsText}`;
                           </label>
                           <label style={{display:"flex", alignItems:"center", gap:"0.4rem", fontSize:"0.78rem", color:text2}}>
                             Points per question:
-                            <input type="number" min={1} max={100} value={qtiPointsPerQ}
-                              onChange={e => setQtiPointsPerQ(Number(e.target.value)||1)}
-                              style={{width:"52px", ...S.input, padding:"0.25rem 0.4rem", fontSize:"0.78rem"}} />
+                            <input type="number" min={0.25} max={100} step={0.25} value={qtiPointsPerQ}
+                              onChange={e => setQtiPointsPerQ(e.target.value)}
+                              style={{width:"60px", ...S.input, padding:"0.25rem 0.4rem", fontSize:"0.78rem"}} />
                           </label>
                         </div>
                       </div>
@@ -3636,14 +3636,14 @@ ${questionsText}`;
                       <div style={{display:"flex", gap:"0.75rem", marginBottom:"1.25rem", flexWrap:"wrap", alignItems:"center"}}>
                         <span style={{fontSize:"0.72rem", color:accent, fontWeight:"bold"}}>Canvas export — one file, all versions:</span>
                         <button style={S.btn("#8b5cf6", false)} onClick={async () => {
-                          const xml = buildQTICompare(versions, versions[0]?.questions[0]?.course || "Exam", qtiUseGroups, qtiPointsPerQ);
+                          const xml = buildQTICompare(versions, versions[0]?.questions[0]?.course || "Exam", qtiUseGroups, parseFloat(qtiPointsPerQ) || 1);
                           const blob = await buildQTIZip(xml, "AllVersions");
                           dlBlob(blob, "AllVersions_Canvas_QTI.zip");
                         }}>⬇ Export to Canvas (QTI .zip)</button>
                         {Object.keys(classSectionVersions).length > 1 && (
                           <button style={S.btn("#f59e0b", false)} onClick={async () => {
                             const course = versions[0]?.questions[0]?.course || "Exam";
-                            const xml = buildQTIAllSectionsMerged(classSectionVersions, course, qtiPointsPerQ);
+                            const xml = buildQTIAllSectionsMerged(classSectionVersions, course, parseFloat(qtiPointsPerQ) || 1);
                             const blob = await buildQTIZip(xml, "AllSections_Merged");
                             dlBlob(blob, "AllSections_Merged_QTI.zip");
                           }}>⬇ All Sections Merged QTI</button>
