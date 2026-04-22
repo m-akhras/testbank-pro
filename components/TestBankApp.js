@@ -608,7 +608,12 @@ function TestBankAppInner() {
   const [savedMasters, setSavedMasters] = useState([]);
   const [savingMaster, setSavingMaster] = useState(false);
   const [mastersLoading, setMastersLoading] = useState(false);
-  const [versions, setVersions] = useState([]);
+  const [versions, setVersions] = useState(() => {
+    try {
+      const saved = localStorage.getItem("tbp_versions");
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  });
   const [activeVersion, setActiveVersion] = useState(0);
   const [bankSearch, setBankSearch] = useState("");
   const [bankCompact, setBankCompact] = useState(false);
@@ -730,7 +735,12 @@ function TestBankAppInner() {
   // ── Classroom sections ──
   const [numClassSections, setNumClassSections] = useState(1);
   const [currentClassSection, setCurrentClassSection] = useState(1);
-  const [classSectionVersions, setClassSectionVersions] = useState({}); // {1: [...versions], 2: [...versions]}
+  const [classSectionVersions, setClassSectionVersions] = useState(() => {
+    try {
+      const saved = localStorage.getItem("tbp_classSectionVersions");
+      return saved ? JSON.parse(saved) : {};
+    } catch { return {}; }
+  }); // {1: [...versions], 2: [...versions]}
   const [activeClassSection, setActiveClassSection] = useState(1);
 
   const [customCourses, setCustomCourses] = useState({});
@@ -748,6 +758,18 @@ function TestBankAppInner() {
     loadSavedMasters();
     seedBuiltinCourses().catch(e => console.error("seedBuiltinCourses error:", e));
   }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("tbp_versions", JSON.stringify(versions));
+    } catch {}
+  }, [versions]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("tbp_classSectionVersions", JSON.stringify(classSectionVersions));
+    } catch {}
+  }, [classSectionVersions]);
 
   async function loadSavedMasters() {
     setMastersLoading(true);
