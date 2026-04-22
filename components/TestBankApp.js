@@ -2830,7 +2830,7 @@ ${questionsText}`;
                                   const allIn = ids.every(id => prev.includes(id));
                                   return allIn ? prev.filter(id => !ids.includes(id)) : [...new Set([...prev, ...ids])];
                                 });
-                                setScreen("versions");
+                                setTimeout(() => setScreen("versions"), 0);
                               }}>
                               + Add to Exam
                             </button>
@@ -2937,7 +2937,7 @@ ${questionsText}`;
             )}
 
             {/* ── STAGE 1: Questions selected, ready to create master ── */}
-            {versions.length === 0 && selectedForExam.length > 0 && (() => {
+            {selectedForExam.length > 0 && (() => {
               const selected = bank
                 .filter(q => selectedForExam.includes(q.id))
                 .sort((a,b) => {
