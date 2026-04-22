@@ -56,4 +56,13 @@ describe("mathToCanvasHTML — Canvas equation_image output", () => {
     const out = mathToCanvasHTML("Find the area.");
     expect(out).toBe("Find the area.");
   });
+
+  test("double integral over D of ln(y) dA → exactly one equation_image, no orphan \\(...\\)", () => {
+    const out = mathToCanvasHTML("double integral over D of ln(y) dA");
+    console.log("double integral ln(y):", out);
+    const imgCount = (out.match(/<img class="equation_image"/g) || []).length;
+    expect(imgCount).toBe(1);
+    expect(out).not.toMatch(/\\\(/);
+    expect(out).not.toMatch(/\\\)/);
+  });
 });
