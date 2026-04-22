@@ -18,6 +18,7 @@ import CustomCourseBuilder from "./editors/CustomCourseBuilder.js";
 import CoursesScreen from "./screens/CoursesScreen.jsx";
 import { useCourses } from "../hooks/useCourses.js";
 import { seedBuiltinCourses } from "../lib/supabase/seedCourses.js";
+import { normalizeUnicodeMath } from "../lib/normalizeUnicodeMath";
 
 const supabase = createBrowserClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,

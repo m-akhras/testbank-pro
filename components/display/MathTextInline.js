@@ -1,10 +1,11 @@
 "use client";
 import { useRef, useEffect } from "react";
+import { normalizeUnicodeMath } from "../../lib/normalizeUnicodeMath";
 
 // ── KaTeX helpers (module-private) ──────────────────────────────────────────
 
 function innerLatex(expr) {
-  let e = String(expr ?? "");
+  let e = normalizeUnicodeMath(String(expr ?? ""));
   e = e.replace(/\btheta\b/gi, '\\theta');
   e = e.replace(/\bphi\b/gi, '\\phi');
   e = e.replace(/(?<![a-zA-Z])pi(?![a-zA-Z])/g, '\\pi');
@@ -27,7 +28,7 @@ function innerLatex(expr) {
 }
 
 function toLatex(raw) {
-  let s = String(raw ?? "");
+  let s = normalizeUnicodeMath(String(raw ?? ""));
 
   if (s.includes("\\(")) return s;
 

@@ -12,7 +12,8 @@
       "Bash(grep -n \"function tokenize\\\\|\\\\\\\\\\\\\\\\bin\\\\\\\\\\\\\\\\b\\\\|\\\\\\\\bin\\\\b\\\\|\\\\\"in\\\\\"\\\\|'in'\" components/TestBankApp.js)",
       "Bash(grep -n \"tokenize\\\\|\\\\\\\\\\\\\\\\in\\\\b\\\\|\\\\\\\\bin\\\\b\" components/display/MathTextInline.js)",
       "Bash(grep *)",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "Bash(npm install *)"
     ]
   }
 }
