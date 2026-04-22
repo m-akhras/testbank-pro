@@ -38,6 +38,15 @@ function toLatex(raw) {
   const inf = "\\infty";
   const fix = x => x.replace(/\binf(inity)?\b/gi, inf).trim();
 
+  s = s.replace(/\bdouble\s+integral\s+from\s+(\S+)\s+to\s+(\S+)\s+of\s+integral\s+from\s+(\S+)\s+to\s+(\S+)\s+of\s+(.+?)\s+d([a-z])\s*d([a-z])\b/gi,
+    (_,a,b,c,d,f,v1,v2) => `\\(\\iint_{${fix(a)}}^{${fix(b)}} ${innerLatex(f)}\\,d${v1}\\,d${v2}\\)`);
+
+  s = s.replace(/\bdouble\s+integral\s+(.+?)\s+d([a-z])\s*d([a-z])\b/gi,
+    (_,f,v1,v2) => `\\(\\iint ${innerLatex(f)}\\,d${v1}\\,d${v2}\\)`);
+
+  s = s.replace(/\btriple\s+integral\s+(.+?)\s+d([a-z])\s*d([a-z])\s*d([a-z])\b/gi,
+    (_,f,v1,v2,v3) => `\\(\\iiint ${innerLatex(f)}\\,d${v1}\\,d${v2}\\,d${v3}\\)`);
+
   s = s.replace(/\bintegral\s+from\s+(\S+)\s+to\s+(\S+)\s+of\s+(.+?)\s+d([a-z])\b/gi,
     (_,a,b,f,v)=>`\\(\\int_{${fix(innerLatex(a))}}^{${fix(innerLatex(b))}} ${innerLatex(f)}\\,d${v}\\)`);
   s = s.replace(/\bintegral\s+of\s+(.+?)\s+d([a-z])\b/gi,
