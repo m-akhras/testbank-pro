@@ -38,8 +38,17 @@ function toLatex(raw) {
   const inf = "\\infty";
   const fix = x => x.replace(/\binf(inity)?\b/gi, inf).trim();
 
+  s = s.replace(/\bdouble\s+integral\s+over\s+(\w+)\s+of\s+(.+?)\s+dA\b/gi,
+    (_,region,f) => `\\(\\iint_{${region}} ${innerLatex(f)}\\,dA\\)`);
+
+  s = s.replace(/\btriple\s+integral\s+over\s+(\w+)\s+of\s+(.+?)\s+dV\b/gi,
+    (_,region,f) => `\\(\\iiint_{${region}} ${innerLatex(f)}\\,dV\\)`);
+
   s = s.replace(/\bdouble\s+integral\s+from\s+(\S+)\s+to\s+(\S+)\s+of\s+integral\s+from\s+(\S+)\s+to\s+(\S+)\s+of\s+(.+?)\s+d([a-z])\s*d([a-z])\b/gi,
-    (_,a,b,c,d,f,v1,v2) => `\\(\\iint_{${fix(a)}}^{${fix(b)}} ${innerLatex(f)}\\,d${v1}\\,d${v2}\\)`);
+    (_,a,b,c,d,f,v1,v2) => `\\(\\int_{${fix(a)}}^{${fix(b)}}\\int_{${fix(c)}}^{${fix(d)}} ${innerLatex(f)}\\,d${v1}\\,d${v2}\\)`);
+
+  s = s.replace(/\bdouble\s+integral\s+of\s+(.+?)\s+dA\b/gi,
+    (_,f) => `\\(\\iint ${innerLatex(f)}\\,dA\\)`);
 
   s = s.replace(/\bdouble\s+integral\s+(.+?)\s+d([a-z])\s*d([a-z])\b/gi,
     (_,f,v1,v2) => `\\(\\iint ${innerLatex(f)}\\,d${v1}\\,d${v2}\\)`);
