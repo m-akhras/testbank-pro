@@ -1,48 +1,59 @@
-const { mathToHTML } = require("../lib/exports/helpers");
+const { mathToHTML, mathToCanvasHTML } = require("../lib/exports/helpers");
 
-describe("mathToHTML uses Canvas math_inline spans with LaTeX", () => {
-  const input = "y = sqrt(x) and y = x^3 for 0 <= x <= 1";
-
-  test("output contains Canvas math_inline span", () => {
-    const out = mathToHTML(input);
-    console.log("mathToHTML output:", out);
-    expect(out).toContain('class="math_inline"');
+describe("mathToHTML — KaTeX-style \\(...\\) output (unchanged)", () => {
+  test("sqrt wraps in \\(\\sqrt{...}\\)", () => {
+    expect(mathToHTML("sqrt(x)")).toContain("\\(\\sqrt{x}\\)");
   });
 
-  test("output contains LaTeX sqrt inside span", () => {
-    expect(mathToHTML(input)).toContain('<span class="math_inline">\\(\\sqrt{');
+  test("does not contain equation_image", () => {
+    expect(mathToHTML("sqrt(x)")).not.toContain("equation_image");
   });
 
-  test("output does not contain raw √", () => {
-    expect(mathToHTML(input)).not.toContain("√");
+  test("<= becomes \\(\\leq\\)", () => {
+    expect(mathToHTML("x <= 1")).toContain("\\(\\leq\\)");
+    expect(mathToHTML("x <= 1")).not.toContain("≤");
+  });
+});
+
+describe("mathToCanvasHTML — Canvas equation_image output", () => {
+  test("sqrt produces equation_image img tag", () => {
+    const out = mathToCanvasHTML("sqrt(x)");
+    console.log("mathToCanvasHTML('sqrt(x)'):", out);
+    expect(out).toContain('<img class="equation_image"');
   });
 
-  test("output uses \\leq inside span, not raw ≤", () => {
-    const out = mathToHTML(input);
-    expect(out).toContain('<span class="math_inline">\\(\\leq\\)</span>');
+  test("equation_image src contains URL-encoded LaTeX", () => {
+    const out = mathToCanvasHTML("sqrt(x)");
+    expect(out).toContain("/equation_images/");
+    expect(out).toContain("\\sqrt");
+  });
+
+  test("output does NOT contain literal \\(...\\) delimiters", () => {
+    const out = mathToCanvasHTML("sqrt(x)");
+    expect(out).not.toMatch(/\\\(.*\\\)/);
+  });
+
+  test("<= becomes equation_image with \\leq", () => {
+    const out = mathToCanvasHTML("x <= 1");
+    expect(out).toContain('<img class="equation_image"');
+    expect(out).toContain("\\leq");
     expect(out).not.toContain("≤");
   });
 
-  test("output uses \\geq inside span, not raw ≥", () => {
-    const out = mathToHTML("x >= 0");
-    expect(out).toContain('<span class="math_inline">\\(\\geq\\)</span>');
-    expect(out).not.toContain("≥");
+  test("exponent produces equation_image", () => {
+    const out = mathToCanvasHTML("x^3");
+    expect(out).toContain('<img class="equation_image"');
   });
 
-  test("output uses \\neq inside span, not raw ≠", () => {
-    const out = mathToHTML("x != y");
-    expect(out).toContain('<span class="math_inline">\\(\\neq\\)</span>');
-    expect(out).not.toContain("≠");
-  });
-
-  test("exponents wrapped in Canvas math_inline span", () => {
-    expect(mathToHTML("x^3")).toContain('<span class="math_inline">\\(x^{3}\\)</span>');
-  });
-
-  test("pipe table cells also use math_inline spans", () => {
+  test("pipe table cells use equation_image", () => {
     const table = "| x | sqrt(x) |\n|---|---|\n| 4 | 2 |";
-    const out = mathToHTML(table);
+    const out = mathToCanvasHTML(table);
     expect(out).toContain("<table");
-    expect(out).toContain('<span class="math_inline">\\(\\sqrt{');
+    expect(out).toContain('<img class="equation_image"');
+  });
+
+  test("plain text passes through unchanged", () => {
+    const out = mathToCanvasHTML("Find the area.");
+    expect(out).toBe("Find the area.");
   });
 });
