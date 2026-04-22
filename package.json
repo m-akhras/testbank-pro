@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "test": "jest"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.82.0",
@@ -17,5 +18,10 @@
     "pdf-parse": "^2.4.5",
     "react": "^18",
     "react-dom": "^18"
+  },
+  "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "jest": "^30.3.0",
+    "jest-environment-node": "^30.3.0"
   }
 }
