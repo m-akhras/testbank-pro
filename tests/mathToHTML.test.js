@@ -33,16 +33,16 @@ describe("mathToCanvasHTML — Canvas equation_image output", () => {
     expect(out).not.toMatch(/\\\(.*\\\)/);
   });
 
-  test("<= becomes equation_image with \\leq", () => {
+  test("<= becomes ≤ plain HTML (no equation_image needed)", () => {
     const out = mathToCanvasHTML("x <= 1");
-    expect(out).toContain('<img class="equation_image"');
-    expect(out).toContain("\\leq");
-    expect(out).not.toContain("≤");
+    expect(out).not.toContain('<img class="equation_image"');
+    expect(out).toContain("≤");
   });
 
-  test("exponent produces equation_image", () => {
+  test("simple exponent becomes <sup> HTML (no equation_image)", () => {
     const out = mathToCanvasHTML("x^3");
-    expect(out).toContain('<img class="equation_image"');
+    expect(out).not.toContain('<img class="equation_image"');
+    expect(out).toContain("<sup>3</sup>");
   });
 
   test("pipe table cells use equation_image", () => {
@@ -64,6 +64,30 @@ describe("mathToCanvasHTML — Canvas equation_image output", () => {
     expect(imgCount).toBe(1);
     expect(out).not.toMatch(/\\\(/);
     expect(out).not.toMatch(/\\\)/);
+  });
+
+  test("x^{2} → x<sup>2</sup>, no equation_image", () => {
+    const out = mathToCanvasHTML("x^2");
+    expect(out).not.toContain('<img class="equation_image"');
+    expect(out).toContain("<sup>2</sup>");
+  });
+
+  test("y <= x → plain ≤ HTML, no equation_image", () => {
+    const out = mathToCanvasHTML("y <= x");
+    expect(out).not.toContain('<img class="equation_image"');
+    expect(out).toContain("≤");
+  });
+
+  test("sqrt(x) → equation_image (complex)", () => {
+    const out = mathToCanvasHTML("sqrt(x)");
+    expect(out).toContain('<img class="equation_image"');
+    expect(out).toContain("\\sqrt");
+  });
+
+  test("double integral over D → equation_image (complex)", () => {
+    const out = mathToCanvasHTML("double integral over D of f dA");
+    expect(out).toContain('<img class="equation_image"');
+    expect(out).toContain("\\iint");
   });
 
   test("double integral over D of sin(x) dA → exactly one equation_image with \\iint_{D} \\sin(x)", () => {
