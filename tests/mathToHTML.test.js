@@ -110,3 +110,53 @@ describe("mathToCanvasHTML — Canvas equation_image output", () => {
     expect(out).not.toMatch(/\\\)/);
   });
 });
+
+describe("Bug fixes", () => {
+  test("Bug1: sin(x) inside integral → single \\sin, no double backslash", () => {
+    const out = mathToCanvasHTML("integral from 0 to 1 of sin(x) dx");
+    // '\\\\sin' in JS is the 2-backslash string \\sin — must NOT appear
+    expect(out).not.toContain('\\\\sin');
+    expect(out).toContain('<img class="equation_image"');
+  });
+
+  test("Bug2: nested single integral parses fully into one img, no leaked text", () => {
+    const out = mathToCanvasHTML("integral from 0 to 4 of integral from y/2 to sqrt(y) of arctan(x) dx dy");
+    const imgCount = (out.match(/<img class="equation_image"/g) || []).length;
+    expect(imgCount).toBe(1);
+    expect(out.replace(/<img[^>]*\/>/g, '').trim()).toBe('');
+    expect(out).toContain('\\arctan');
+  });
+
+  test("Bug3: (2ln(2))/(3) → \\dfrac with \\ln(2), no double backslash", () => {
+    const out = mathToHTML("(2ln(2))/(3)");
+    expect(out).toContain('\\dfrac');
+    expect(out).toContain('\\ln(2)');
+    expect(out).not.toContain('\\\\ln');
+  });
+});
+
+describe("DEBUG — real failing inputs", () => {
+  test("DEBUG: double integral over D of sin(x) dA", () => {
+    const { mathToCanvasHTML } = require("../lib/exports/helpers");
+    const input = "Let D be the region bounded by y=x^2. Evaluate the double integral over D of sin(x) dA.";
+    const output = mathToCanvasHTML(input);
+    console.log("INPUT:", input);
+    console.log("OUTPUT:", output);
+  });
+
+  test("DEBUG: nested integral answer choice", () => {
+    const { mathToCanvasHTML } = require("../lib/exports/helpers");
+    const input = "integral from 0 to 4 of integral from y/2 to sqrt(y) of arctan(x) dx dy";
+    const output = mathToCanvasHTML(input);
+    console.log("INPUT:", input);
+    console.log("OUTPUT:", output);
+  });
+
+  test("DEBUG: fraction with ln", () => {
+    const { mathToCanvasHTML } = require("../lib/exports/helpers");
+    const input = "19/36 + (2ln(2))/(3)";
+    const output = mathToCanvasHTML(input);
+    console.log("INPUT:", input);
+    console.log("OUTPUT:", output);
+  });
+});
