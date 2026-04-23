@@ -65,4 +65,24 @@ describe("mathToCanvasHTML — Canvas equation_image output", () => {
     expect(out).not.toMatch(/\\\(/);
     expect(out).not.toMatch(/\\\)/);
   });
+
+  test("double integral over D of sin(x) dA → exactly one equation_image with \\iint_{D} \\sin(x)", () => {
+    const out = mathToCanvasHTML("double integral over D of sin(x) dA");
+    const imgCount = (out.match(/<img class="equation_image"/g) || []).length;
+    expect(imgCount).toBe(1);
+    expect(out).toContain("\\iint_{D}");
+    expect(out).toContain("\\sin(x)");
+    expect(out).not.toMatch(/\\\(/);
+    expect(out).not.toMatch(/\\\)/);
+  });
+
+  test("double integral over D of e^x dA → exactly one equation_image with \\iint_{D} e^{x}", () => {
+    const out = mathToCanvasHTML("double integral over D of e^x dA");
+    const imgCount = (out.match(/<img class="equation_image"/g) || []).length;
+    expect(imgCount).toBe(1);
+    expect(out).toContain("\\iint_{D}");
+    expect(out).toContain("e^{x}");
+    expect(out).not.toMatch(/\\\(/);
+    expect(out).not.toMatch(/\\\)/);
+  });
 });
