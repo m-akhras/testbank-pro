@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { flushSync } from "react-dom";
 import { createBrowserClient } from "@supabase/ssr";
 import { uid, questionSimilarity } from "../lib/utils/questions.js";
 import {
@@ -149,14 +150,16 @@ export function useGenerate({
           return { label, questions: versioned, classSection };
         });
         const finalVersions = masterLocked ? [{ ...versions[0], classSection }, ...allVersions] : allVersions;
-        // Persist to shared state BEFORE navigating. Do NOT clear pendingType/versions
-        // — ExportScreen reads versions straight from examBuilder state.
-        setClassSectionVersions({ [classSection]: finalVersions });
-        setVersions(finalVersions);
-        setActiveVersion(0);
-        setActiveClassSection(classSection);
-        setPasteInput("");
-        setExamSaved(false); setSaveExamName("");
+        // flushSync commits all state updates synchronously before router.push fires,
+        // preventing the export page from rendering with stale (empty) versions.
+        flushSync(() => {
+          setClassSectionVersions({ [classSection]: finalVersions });
+          setVersions(finalVersions);
+          setActiveVersion(0);
+          setActiveClassSection(classSection);
+          setPasteInput("");
+          setExamSaved(false); setSaveExamName("");
+        });
         setScreen("export");
         return;
       }
@@ -186,12 +189,14 @@ export function useGenerate({
             ? [{ ...versions[0], classSection: s }, ...sectionVariants]
             : sectionVariants;
         }
-        // Persist to shared state BEFORE navigating. Do NOT clear pendingType/versions.
-        setClassSectionVersions(newSectionVersions);
-        setVersions(newSectionVersions[1]);
-        setActiveVersion(0); setActiveClassSection(1);
-        setPasteInput("");
-        setExamSaved(false); setSaveExamName("");
+        // flushSync commits all state updates synchronously before router.push fires.
+        flushSync(() => {
+          setClassSectionVersions(newSectionVersions);
+          setVersions(newSectionVersions[1]);
+          setActiveVersion(0); setActiveClassSection(1);
+          setPasteInput("");
+          setExamSaved(false); setSaveExamName("");
+        });
         setScreen("export");
         return;
       }
