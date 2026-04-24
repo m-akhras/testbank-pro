@@ -1,3 +1,4 @@
+}
 "use client";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { createBrowserClient } from "@supabase/ssr";
@@ -16,6 +17,10 @@ import GraphEditor from "./editors/GraphEditor.js";
 import InlineEditor from "./editors/InlineEditor.js";
 import CustomCourseBuilder from "./editors/CustomCourseBuilder.js";
 import CoursesScreen from "./screens/CoursesScreen.jsx";
+import SavedExamsScreen from "./screens/SavedExamsScreen.js";
+import HomeScreen from "./screens/HomeScreen.js";
+import GenerateScreen from "./screens/GenerateScreen.js";
+import ReviewScreen from "./screens/ReviewScreen.js";
 import { useCourses } from "../hooks/useCourses.js";
 import { seedBuiltinCourses } from "../lib/supabase/seedCourses.js";
 import { normalizeUnicodeMath } from "../lib/normalizeUnicodeMath";
@@ -33,14 +38,14 @@ const QTYPES = ["Multiple Choice","Free Response","True/False","Fill in the Blan
 const DIFFICULTIES = ["Easy","Medium","Hard","Mixed"];
 const VERSIONS = ["A","B","C","D","E","F","G","H"];
 
-// ─── Utilities ────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Utilities â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // escapeXML moved to lib/exports/helpers.js (used only by QTI functions)
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
 
 // Convert plain-text math to HTML for Canvas QTI display
 // Convert plain-text math expression to LaTeX string
 // Convert plain-text math to simple HTML entities for Canvas QTI (proven to work)
-// ─── Question Validator ───────────────────────────────────────────────────────
+// â”€â”€â”€ Question Validator â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Returns array of issue strings. Empty array = valid.
 function validateQuestion(q) {
   const issues = [];
@@ -70,10 +75,10 @@ function validateQuestion(q) {
       // strip LaTeX wrappers
       .replace(/\[()[\]]/g, "")
       .replace(/\s+/g, " ")
-      // normalize fractions: 1/2 and rac{1}{2} → same
+      // normalize fractions: 1/2 and rac{1}{2} â†’ same
       .replace(/\frac\{(\d+)\}\{(\d+)\}/g, (_, n, d) => `${n}/${d}`)
-      // normalize common math: x^2 vs x² etc
-      .replace(/\^2/g, "²").replace(/\^3/g, "³")
+      // normalize common math: x^2 vs xÂ² etc
+      .replace(/\^2/g, "Â²").replace(/\^3/g, "Â³")
       // strip spaces around operators
       .replace(/\s*([+\-*/=])\s*/g, "$1");
 
@@ -135,14 +140,14 @@ function validateQuestion(q) {
 
   return issues;
 }
-// ─── End Question Validator ───────────────────────────────────────────────────
+// â”€â”€â”€ End Question Validator â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 // mathToHTML, mathToHTMLInline moved to lib/exports/helpers.js
 
-// ─── Graph Engine ─────────────────────────────────────────────────────────────
+// â”€â”€â”€ Graph Engine â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // evalFn, renderGraphToSVG, graphToBase64PNG, renderStatChartToSVG, statChartToBase64PNG
 // moved to lib/exports/graphRendering.js
-// Requires D3 — add to app/layout.js <head>:
+// Requires D3 â€” add to app/layout.js <head>:
 // <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
 //
 // graphConfig shape:
@@ -163,7 +168,7 @@ function validateQuestion(q) {
 //   fnTop: "x+2", fnBottom: "x^2", shadeFrom: -1, shadeTo: 2
 //
 //   // domain (single shaded region, Calc 3):
-//   boundary: "x^2", shadeAbove: true, boundaryDashed: true, boundaryLabel: "y = x²"
+//   boundary: "x^2", shadeAbove: true, boundaryDashed: true, boundaryLabel: "y = xÂ²"
 //
 //   // multi (4 graphs as MC options, Calc 3):
 //   boundary: "x^2"
@@ -185,7 +190,7 @@ function validateQuestion(q) {
 // mathToOmml, mathStepsOnly moved to lib/exports/helpers.js
 // makeDocxImageXml (private), buildAnswerKey, buildDocx, buildDocxCompare moved to lib/exports/docx.js
 // dlFile, dlBlob moved to lib/exports/utils.js
-// ─── Duplicate detection ──────────────────────────────────────────────────────
+// â”€â”€â”€ Duplicate detection â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function questionSimilarity(a, b) {
   const textA = String(a.question || a.stem || "").toLowerCase().trim();
   const textB = String(b.question || b.stem || "").toLowerCase().trim();
@@ -199,312 +204,17 @@ function questionSimilarity(a, b) {
   return overlap / Math.min(wordsA.size, wordsB.size);
 }
 
-// ── Question type instructions (used by all prompt builders) ──────────────────
+// â”€â”€ Question type instructions (used by all prompt builders) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-// ─── Prompt Builders ─────────────────────────────────────────────────────────
-// All AI prompt construction functions — isolated per course, no React deps
+// â”€â”€â”€ Prompt Builders â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// All AI prompt construction functions â€” isolated per course, no React deps
 // Used by TestBankApp.js for generation, mutation, and replace operations
 
-// Prompt builders — imported from lib/prompts/index.js
+// Prompt builders â€” imported from lib/prompts/index.js
 
-// CustomCourseBuilder — imported from components/editors/
+// CustomCourseBuilder â€” imported from components/editors/
 
-// ─── Saved Exams Screen ───────────────────────────────────────────────────────
-function SavedExamsScreen({ S, text1, text2, text3, border, onLoad }) {
-  const [exams, setExams] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [exportLog, setExportLog] = useState([]);
-  const [gradesData, setGradesData] = useState({}); // examId → [{question, avg, count}]
-  const [showGrades, setShowGrades] = useState({}); // examId → bool
-  const gradesFileRefs = {};
-
-  useEffect(() => {
-    Promise.all([loadExams(), loadExportHistory()]).then(([e, h]) => {
-      setExams(e); setExportLog(h); setLoading(false);
-    });
-  }, []);
-
-  async function loadExportHistory() {
-    try {
-      const { data, error } = await supabase
-        .from("export_history")
-        .select("*")
-        .order("exported_at", { ascending: false })
-        .limit(20);
-      if (error) throw error;
-      return data;
-    } catch { return []; }
-  }
-
-  function parseCanvasGrades(csvText, exam) {
-    // Parse CSV — Canvas format: first row = headers, first col = student name, second = ID, rest = question scores
-    const lines = csvText.trim().split("\n").map(l => l.split(",").map(c => c.trim().replace(/^"|"$/g, "")));
-    if (lines.length < 2) return null;
-    const headers = lines[0];
-
-    // Find question columns — skip student name, ID, section, group cols
-    // Canvas format typically: Student, ID, SIS User ID, SIS Login ID, Section, question_1, question_2...
-    const skipCols = new Set();
-    headers.forEach((h, i) => {
-      const lower = h.toLowerCase();
-      if (lower.includes("student") || lower.includes(" id") || lower === "id" ||
-          lower.includes("sis") || lower.includes("login") || lower.includes("section") ||
-          lower.includes("group") || lower.includes("score") || lower.includes("total") ||
-          lower.includes("percent") || lower.includes("grade") || lower === "") {
-        skipCols.add(i);
-      }
-    });
-
-    const questionCols = headers
-      .map((h, i) => ({ h, i }))
-      .filter(({ i }) => !skipCols.has(i));
-
-    if (questionCols.length === 0) return null;
-
-    // Calculate average score per question column (strip student identity)
-    const results = questionCols.map(({ h, i }) => {
-      const scores = lines.slice(1)
-        .map(row => parseFloat(row[i]))
-        .filter(v => !isNaN(v));
-      const avg = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : null;
-      // Try to find max points from header e.g. "Q1 (2 pts)" or from data
-      const maxMatch = h.match(/\((\d+(?:\.\d+)?)\s*pts?\)/i);
-      const max = maxMatch ? parseFloat(maxMatch[1]) : Math.max(...scores, 1);
-      return { label: h, avg, max, count: scores.length, pct: avg !== null ? Math.round((avg / max) * 100) : null };
-    }).filter(r => r.avg !== null).sort((a, b) => a.pct - b.pct);
-
-    return results;
-  }
-
-  function handleGradesUpload(e, exam) {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const results = parseCanvasGrades(ev.target.result, exam);
-      if (!results || results.length === 0) {
-        alert("Could not parse grades. Make sure this is a Canvas grades CSV.");
-        return;
-      }
-      setGradesData(prev => ({ ...prev, [exam.id]: results }));
-      setShowGrades(prev => ({ ...prev, [exam.id]: true }));
-    };
-    reader.readAsText(file);
-  }
-
-  if (loading) return <div style={{color:text2, padding:"2rem"}}>Loading saved exams…</div>;
-
-  return (
-    <div>
-      <div style={S.pageHeader}>
-        <h1 style={S.h1}>Saved Exams</h1>
-        <p style={S.sub}>{exams.length} exam{exams.length !== 1 ? "s" : ""} saved in database.</p>
-      </div>
-
-      {exams.length === 0 && (
-        <div style={{...S.card, textAlign:"center", color:text3, padding:"3rem"}}>
-          No saved exams yet. Build an exam in the Versions tab and save it.
-        </div>
-      )}
-
-      {exams.map(exam => {
-        const versions = exam.versions || [];
-        // detect sections — classSection lives on the version object, fall back to questions[0]
-        const sectionNums = [...new Set(versions.map(v => v.classSection ?? v.questions?.[0]?.classSection).filter(Boolean))].sort((a,b)=>a-b);
-        const hasMultipleSections = sectionNums.length > 1;
-        const safeName = (exam.name||"Exam").replace(/[^a-zA-Z0-9]/g,"_");
-
-        return (
-        <div key={exam.id} style={S.card}>
-          <div style={{display:"flex", justifyContent:"space-between", alignItems:"flex-start", flexWrap:"wrap", gap:"0.5rem"}}>
-            <div>
-              <div style={{fontSize:"1rem", fontWeight:"bold", color:text1, marginBottom:"0.25rem"}}>{exam.name}</div>
-              <div style={{fontSize:"0.72rem", color:text3}}>
-                {new Date(exam.created_at).toLocaleDateString()} · {versions.length} version(s)
-                {hasMultipleSections && ` · ${sectionNums.length} sections`}
-              </div>
-              {!hasMultipleSections && versions.length > 0 && versions.some(v => v.classSection || v.questions?.[0]?.classSection) && (
-                <div style={{marginTop:"0.3rem", fontSize:"0.68rem", color:"#f59e0b", background:"#451a0322", border:"1px solid #f59e0b44", borderRadius:"4px", padding:"0.2rem 0.5rem"}}>
-                  ⚠ Saved before multi-section fix — re-build and re-save to restore all sections
-                </div>
-              )}
-              <button style={{marginTop:"0.4rem", padding:"0.25rem 0.7rem", fontSize:"0.72rem",
-                background:"#2D6A4F", color:"#fff", border:"none", borderRadius:"4px",
-                cursor:"pointer", fontWeight:"600"}}
-                onClick={() => onLoad && onLoad(exam)}>
-                ▶ Load into Versions tab
-              </button>
-            </div>
-            <div style={{display:"flex", gap:"0.5rem", flexWrap:"wrap", alignItems:"center"}}>
-            </div>
-          </div>
-
-          {/* Word export section — one zip per section */}
-          <div style={{marginTop:"0.75rem", borderTop:"1px solid #1e2d45", paddingTop:"0.75rem", display:"flex", gap:"0.5rem", flexWrap:"wrap", alignItems:"center"}}>
-            <span style={{fontSize:"0.72rem", color:text3, marginRight:"0.25rem"}}>Word:</span>
-            {hasMultipleSections ? (
-              // One zip button per section
-              sectionNums.map(sec => (
-                <button key={sec} style={S.oBtn("#10b981")}
-                  onClick={async () => {
-                    // load JSZip
-                    if (!window.JSZip) {
-                      await new Promise((res,rej) => {
-                        const s = document.createElement("script");
-                        s.src = "https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js";
-                        s.onload = res; s.onerror = rej;
-                        document.head.appendChild(s);
-                      });
-                    }
-                    const zip = new window.JSZip();
-                    const secVersions = versions.filter(v => (v.classSection ?? v.questions?.[0]?.classSection) === sec || (!(v.classSection ?? v.questions?.[0]?.classSection) && sec === sectionNums[0]));
-                    for (const v of secVersions) {
-                      const blob = await buildDocx(v.questions, exam.name, v.label, sec);
-                      const bytes = await blob.arrayBuffer();
-                      zip.file(`${safeName}_S${sec}_V${v.label}.docx`, bytes);
-                    }
-                    const zipBlob = await zip.generateAsync({type:"blob"});
-                    dlBlob(zipBlob, `${safeName}_S${sec}_Word.zip`);
-                    await logExport(exam.name, `Word S${sec} ZIP`, sec);
-                  }}>
-                  ⬇ S{sec} Word (.zip)
-                </button>
-              ))
-            ) : (
-              // No sections — one zip with all versions
-              <button style={S.oBtn("#10b981")}
-                onClick={async () => {
-                  if (!window.JSZip) {
-                    await new Promise((res,rej) => {
-                      const s = document.createElement("script");
-                      s.src = "https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js";
-                      s.onload = res; s.onerror = rej;
-                      document.head.appendChild(s);
-                    });
-                  }
-                  const zip = new window.JSZip();
-                  for (const v of versions) {
-                    const blob = await buildDocx(v.questions, exam.name, v.label, null);
-                    const bytes = await blob.arrayBuffer();
-                    zip.file(`${safeName}_V${v.label}.docx`, bytes);
-                  }
-                  const zipBlob = await zip.generateAsync({type:"blob"});
-                  dlBlob(zipBlob, `${safeName}_Word.zip`);
-                  await logExport(exam.name, "Word ZIP", "all");
-                }}>
-                ⬇ All Versions Word (.zip)
-              </button>
-            )}
-          </div>
-
-          {/* QTI Re-export */}
-          <div style={{marginTop:"0.75rem", borderTop:"1px solid #1e2d45", paddingTop:"0.75rem", display:"flex", gap:"0.5rem", flexWrap:"wrap", alignItems:"center"}}>
-            <span style={{fontSize:"0.72rem", color:text3, marginRight:"0.25rem"}}>Canvas QTI:</span>
-            {hasMultipleSections ? (
-              sectionNums.map(sec => (
-                <button key={sec} style={S.oBtn("#8b5cf6")}
-                  onClick={async () => {
-                    const secVersions = versions.filter(v => (v.classSection ?? v.questions?.[0]?.classSection) === sec);
-                    const blobs = await buildClassroomSectionsQTI({[sec]: secVersions}, exam.name, true, 1);
-                    if (blobs[sec]) dlBlob(blobs[sec], `${safeName}_S${sec}_QTI.zip`);
-                    await logExport(exam.name, `QTI S${sec}`, sec);
-                  }}>
-                  ⬇ S{sec} QTI (.zip)
-                </button>
-              ))
-            ) : (
-              versions.map(v => (
-                <button key={v.label} style={S.oBtn("#8b5cf6")}
-                  onClick={async () => {
-                    const xml = buildQTI(v.questions, exam.name, v.label);
-                    const blob = await buildQTIZip(xml, `${exam.name}_V${v.label}`);
-                    dlBlob(blob, `${safeName}_V${v.label}_QTI.zip`);
-                    await logExport(exam.name, "QTI", v.label);
-                  }}>
-                  ⬇ V{v.label} QTI (.zip)
-                </button>
-              ))
-            )}
-          </div>
-
-          {/* Grades Import */}
-          <div style={{marginTop:"0.75rem", borderTop:"1px solid #1e2d45", paddingTop:"0.75rem", display:"flex", gap:"0.5rem", alignItems:"center", flexWrap:"wrap"}}>
-            <input
-              type="file" accept=".csv"
-              style={{display:"none"}}
-              id={`grades-${exam.id}`}
-              onChange={e => handleGradesUpload(e, exam)}
-            />
-            <button style={{...S.oBtn("#06b6d4"), fontSize:"0.72rem"}}
-              onClick={() => document.getElementById(`grades-${exam.id}`)?.click()}>
-              📊 Import Canvas Grades
-            </button>
-            {gradesData[exam.id] && (
-              <button style={{fontSize:"0.72rem", background:"none", border:"none", cursor:"pointer",
-                color: showGrades[exam.id] ? "#06b6d4" : text3}}
-                onClick={() => setShowGrades(prev => ({...prev, [exam.id]: !prev[exam.id]}))}>
-                {showGrades[exam.id] ? "Hide Results" : "Show Results"}
-              </button>
-            )}
-          </div>
-
-          {/* Grades Results Panel */}
-          {showGrades[exam.id] && gradesData[exam.id] && (
-            <div style={{marginTop:"0.75rem", background:bg2, border:"1px solid "+border, borderRadius:"10px", padding:"1rem"}}>
-              <div style={{fontSize:"0.78rem", color:"#06b6d4", fontWeight:"600", marginBottom:"0.75rem"}}>
-                📊 Question Performance — sorted by lowest score
-                <span style={{fontSize:"0.68rem", color:text3, fontWeight:"400", marginLeft:"0.5rem"}}>
-                  (no student data stored)
-                </span>
-              </div>
-              {gradesData[exam.id].map((r, i) => (
-                <div key={i} style={{display:"flex", alignItems:"center", gap:"0.75rem", marginBottom:"0.4rem",
-                  padding:"0.4rem 0.6rem", borderRadius:"6px",
-                  background: r.pct < 50 ? "#1a0a0a" : r.pct < 70 ? "#1a1200" : "#0a1200"}}>
-                  <div style={{flex:1, fontSize:"0.78rem", color:text1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}
-                    title={r.label}>{r.label}</div>
-                  <div style={{flexShrink:0, width:"180px"}}>
-                    <div style={{height:"6px", borderRadius:"3px", background:border, overflow:"hidden"}}>
-                      <div style={{height:"100%", width:`${r.pct}%`, borderRadius:"3px",
-                        background: r.pct < 50 ? "#f87171" : r.pct < 70 ? "#f59e0b" : "#4ade80"}} />
-                    </div>
-                  </div>
-                  <div style={{flexShrink:0, fontSize:"0.75rem", fontWeight:"600", minWidth:"45px", textAlign:"right",
-                    color: r.pct < 50 ? "#f87171" : r.pct < 70 ? "#f59e0b" : "#4ade80"}}>
-                    {r.pct}%
-                  </div>
-                  <div style={{flexShrink:0, fontSize:"0.68rem", color:text3, minWidth:"55px"}}>
-                    {r.avg?.toFixed(1)}/{r.max} pts
-                  </div>
-                </div>
-              ))}
-              <div style={{fontSize:"0.68rem", color:text3, marginTop:"0.5rem"}}>
-                Based on {gradesData[exam.id][0]?.count || 0} student submissions · Red = below 50% · Yellow = 50–70% · Green = above 70%
-              </div>
-            </div>
-          )}
-        </div>
-        );
-      })}
-
-      {exportLog.length > 0 && (
-        <>
-          <h2 style={{fontSize:"1.1rem", fontWeight:"normal", margin:"2rem 0 0.75rem", color:text1}}>Export History</h2>
-          <div style={S.card}>
-            {exportLog.map((log, i) => (
-              <div key={i} style={{display:"flex", justifyContent:"space-between", padding:"0.4rem 0", borderBottom: i < exportLog.length-1 ? `1px solid ${"#D9D0C0"}` : "none", fontSize:"0.78rem"}}>
-                <span style={{color:text1}}>{log.exam_name} — V{log.version_label}</span>
-                <span style={{color:text3}}>{log.format} · {new Date(log.exported_at).toLocaleDateString()}</span>
-              </div>
-            ))}
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
-// ─── Main App ─────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Main App â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function TestBankAppInner() {
   const [screen, setScreen] = useState("home");
   const [exportHighlight, setExportHighlight] = useState(false);
@@ -559,7 +269,7 @@ function TestBankAppInner() {
   const [bulkReplaceIds, setBulkReplaceIds] = useState(new Set());
   const [graphEditorQId, setGraphEditorQId] = useState(null); // which question has graph editor open
   const [inlineEditQId,  setInlineEditQId]  = useState(null); // which question has inline editor open
-  const [toast, setToast] = useState(null); // {msg, type} — auto-dismisses
+  const [toast, setToast] = useState(null); // {msg, type} â€” auto-dismisses
 
   const showToast = (msg, type="success") => {
     setToast({msg, type});
@@ -596,7 +306,7 @@ function TestBankAppInner() {
   const [showPrintPreview, setShowPrintPreview] = useState(false);
   const [printGraphCache, setPrintGraphCache] = useState({});
 
-  // Pre-render graphs for print preview — must be after state declarations
+  // Pre-render graphs for print preview â€” must be after state declarations
   useEffect(() => {
     if (!showPrintPreview) { setPrintGraphCache({}); return; }
     const v = versions[activeVersion];
@@ -656,7 +366,7 @@ function TestBankAppInner() {
   const [qtiPointsPerQ, setQtiPointsPerQ] = useState(1);
   const [bankTabState, setBankTabState] = useState("browse");
   const [expandedBatches, setExpandedBatches] = useState({});
-  // ── Classroom sections ──
+  // â”€â”€ Classroom sections â”€â”€
   const [numClassSections, setNumClassSections] = useState(1);
   const [currentClassSection, setCurrentClassSection] = useState(1);
   const [classSectionVersions, setClassSectionVersions] = useState(() => {
@@ -723,7 +433,7 @@ function TestBankAppInner() {
         created_at: new Date().toISOString(),
       });
       if (error) throw error;
-      showToast("Master saved ✓");
+      showToast("Master saved âœ“");
       setMasterName("");
       loadSavedMasters();
     } catch(e) {
@@ -749,7 +459,7 @@ function TestBankAppInner() {
     if (settings.course)            setCourse(settings.course);
     setActiveVersion(0);
     setScreen("versions");
-    showToast(`Loaded "${master.name}" ✓`);
+    showToast(`Loaded "${master.name}" âœ“`);
   }
 
   async function loadCustomCourses() {
@@ -794,9 +504,9 @@ function TestBankAppInner() {
     try {
       const raw = pasteInput.trim();
 
-      // Sanitize any question object from AI — guard null/missing fields
+      // Sanitize any question object from AI â€” guard null/missing fields
       const sanitize = (q) => {
-        // Strip title/probability from graphConfig — cleaner for Canvas exports
+        // Strip title/probability from graphConfig â€” cleaner for Canvas exports
         let graphConfig = q.graphConfig;
         if (graphConfig) {
           const { title, ...rest } = graphConfig;
@@ -939,7 +649,7 @@ function TestBankAppInner() {
             [cs]: (prev[cs] || []).map((v,vi) => vi !== vIdx ? v : { ...v, questions: v.questions.map((q,qi) => qi !== qIdx ? q : newQ) })
           }));
         } else {
-          // Single section — sync all classSectionVersions entries
+          // Single section â€” sync all classSectionVersions entries
           setClassSectionVersions(prev => {
             const updated = {...prev};
             Object.keys(updated).forEach(sec => {
@@ -1006,7 +716,7 @@ function TestBankAppInner() {
       const text = data.content?.[0]?.text || data.text || "";
       if (!text) throw new Error("Empty response from API. Try again or use Copy Prompt.");
       if (data.warning) showToast(data.warning, "error");
-      if (data.stop_reason === "max_tokens" && !text) throw new Error("Response truncated — generate fewer questions at once (max 10 recommended).");
+      if (data.stop_reason === "max_tokens" && !text) throw new Error("Response truncated â€” generate fewer questions at once (max 10 recommended).");
       setPasteInput(text);
       setPendingType(pendingTypeVal);
       setPendingMeta(pendingMetaVal);
@@ -1077,7 +787,7 @@ function TestBankAppInner() {
     return a + (cfg.Easy.count||0) + (cfg.Medium.count||0) + (cfg.Hard.count||0);
   }, 0);
 
-  // Get available sections — only show when a course is selected, pulled from actual bank questions
+  // Get available sections â€” only show when a course is selected, pulled from actual bank questions
   const availableSections = filterCourse === "All"
     ? []
     : [...new Set(bank.filter(q => q.course === filterCourse).map(q => q.section).filter(Boolean))].sort();
@@ -1147,10 +857,10 @@ function TestBankAppInner() {
   )].sort((a,b) => new Date(`1970/01/01 ${b}`) - new Date(`1970/01/01 ${a}`));
   const courseColors = Object.fromEntries(Object.entries(allCourses).map(([k, v]) => [k, v.color]));
 
-  // ── Sidebar nav groups ───────────────────────────────────────────────────────
+  // â”€â”€ Sidebar nav groups â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const bankIssueCount = bank.filter(q => validateQuestion(q).length > 0).length;
 
-  // Map originalId → count of saved exams that include that question
+  // Map originalId â†’ count of saved exams that include that question
   const usedInExams = {};
   savedExams.forEach(exam => {
     const versions = exam.versions || [];
@@ -1163,23 +873,23 @@ function TestBankAppInner() {
 
   const navGroups = [
     { label: null, items: [
-      { id:"home", icon:"⊟", label:"Dashboard" },
+      { id:"home", icon:"âŠŸ", label:"Dashboard" },
     ]},
     { label: "Question Bank", items: [
-      ...(isAdmin ? [{ id:"generate", icon:"✦", label:"Generate" }] : []),
-      { id:"review",   icon:"◎", label:"Review", badge: lastGenerated.length || null, alert: lastGenerated.length > 0 },
-      { id:"bank",     icon:"▦", label:"Browse & Edit", badge: bank.length || null },
+      ...(isAdmin ? [{ id:"generate", icon:"âœ¦", label:"Generate" }] : []),
+      { id:"review",   icon:"â—Ž", label:"Review", badge: lastGenerated.length || null, alert: lastGenerated.length > 0 },
+      { id:"bank",     icon:"â–¦", label:"Browse & Edit", badge: bank.length || null },
     ]},
     { label: "Exam Builder", items: [
-      { id:"versions", icon:"⊞", label:"Build & Export" },
-      { id:"saved",    icon:"◈", label:"Saved Exams" },
+      { id:"versions", icon:"âŠž", label:"Build & Export" },
+      { id:"saved",    icon:"â—ˆ", label:"Saved Exams" },
     ]},
     { label: "Settings", items: [
-      { id:"courses",  icon:"🎓", label:"Courses", badge: dbCourses.length || null },
+      { id:"courses",  icon:"ðŸŽ“", label:"Courses", badge: dbCourses.length || null },
     ]},
   ];
 
-  // ── Sidebar component ────────────────────────────────────────────────────────
+  // â”€â”€ Sidebar component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const Sidebar = () => (
     <aside style={S.sidebar}>
       {/* Logo */}
@@ -1199,10 +909,10 @@ function TestBankAppInner() {
           borderRadius:"8px", cursor:"pointer",
           display:"flex", alignItems:"center", gap:"0.5rem"
         }}>
-          <span style={{fontSize:"0.9rem"}}>⚡</span>
+          <span style={{fontSize:"0.9rem"}}>âš¡</span>
           <div>
             <div style={{fontSize:"0.71rem", color:"#f59e0b", fontWeight:"600", lineHeight:1.3}}>{lastGenerated.length} questions ready to review</div>
-            <div style={{fontSize:"0.62rem", color:"#92400E", marginTop:"1px"}}>Click to review →</div>
+            <div style={{fontSize:"0.62rem", color:"#92400E", marginTop:"1px"}}>Click to review â†’</div>
           </div>
         </div>
       )}
@@ -1213,10 +923,10 @@ function TestBankAppInner() {
           borderRadius:"8px", cursor:"pointer",
           display:"flex", alignItems:"center", gap:"0.5rem"
         }}>
-          <span style={{fontSize:"0.9rem"}}>⚠️</span>
+          <span style={{fontSize:"0.9rem"}}>âš ï¸</span>
           <div>
             <div style={{fontSize:"0.71rem", color:"#9B1C1C", fontWeight:"600", lineHeight:1.3}}>{bankIssueCount} question{bankIssueCount>1?"s":""} with issues</div>
-            <div style={{fontSize:"0.62rem", color:"#9B1C1C", marginTop:"1px"}}>Click to fix →</div>
+            <div style={{fontSize:"0.62rem", color:"#9B1C1C", marginTop:"1px"}}>Click to fix â†’</div>
           </div>
         </div>
       )}
@@ -1274,7 +984,7 @@ function TestBankAppInner() {
 
   const [confirmDelete, setConfirmDelete] = useState(null); // {id, label}
 
-  // ── Auto-validate all versions (admin only) ───────────────────────────────
+  // â”€â”€ Auto-validate all versions (admin only) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   async function autoValidateAllVersions() {
     setValidating(true);
     setValidationError("");
@@ -1305,7 +1015,7 @@ function TestBankAppInner() {
     setValidating(false);
   }
 
-  // ── Copy validation prompt (admin only) ──────────────────────────────────
+  // â”€â”€ Copy validation prompt (admin only) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   function copyValidationPrompt() {
     const allVersions = Object.keys(classSectionVersions).length > 1
       ? Object.values(classSectionVersions).flat()
@@ -1358,7 +1068,7 @@ ${questionsText}`;
     <div style={S.app}>
       <Sidebar />
 
-      {/* ── Toast notification ── */}
+      {/* â”€â”€ Toast notification â”€â”€ */}
       {toast && (
         <div style={{position:"fixed", bottom:"1.5rem", right:"1.5rem", zIndex:99999,
           padding:"0.65rem 1.1rem", borderRadius:"8px", fontSize:"0.82rem", fontWeight:"600",
@@ -1366,22 +1076,22 @@ ${questionsText}`;
           color: toast.type==="error" ? "#fca5a5" : toast.type==="warn" ? "#fde68a" : "#86efac",
           border: `1px solid ${toast.type==="error" ? "#f8717144" : toast.type==="warn" ? "#f59e0b44" : "#22c55e44"}`,
           boxShadow:"0 4px 20px rgba(0,0,0,0.4)", animation:"fadeIn 0.2s ease"}}>
-          {toast.type==="success" ? "✓" : toast.type==="warn" ? "⚠" : "✕"} {toast.msg}
+          {toast.type==="success" ? "âœ“" : toast.type==="warn" ? "âš " : "âœ•"} {toast.msg}
         </div>
       )}
 
-      {/* ── Export loading overlay ── */}
+      {/* â”€â”€ Export loading overlay â”€â”€ */}
       {exportLoading && (
         <div style={{position:"fixed", bottom:"1.5rem", left:"50%", transform:"translateX(-50%)", zIndex:99999,
           padding:"0.65rem 1.4rem", borderRadius:"8px", fontSize:"0.82rem", fontWeight:"600",
           background:"#1B4332", color:"#86efac", border:"1px solid #22c55e44",
           boxShadow:"0 4px 20px rgba(0,0,0,0.5)", display:"flex", alignItems:"center", gap:"0.5rem"}}>
-          <span style={{display:"inline-block", animation:"spin 1s linear infinite"}}>⟳</span>
+          <span style={{display:"inline-block", animation:"spin 1s linear infinite"}}>âŸ³</span>
           {exportLoading}
         </div>
       )}
 
-      {/* ── Delete confirmation dialog ── */}
+      {/* â”€â”€ Delete confirmation dialog â”€â”€ */}
       {confirmDelete && (
         <div style={{position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", zIndex:9998,
           display:"flex", alignItems:"center", justifyContent:"center"}}>
@@ -1413,494 +1123,91 @@ ${questionsText}`;
 
       <main style={S.main}>
 
-        {/* ── DASHBOARD ── */}
+        {/* â”€â”€ DASHBOARD â”€â”€ */}
         {screen === "home" && (
-          <div>
-            {/* Header */}
-            <div style={{marginBottom:"2.5rem"}}>
-              <h1 style={{...S.h1, fontSize:"2rem", marginBottom:"0.3rem"}}>Dashboard</h1>
-              <p style={{...S.sub, fontSize:"0.85rem"}}>Welcome back — your exam authoring workspace.</p>
-            </div>
-
-            {/* Workflow strip — horizontal pill row */}
-            <div style={{marginBottom:"2.5rem"}}>
-              <div style={{fontSize:"0.6rem", color:text3, textTransform:"uppercase", letterSpacing:"0.18em", fontWeight:"700", marginBottom:"1rem", fontFamily:"'Inter',system-ui,sans-serif"}}>Your Workflow</div>
-              <div style={{display:"flex", gap:"0.5rem", alignItems:"stretch"}}>
-                {[
-                  { step:"1", label:"Generate", sub:"Create with AI", sc:"generate", color:"#2D6A4F", icon:"✦" },
-                  { step:"2", label:"Review", sub:"Check & save",    sc:"review",   color:"#92400E", icon:"◎", badge: lastGenerated.length || 0 },
-                  { step:"3", label:"Build Exam", sub:"Select & version", sc:"versions", color:"#7C3AED", icon:"⊞" },
-                  { step:"4", label:"Export",   sub:"Word · QTI · Print", sc:"export", color:"#185FA5", icon:"⬇" },
-                ].map((s, i) => (
-                  <div key={i} style={{display:"flex", alignItems:"center", flex:1, gap:"0.5rem"}}>
-                    <div onClick={() => {
-                      if (s.sc === "export") { setScreen("versions"); setExportHighlight(true); setTimeout(() => setExportHighlight(false), 2500); }
-                      else setScreen(s.sc);
-                    }} style={{
-                      flex:1, padding:"1rem 1.1rem", borderRadius:"12px", cursor:"pointer",
-                      background: (s.sc === "export" ? exportHighlight : screen===s.sc) ? s.color+"12" : bg1,
-                      border:"1.5px solid "+((s.sc === "export" ? exportHighlight : screen===s.sc) ? s.color+"60" : border),
-                      transition:"all 0.15s", display:"flex", alignItems:"center", gap:"0.75rem"
-                    }}>
-                      <div style={{width:"34px", height:"34px", borderRadius:"9px", background:s.color+"15",
-                        border:"1px solid "+s.color+"30", display:"flex", alignItems:"center", justifyContent:"center",
-                        flexShrink:0, position:"relative"}}>
-                        <span style={{fontSize:"0.85rem", color:s.color}}>{s.icon}</span>
-                        <div style={{position:"absolute", top:"-7px", right:"-7px", width:"16px", height:"16px",
-                          borderRadius:"50%", background:s.color, display:"flex", alignItems:"center",
-                          justifyContent:"center", fontSize:"0.55rem", fontWeight:"800", color:"#fff",
-                          fontFamily:"'Inter',system-ui,sans-serif"}}>
-                          {s.step}
-                        </div>
-                        {s.badge > 0 && (
-                          <div style={{position:"absolute", top:"-7px", left:"-7px", width:"16px", height:"16px",
-                            borderRadius:"50%", background:"#92400E", display:"flex", alignItems:"center",
-                            justifyContent:"center", fontSize:"0.55rem", fontWeight:"800", color:"#fff",
-                            fontFamily:"'Inter',system-ui,sans-serif"}}>
-                            {s.badge}
-                          </div>
-                        )}
-                      </div>
-                      <div>
-                        <div style={{fontSize:"0.82rem", fontWeight:"700", color:text1, fontFamily:"'Inter',system-ui,sans-serif"}}>{s.label}</div>
-                        <div style={{fontSize:"0.65rem", color:text3, marginTop:"1px", fontFamily:"'Inter',system-ui,sans-serif"}}>{s.sub}</div>
-                      </div>
-                    </div>
-                    {i < 3 && <div style={{color:text3, fontSize:"0.8rem", flexShrink:0}}>›</div>}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Onboarding checklist — shown when bank is empty or user hasn't completed steps */}
-            {bankLoaded && bank.length === 0 && (
-              <div style={{...S.card, borderColor:"#2D6A4F44", marginBottom:"2rem", background:"#052e1608"}}>
-                <div style={{fontSize:"0.78rem", fontWeight:"700", color:"#2D6A4F", marginBottom:"0.75rem", letterSpacing:"0.08em", textTransform:"uppercase"}}>
-                  🚀 Getting Started
-                </div>
-                {[
-                  { done: course !== null, label:"Select a course", action:() => setScreen("generate"), btn:"Go to Generate" },
-                  { done: bank.length > 0, label:"Generate your first questions", action:() => setScreen("generate"), btn:"Generate" },
-                  { done: savedExams.length > 0, label:"Build and save an exam", action:() => setScreen("versions"), btn:"Build Exam" },
-                ].map((step, i) => (
-                  <div key={i} style={{display:"flex", alignItems:"center", gap:"0.75rem", marginBottom:"0.5rem"}}>
-                    <div style={{width:"20px", height:"20px", borderRadius:"50%", flexShrink:0,
-                      background: step.done ? "#2D6A4F" : bg2,
-                      border: "1.5px solid " + (step.done ? "#2D6A4F" : border),
-                      display:"flex", alignItems:"center", justifyContent:"center",
-                      fontSize:"0.65rem", color:"#fff", fontWeight:"700"}}>
-                      {step.done ? "✓" : i+1}
-                    </div>
-                    <span style={{fontSize:"0.82rem", color: step.done ? text3 : text1, flex:1,
-                      textDecoration: step.done ? "line-through" : "none"}}>{step.label}</span>
-                    {!step.done && (
-                      <button onClick={step.action}
-                        style={{fontSize:"0.72rem", padding:"0.2rem 0.65rem", background:"#2D6A4F",
-                          color:"#fff", border:"none", borderRadius:"4px", cursor:"pointer", fontWeight:"600"}}>
-                        {step.btn} →
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Stats row — clean metric cards */}
-            <div style={{display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:"1rem", marginBottom:"2.5rem"}}>
-              {[
-                { label:"Questions in Bank", value:bank.length, color:"#2D6A4F", bg:"#D1FAE5", action:() => setScreen("bank") },
-                { label:"Pending Review",    value:lastGenerated.length || 0, color:"#92400E", bg:"#FEF3C7", action:() => setScreen("review") },
-                { label:"Issues Found",      value:bankIssueCount, color:bankIssueCount>0?"#9B1C1C":"#2D6A4F", bg:bankIssueCount>0?"#FEE2E2":"#D1FAE5", action:() => { setFilterIssuesOnly(bankIssueCount > 0); setScreen("bank"); } },
-              ].map((s,i) => (
-                <div key={i} onClick={s.action} style={{
-                  background:bg1, border:"1px solid "+border, borderRadius:"14px",
-                  padding:"1.5rem 1.5rem 1.25rem", cursor:"pointer", transition:"border-color 0.15s",
-                  borderLeft:"4px solid "+s.color
-                }}>
-                  <div style={{fontSize:"2.2rem", fontWeight:"800", color:s.color, letterSpacing:"-0.04em",
-                    fontFamily:"'Georgia',serif", lineHeight:1, marginBottom:"0.5rem"}}>{s.value}</div>
-                  <div style={{fontSize:"0.72rem", color:text2, fontFamily:"'Inter',system-ui,sans-serif", textTransform:"uppercase", letterSpacing:"0.06em", fontWeight:"600"}}>{s.label}</div>
-                </div>
-              ))}
-            </div>
-
-            {/* Courses */}
-            <div style={{display:"flex", justifyContent:"space-between", alignItems:"baseline", marginBottom:"1.25rem"}}>
-              <h2 style={S.h2}>Courses</h2>
-              <button style={{...S.oBtn(accent), fontSize:"0.72rem", padding:"0.3rem 0.9rem"}} onClick={() => setScreen("generate")}>+ Generate Questions</button>
-            </div>
-            <div style={{display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(210px,1fr))", gap:"0.85rem", marginBottom:"2.5rem"}}>
-              {Object.entries(allCourses).map(([name, { color, chapters }]) => {
-                const qCount = bank.filter(q => q.course === name).length;
-                return (
-                  <div key={name} onClick={() => { setCourse(name); setSelectedSections([]); setSectionCounts({}); setSectionConfig({}); setScreen("generate"); }}
-                    style={{
-                      background:bg1, borderRadius:"14px", padding:"1.25rem 1.25rem 1rem",
-                      border:"1px solid "+border, cursor:"pointer",
-                      borderBottom:"3px solid "+color, transition:"all 0.15s",
-                      display:"flex", flexDirection:"column", gap:"0.3rem"
-                    }}>
-                    <div style={{fontSize:"0.88rem", fontWeight:"700", color:text1, lineHeight:1.3, fontFamily:"'Georgia',serif"}}>{name}</div>
-                    <div style={{fontSize:"0.68rem", color:text3, fontFamily:"'Inter',system-ui,sans-serif"}}>{chapters.length} chapters</div>
-                    {qCount > 0 && (
-                      <div style={{marginTop:"0.5rem", display:"inline-flex", alignItems:"center", gap:"0.35rem",
-                        background:color+"12", border:"1px solid "+color+"30", borderRadius:"20px",
-                        padding:"0.15rem 0.6rem", width:"fit-content"}}>
-                        <div style={{width:"5px", height:"5px", borderRadius:"50%", background:color, flexShrink:0}}/>
-                        <span style={{fontSize:"0.65rem", color:color, fontWeight:"600", fontFamily:"'Inter',system-ui,sans-serif"}}>{qCount} questions</span>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Custom Course Builder */}
-            <CustomCourseBuilder
-              customCourses={customCourses}
-              onSave={saveCustomCourse}
-              onDelete={deleteCustomCourse}
-              text1={text1} text2={text2} text3={text3} border={border} bg1={bg1} S={S}
-              isAdmin={isAdmin}
-            />
-
-            {/* Recent questions */}
-            {bank.length > 0 && (
-              <div style={{marginTop:"2rem"}}>
-                <h2 style={{...S.h2, marginBottom:"1rem"}}>Recent Questions</h2>
-                <div style={{display:"flex", flexDirection:"column", gap:"0"}}>
-                  {bank.slice(0,5).map((q,i) => (
-                    <div key={i} style={{
-                      display:"flex", alignItems:"center", gap:"1rem",
-                      padding:"0.85rem 0",
-                      borderBottom: i < 4 ? "1px solid "+border+"88" : "none",
-                    }}>
-                      <div style={{flexShrink:0, width:"32px", height:"32px", borderRadius:"8px",
-                        background:(courseColors[q.course]||accent)+"18",
-                        display:"flex", alignItems:"center", justifyContent:"center",
-                        fontSize:"0.65rem", color:courseColors[q.course]||accent, fontWeight:"800",
-                        fontFamily:"'Inter',system-ui,sans-serif"}}>
-                        {(q.section||"?").split(" ")[0]}
-                      </div>
-                      <div style={{flex:1, minWidth:0}}>
-                        <div style={{display:"flex", gap:"0.4rem", marginBottom:"0.2rem", flexWrap:"wrap"}}>
-                          <span style={S.tag(courseColors[q.course])}>{q.course}</span>
-                          <span style={S.diffTag(q.difficulty||"")}>{q.difficulty}</span>
-                        </div>
-                        <div style={{fontSize:"0.82rem", color:text1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", fontFamily:"'Georgia',serif"}}>
-                          {q.type==="Branched" ? q.stem : q.question}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <button style={{...S.oBtn(text2), fontSize:"0.75rem", marginTop:"1rem"}} onClick={() => setScreen("bank")}>
-                  View all {bank.length} questions →
-                </button>
-              </div>
-            )}
-          </div>
+          <HomeScreen
+            screen={screen}
+            exportHighlight={exportHighlight}
+            setScreen={setScreen}
+            setExportHighlight={setExportHighlight}
+            lastGenerated={lastGenerated}
+            bankLoaded={bankLoaded}
+            bank={bank}
+            course={course}
+            savedExams={savedExams}
+            bankIssueCount={bankIssueCount}
+            setFilterIssuesOnly={setFilterIssuesOnly}
+            allCourses={allCourses}
+            courseColors={courseColors}
+            setCourse={setCourse}
+            setSelectedSections={setSelectedSections}
+            setSectionCounts={setSectionCounts}
+            setSectionConfig={setSectionConfig}
+            customCourses={customCourses}
+            saveCustomCourse={saveCustomCourse}
+            deleteCustomCourse={deleteCustomCourse}
+            isAdmin={isAdmin}
+            accent={accent}
+          />
         )}
+
 
 
         {/* GENERATE */}
         {screen === "generate" && (
-          <div>
-            <div style={{...S.pageHeader, display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:"1rem", flexWrap:"wrap"}}>
-              <div>
-                <h1 style={S.h1}>Generate Questions</h1>
-                <p style={S.sub}>Select a course, pick sections, and copy the prompt to Claude.</p>
-              </div>
-              <button style={{...S.oBtn(text2), fontSize:"0.75rem", flexShrink:0}} onClick={() => setScreen("bank")}>Browse Bank →</button>
-            </div>
-
-            {/* Course picker */}
-            <div style={S.card}>
-              <div style={S.lbl}>Course</div>
-              <div style={{display:"flex", gap:"0.5rem", flexWrap:"wrap", marginTop:"0.5rem"}}>
-                {Object.entries(allCourses).map(([name, { color }]) => (
-                  <button key={name}
-                    style={S.courseChip(color, course===name)}
-                    onClick={() => { setCourse(name); setSelectedSections([]); setSectionCounts({}); setSectionConfig({}); }}>
-                    <span style={S.courseDot(color)}/>
-                    {name}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Section picker */}
-            {course && (
-              <div style={S.card}>
-                <div style={S.lbl}>Sections ({selectedSections.length} selected · {totalQ} questions)</div>
-                {chapters.map(chap => {
-                  const allSel = chap.sections.every(s => selectedSections.includes(s));
-                  return (
-                    <div key={chap.ch} style={{marginBottom:"1rem"}}>
-                      <button style={{...S.sBtn(allSel), marginBottom:"0.4rem", fontWeight:"bold"}} onClick={() => toggleChapter(chap)}>
-                        <span style={S.chk(allSel)}>{allSel?"✓":""}</span>
-                        Ch {chap.ch}: {chap.title}
-                      </button>
-                      <div style={{...S.sGrid, paddingLeft:"1rem"}}>
-                        {chap.sections.map(sec => {
-                          const sel = selectedSections.includes(sec);
-                          return (
-                            <div key={sec} style={{display:"flex", alignItems:"center", gap:"0.4rem"}}>
-                              <button style={S.sBtn(sel)} onClick={() => toggleSection(sec)}>
-                                <span style={S.chk(sel)}>{sel?"✓":""}</span>
-                                {sec}
-                              </button>
-                              {(() => {
-                                const existingCount = bank.filter(q => q.section === sec && q.course === course).length;
-                                return existingCount > 0 && (
-                                  <span title={`${existingCount} questions already in bank for this section`}
-                                    style={{fontSize:"0.62rem", color:text3, background:bg2, border:"1px solid "+border, borderRadius:"3px", padding:"0.05rem 0.3rem"}}>
-                                    {existingCount}q
-                                  </span>
-                                );
-                              })()}
-                              {sel && (() => {
-                                const cfg = getSectionConfig(sec);
-                                const diffColors = { Easy:"#10b981", Medium:"#f59e0b", Hard:"#f43f5e" };
-                                const isQM = course === "Quantitative Methods I" || course === "Quantitative Methods II";
-                                const types = isQM ? ["normal","table","graph","mix"] : ["normal","graph","mix"];
-                                const typeLabels = { normal:"Text", table:"Table", graph:"Graph", mix:"Mix" };
-                                const typeColors = { normal: border, table:"#185FA5", graph:"#1D9E75", mix:"#8b5cf6" };
-                                return (
-                                  <div style={{marginTop:"0.4rem", paddingLeft:"0.75rem", borderLeft:"2px solid #334155"}}>
-                                    {["Easy","Medium","Hard"].map(d => {
-                                      // total = sum of all type counts
-                                      const typeCounts = cfg[d].typeCounts || {};
-                                      const total = types.reduce((s,t) => s + (typeCounts[t]||0), 0);
-                                      return (
-                                        <div key={d} style={{marginBottom:"0.5rem"}}>
-                                          {/* Header row: difficulty + total */}
-                                          <div style={{display:"flex", alignItems:"center", gap:"0.5rem", marginBottom:"0.25rem"}}>
-                                            <span style={{fontSize:"0.68rem", color:diffColors[d], fontWeight:"600", minWidth:"46px"}}>{d}</span>
-                                            <span style={{fontSize:"0.68rem", color:text2, background:bg2, border:"1px solid "+border, borderRadius:"4px", padding:"0.1rem 0.5rem", minWidth:"28px", textAlign:"center"}}>
-                                              {total}
-                                            </span>
-                                            <span style={{fontSize:"0.6rem", color:text3}}>total</span>
-                                          </div>
-                                          {/* Type counts row */}
-                                          <div style={{display:"flex", gap:"0.4rem", flexWrap:"wrap", alignItems:"flex-start", paddingLeft:"54px"}}>
-                                            {types.map(t => {
-                                              const count = typeCounts[t] || 0;
-                                              const isTable = t === "table" || t === "mix";
-                                              return (
-                                                <div key={t} style={{display:"flex", flexDirection:"column", alignItems:"center", gap:"0.15rem"}}>
-                                                  <span style={{fontSize:"0.6rem", color: count > 0 ? typeColors[t] : text3, fontWeight: count>0?"600":"400"}}>{typeLabels[t]}</span>
-                                                  <input type="number" min={0} max={20} value={count}
-                                                    onChange={e => {
-                                                      const newVal = Math.max(0, Number(e.target.value)||0);
-                                                      const newTypeCounts = { ...typeCounts, [t]: newVal };
-                                                      const newTotal = types.reduce((s,tt) => s + (newTypeCounts[tt]||0), 0);
-                                                      // dominant graphType = type with highest count (for prompt fallback)
-                                                      const dominant = types.reduce((a,b) => (newTypeCounts[b]||0) > (newTypeCounts[a]||0) ? b : a, "normal");
-                                                      setSectionDiff(sec, d, { typeCounts: newTypeCounts, count: newTotal, graphType: dominant });
-                                                    }}
-                                                    style={{width:"36px", ...S.input, padding:"0.1rem 0.25rem", fontSize:"0.75rem", textAlign:"center",
-                                                      borderColor: count > 0 ? typeColors[t]+"88" : border}} />
-                                                  {isTable && count > 0 && (
-                                                    <div style={{display:"flex", flexDirection:"column", gap:"0.1rem", alignItems:"center"}}>
-                                                      <div style={{display:"flex", alignItems:"center", gap:"0.15rem"}}>
-                                                        <span style={{fontSize:"0.55rem", color:text3}}>rows</span>
-                                                        <input type="number" min={2} max={20} value={cfg[d].tableRows||4}
-                                                          onChange={e => setSectionDiff(sec, d, "tableRows", Math.max(2, Math.min(20, Number(e.target.value)||4)))}
-                                                          style={{width:"30px", ...S.input, padding:"0.1rem 0.2rem", fontSize:"0.62rem", textAlign:"center"}} />
-                                                      </div>
-                                                      <div style={{display:"flex", alignItems:"center", gap:"0.15rem"}}>
-                                                        <span style={{fontSize:"0.55rem", color:text3}}>cols</span>
-                                                        <input type="number" min={2} max={8} value={cfg[d].tableCols||2}
-                                                          onChange={e => setSectionDiff(sec, d, "tableCols", Math.max(2, Math.min(8, Number(e.target.value)||2)))}
-                                                          style={{width:"30px", ...S.input, padding:"0.1rem 0.2rem", fontSize:"0.62rem", textAlign:"center"}} />
-                                                      </div>
-                                                    </div>
-                                                  )}
-                                                </div>
-                                              );
-                                            })}
-                                          </div>
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                );
-                              })()}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* Question Type */}
-            <div style={S.row}>
-              <div style={S.field}>
-                <label style={S.lbl}>Question Type</label>
-                <select style={S.sel} value={qType} onChange={e => setQType(e.target.value)}>
-                  {QTYPES.map(t => <option key={t}>{t}</option>)}
-                </select>
-              </div>
-            </div>
-
-            <div style={{display:"flex", gap:"0.75rem", flexWrap:"wrap", alignItems:"center"}}>
-              {generateConfirm ? (
-                <div style={{display:"flex", alignItems:"center", gap:"0.75rem", background:bg1,
-                  border:"1px solid "+border, borderRadius:"8px", padding:"0.6rem 1rem"}}>
-                  <span style={{fontSize:"0.85rem", color:text1}}>
-                    Generate {selectedSections.reduce((a,s) => a+(sectionCounts[s]||3), 0)} questions?
-                  </span>
-                  {(() => {
-                    const qCount = selectedSections.reduce((a,s) => a+(sectionCounts[s]||3), 0);
-                    const estTokens = Math.round(qCount * 350 + 1200);
-                    const estCost = (estTokens / 1000000 * 15).toFixed(3);
-                    return (
-                      <span style={{fontSize:"0.72rem", color:text3}}>
-                        ~{estTokens.toLocaleString()} tokens · ~${estCost}
-                      </span>
-                    );
-                  })()}
-                  <button style={S.btn(accent, false)} onClick={async () => {
-                    setGenerateConfirm(false);
-                    triggerGenerate();
-                    const prompt = buildGeneratePrompt(course, selectedSections, sectionCounts, qType, diff, sectionConfig, courseObject);
-                    await autoGenerate(prompt, (result) => {
-                      setPasteInput(result);
-                      setTimeout(() => { document.getElementById("auto-paste-trigger")?.click(); }, 100);
-                    });
-                  }}>Yes</button>
-                  <button style={S.oBtn(text2)} onClick={() => setGenerateConfirm(false)}>Cancel</button>
-                </div>
-              ) : (
-                <>
-                  <button
-                    style={S.btn(accent, !course || selectedSections.length === 0 || isGenerating)}
-                    disabled={!course || selectedSections.length === 0 || isGenerating}
-                    onClick={() => setGenerateConfirm(true)}
-                  >
-                    {isGenerating ? "⏳ Generating..." : "✦ Generate Questions"}
-                  </button>
-                  <button
-                    style={{...S.oBtn(text2), fontSize:"0.75rem"}}
-                    disabled={!course || selectedSections.length === 0}
-                    onClick={triggerGenerate}
-                  >
-                    Manual (copy-paste)
-                  </button>
-                </>
-              )}
-            </div>
-
-            {generateError && (
-              <div style={{color:"#f87171", fontSize:"0.78rem", marginTop:"0.5rem"}}>{generateError}</div>
-            )}
-
-            {pendingType === "generate" && generatedPrompt && (
-              <>
-                <hr style={S.divider} />
-                <div style={{fontSize:"0.78rem", color:accent, fontWeight:"bold", marginBottom:"0.5rem"}}>📋 Manual mode — copy prompt and paste response:</div>
-                <div style={S.promptBox}>{generatedPrompt}</div>
-                {isAdmin && <button style={S.oBtn(accent)} onClick={() => navigator.clipboard.writeText(generatedPrompt)}>
-                  Copy Prompt
-                </button>}
-                <button id="auto-paste-trigger" style={{display:"none"}} onClick={handlePaste} />
-                <PastePanel
-                  label="Paste the JSON array from Claude's response below."
-                  S={S} text2={text2}
-                  pasteInput={pasteInput} setPasteInput={setPasteInput}
-                  pasteError={pasteError} handlePaste={handlePaste}
-                  onCancel={() => { setPendingType(null); setPasteInput(""); setGeneratedPrompt(""); }}
-                />
-              </>
-            )}
-          </div>
+          <GenerateScreen
+            setScreen={setScreen}
+            course={course}
+            setCourse={setCourse}
+            allCourses={allCourses}
+            selectedSections={selectedSections}
+            setSelectedSections={setSelectedSections}
+            sectionCounts={sectionCounts}
+            setSectionCounts={setSectionCounts}
+            sectionConfig={sectionConfig}
+            setSectionConfig={setSectionConfig}
+            totalQ={totalQ}
+            chapters={chapters}
+            toggleChapter={toggleChapter}
+            toggleSection={toggleSection}
+            bank={bank}
+            getSectionConfig={getSectionConfig}
+            setSectionDiff={setSectionDiff}
+            qType={qType}
+            setQType={setQType}
+            diff={diff}
+            generateConfirm={generateConfirm}
+            setGenerateConfirm={setGenerateConfirm}
+            isGenerating={isGenerating}
+            triggerGenerate={triggerGenerate}
+            autoGenerate={autoGenerate}
+            courseObject={courseObject}
+            setPasteInput={setPasteInput}
+            generateError={generateError}
+            pendingType={pendingType}
+            generatedPrompt={generatedPrompt}
+            isAdmin={isAdmin}
+            pasteInput={pasteInput}
+            pasteError={pasteError}
+            handlePaste={handlePaste}
+            setPendingType={setPendingType}
+            setGeneratedPrompt={setGeneratedPrompt}
+            accent={accent}
+          />
         )}
+
 
         {/* REVIEW */}
         {screen === "review" && (
-          <div>
-            <div style={{...S.pageHeader, display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:"1rem", flexWrap:"wrap"}}>
-              <div>
-                <h1 style={S.h1}>Review Generated Questions</h1>
-                <p style={S.sub}>{lastGenerated.length} questions generated and saved to your bank.</p>
-              </div>
-              <div style={{display:"flex", gap:"0.5rem", flexShrink:0}}>
-                <button style={{...S.oBtn(text2), fontSize:"0.75rem"}} onClick={() => setScreen("generate")}>← Generate More</button>
-                <button style={{...S.oBtn(accent), fontSize:"0.75rem"}} onClick={() => setScreen("bank")}>Browse Bank →</button>
-                <button style={{...S.btn("#8b5cf6", false), fontSize:"0.75rem"}} onClick={() => {
-                  const ids = lastGenerated.map(q => q.id).filter(Boolean);
-                  if (ids.length) setSelectedForExam(prev => [...new Set([...prev, ...ids])]);
-                  setScreen("versions");
-                }}>Build Exam →</button>
-              </div>
-            </div>
-            {lastGenerated.length === 0 && (
-              <div style={{...S.card, textAlign:"center", padding:"3rem 2rem"}}>
-                <div style={{fontSize:"2.5rem", marginBottom:"1rem"}}>✨</div>
-                <div style={{fontSize:"1rem", fontWeight:"600", color:text1, marginBottom:"0.5rem"}}>No questions to review</div>
-                <div style={{fontSize:"0.82rem", color:text2, marginBottom:"1.5rem", lineHeight:1.6}}>
-                  Generate questions first, then paste the JSON here to review them before saving to your bank.
-                </div>
-                <button style={S.btn(accent, false)} onClick={() => setScreen("generate")}>✦ Generate Questions</button>
-              </div>
-            )}
-            {dupWarnings.length > 0 && (
-              <div style={{...S.card, borderColor:"#f59e0b44", background:"#f59e0b08", marginBottom:"1rem"}}>
-                <div style={{fontSize:"0.75rem", color:"#f59e0b", fontWeight:"600", marginBottom:"0.4rem"}}>⚠ Possible duplicates detected (same section)</div>
-                {dupWarnings.map((w,i) => (
-                  <div key={i} style={{fontSize:"0.72rem", color:text2, marginBottom:"0.2rem"}}>• {w}</div>
-                ))}
-                <div style={{fontSize:"0.68rem", color:text3, marginTop:"0.4rem"}}>These questions were still saved — review and delete if needed.</div>
-              </div>
-            )}
-            {lastGenerated.map((q, qi) => (
-              <div key={q.id || qi} style={S.qCard}>
-                {(() => { const issues = validateQuestion(q); return (
-                <div style={S.qMeta}>
-                  <span>Q{qi+1}</span>
-                  <span style={S.tag(courseColors[q.course])}>{q.course}</span>
-                  <span style={S.tag()}>{q.type}</span>
-                  <span style={S.tag()}>{q.section}</span>
-                  <span style={S.tag()}>{q.difficulty}</span>
-                  {issues.length > 0 && (
-                    <span title={issues.join("\n")} style={{marginLeft:"auto", cursor:"help",
-                      background:"#7c2d12", color:"#9B1C1C", fontSize:"0.68rem", fontWeight:"600",
-                      padding:"0.1rem 0.4rem", borderRadius:"4px", whiteSpace:"nowrap"}}>
-                      ⚠️ {issues.length} issue{issues.length > 1 ? "s" : ""}
-                    </span>
-                  )}
-                </div>
-                ); })()}
-                {q.hasGraph && q.graphConfig && (
-                  <GraphDisplay graphConfig={q.graphConfig} authorMode={true} />
-                )}
-                {q.type === "Branched" ? (
-                  <>
-                    <div style={{...S.qText, color:accent+"cc"}}>Given: <MathText>{q.stem}</MathText></div>
-                    {(q.parts||[]).map((p,pi) => (
-                      <div key={pi} style={{marginBottom:"0.6rem", paddingLeft:"0.75rem", borderLeft:"2px solid "+border}}>
-                        <div style={{fontSize:"0.7rem", color:text3, marginBottom:"0.2rem"}}>({String.fromCharCode(97+pi)})</div>
-                        <div style={S.qText}><MathText>{p.question}</MathText></div>
-                        {p.answer && <div style={S.ans}>Answer: <MathText>{p.answer}</MathText></div>}
-                        {p.explanation && <div style={S.expl}>💡 <MathText>{p.explanation}</MathText></div>}
-                      </div>
-                    ))}
-                  </>
-                ) : (
-                  <>
-                    <div style={S.qText}><MathText>{q.question}</MathText></div>
-                    {q.choices && <ul style={S.cList}>{q.choices.map((c,ci) => <li key={ci} style={S.cItem(c===q.answer)}>{String.fromCharCode(65+ci)}. <MathText>{c}</MathText></li>)}</ul>}
-                    {q.answer && <div style={S.ans}>✓ <MathText>{q.answer}</MathText></div>}
-                    {q.explanation && <div style={S.expl}>💡 <MathText>{q.explanation}</MathText></div>}
-                  </>
-                )}
-              </div>
-            ))}
-          </div>
+          <ReviewScreen
+            setScreen={setScreen}
+            lastGenerated={lastGenerated}
+            setSelectedForExam={setSelectedForExam}
+            dupWarnings={dupWarnings}
+            validateQuestion={validateQuestion}
+            courseColors={courseColors}
+            accent={accent}
+          />
         )}
 
         {/* BANK */}
@@ -1909,11 +1216,11 @@ ${questionsText}`;
             <div style={{...S.pageHeader, display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:"1rem", flexWrap:"wrap"}}>
               <div>
                 <h1 style={S.h1}>Question Bank</h1>
-                <p style={S.sub}>{bank.length} questions saved{bankIssueCount > 0 ? ` · ⚠️ ${bankIssueCount} with issues` : " · ✓ all valid"}.</p>
+                <p style={S.sub}>{bank.length} questions saved{bankIssueCount > 0 ? ` Â· âš ï¸ ${bankIssueCount} with issues` : " Â· âœ“ all valid"}.</p>
               </div>
               <div style={{display:"flex", gap:"0.5rem", flexShrink:0}}>
                 <button style={{...S.ghostBtn(bankCompact ? accent : text3), fontSize:"0.75rem"}} onClick={() => setBankCompact(p => !p)}>
-                  {bankCompact ? "≡ Compact" : "☰ Compact"}
+                  {bankCompact ? "â‰¡ Compact" : "â˜° Compact"}
                 </button>
                 {isAdmin && (
                   <button style={{...S.ghostBtn("#f59e0b"), fontSize:"0.75rem"}} onClick={async () => {
@@ -1932,15 +1239,15 @@ ${questionsText}`;
                         cleaned++;
                       }
                     }
-                    showToast(`Cleaned ${cleaned} explanation${cleaned !== 1 ? "s" : ""} ✓`);
-                  }}>🧹 Clean Explanations</button>
+                    showToast(`Cleaned ${cleaned} explanation${cleaned !== 1 ? "s" : ""} âœ“`);
+                  }}>ðŸ§¹ Clean Explanations</button>
                 )}
                 <button style={{...S.oBtn(text2), fontSize:"0.75rem"}} onClick={() => setScreen("generate")}>+ Generate More</button>
                 <button style={{...S.btn("#8b5cf6", false), fontSize:"0.75rem"}} onClick={() => {
                   const ids = lastGenerated.map(q => q.id).filter(Boolean);
                   if (ids.length) setSelectedForExam(prev => [...new Set([...prev, ...ids])]);
                   setScreen("versions");
-                }}>Build Exam →</button>
+                }}>Build Exam â†’</button>
               </div>
             </div>
 
@@ -1961,19 +1268,19 @@ ${questionsText}`;
               ))}
             </div>
 
-            {/* ── BROWSE TAB ── */}
+            {/* â”€â”€ BROWSE TAB â”€â”€ */}
             {bankTabState === "browse" && (<>
 
             {/* Bulk select toolbar */}
             <div style={{display:"flex", gap:"0.5rem", alignItems:"center", marginBottom:"0.75rem", flexWrap:"wrap"}}>
               <button style={S.ghostBtn(bankSelectMode ? "#f87171" : text2)}
                 onClick={() => { setBankSelectMode(!bankSelectMode); setBankSelected(new Set()); }}>
-                {bankSelectMode ? `✕ Cancel Select (${bankSelected.size} selected)` : "☑ Select to Delete"}
+                {bankSelectMode ? `âœ• Cancel Select (${bankSelected.size} selected)` : "â˜‘ Select to Delete"}
               </button>
               {isAdmin && !bankSelectMode && (
                 <button style={S.ghostBtn("#8b5cf6")} onClick={async () => {
                   const graphQs = bank.filter(q => q.hasGraph && q.graphConfig && (q.graphConfig.title || q.graphConfig.probability));
-                  if (graphQs.length === 0) { showToast("No titles/labels to clean up ✓"); return; }
+                  if (graphQs.length === 0) { showToast("No titles/labels to clean up âœ“"); return; }
                   if (!window.confirm(`Strip title and probability labels from ${graphQs.length} graph question(s)? This makes them cleaner in Canvas.`)) return;
                   let cleaned = 0;
                   for (const q of graphQs) {
@@ -1983,8 +1290,8 @@ ${questionsText}`;
                     setBank(prev => prev.map(bq => bq.id === q.id ? updated : bq));
                     cleaned++;
                   }
-                  showToast(`✓ Cleaned ${cleaned} graph question${cleaned>1?"s":""}`);
-                }}>🧹 Clean graph titles</button>
+                  showToast(`âœ“ Cleaned ${cleaned} graph question${cleaned>1?"s":""}`);
+                }}>ðŸ§¹ Clean graph titles</button>
               )}
               {bankSelectMode && bankSelected.size > 0 && (
                 <>
@@ -1993,7 +1300,7 @@ ${questionsText}`;
                     for (const id of bankSelected) await deleteQuestion(id);
                     setBank(prev => prev.filter(q => !bankSelected.has(q.id)));
                     setBankSelected(new Set()); setBankSelectMode(false);
-                  }}>🗑 Delete {bankSelected.size} questions</button>
+                  }}>ðŸ—‘ Delete {bankSelected.size} questions</button>
                   <button style={S.ghostBtn("#10b981")} onClick={() => {
                     const selectedQs = bank.filter(q => bankSelected.has(q.id));
                     if (!selectedQs.length) return;
@@ -2011,7 +1318,7 @@ ${questionsText}`;
                     setBulkReplacePrompt(prompt);
                     setBulkReplaceIds(new Set(bankSelected));
                     setBulkReplacePaste(""); setBulkReplaceError("");
-                  }}>🔄 Replace {bankSelected.size} with new</button>
+                  }}>ðŸ”„ Replace {bankSelected.size} with new</button>
                   <button style={S.ghostBtn(text2)} onClick={() => {
                     const ids = new Set(filteredBank.map(q => q.id));
                     setBankSelected(ids);
@@ -2024,12 +1331,12 @@ ${questionsText}`;
             {bulkReplacePrompt && (
               <div style={{background:bg2, border:"1px solid #10b98144", borderRadius:"10px", padding:"1rem", marginBottom:"1rem"}}>
                 <div style={{fontSize:"0.78rem", color:"#10b981", fontWeight:"600", marginBottom:"0.5rem"}}>
-                  🔄 Replace {bulkReplaceIds.size} questions — copy prompt to Claude, paste response back:
+                  ðŸ”„ Replace {bulkReplaceIds.size} questions â€” copy prompt to Claude, paste response back:
                 </div>
                 <div style={{...S.promptBox, maxHeight:"140px"}}>{bulkReplacePrompt}</div>
                 <div style={{display:"flex", gap:"0.5rem", marginBottom:"0.75rem", flexWrap:"wrap"}}>
                   <button style={{...S.oBtn("#10b981"), fontSize:"0.72rem", padding:"0.3rem 0.7rem"}}
-                    onClick={() => navigator.clipboard.writeText(bulkReplacePrompt)}>📋 Copy Prompt</button>
+                    onClick={() => navigator.clipboard.writeText(bulkReplacePrompt)}>ðŸ“‹ Copy Prompt</button>
                   {isAdmin && <button style={{...S.btn("#10b981", autoGenLoading), fontSize:"0.72rem", padding:"0.3rem 0.7rem"}}
                     disabled={autoGenLoading}
                     onClick={async () => {
@@ -2043,7 +1350,7 @@ ${questionsText}`;
                         setBulkReplacePaste(text);
                       } catch(e) { setBulkReplaceError(e.message); }
                       finally { setAutoGenLoading(false); }
-                    }}>{autoGenLoading ? "⏳ Generating..." : "⚡ Auto-Generate"}</button>}
+                    }}>{autoGenLoading ? "â³ Generating..." : "âš¡ Auto-Generate"}</button>}
                   <button style={{...S.ghostBtn(text3), fontSize:"0.68rem"}}
                     onClick={() => { setBulkReplacePrompt(""); setBulkReplaceIds(new Set()); setBulkReplacePaste(""); setBulkReplaceError(""); }}>Cancel</button>
                 </div>
@@ -2072,16 +1379,16 @@ ${questionsText}`;
                       setFilterTime("All"); setFilterDay("All");
                       setBankSelected(new Set()); setBankSelectMode(false);
                       setBulkReplacePrompt(""); setBulkReplaceIds(new Set()); setBulkReplacePaste("");
-                      showToast(`✓ ${tagged.length} questions replaced successfully`, "success");
+                      showToast(`âœ“ ${tagged.length} questions replaced successfully`, "success");
                     } catch(e) { setBulkReplaceError(e.message || "Failed to parse response."); }
-                  }}>✓ Submit Replacement</button>
+                  }}>âœ“ Submit Replacement</button>
               </div>
             )}
 
             <div style={{marginBottom:"0.75rem"}}>
               <input
                 value={bankSearch} onChange={e => setBankSearch(e.target.value)}
-                placeholder="🔍  Search questions, answers, sections..."
+                placeholder="ðŸ”  Search questions, answers, sections..."
                 style={{width:"100%", padding:"0.5rem 0.75rem", background:bg2,
                   border:"1px solid "+border, color:text1, borderRadius:"8px",
                   fontSize:"0.83rem", boxSizing:"border-box", outline:"none"}}
@@ -2134,38 +1441,38 @@ ${questionsText}`;
                   padding:"0.18rem 0.65rem", alignSelf:"center",
                   boxShadow:"0 1px 4px "+accent+"55"
                 }}>
-                  ✓ {selectedForExam.length} selected for exam
+                  âœ“ {selectedForExam.length} selected for exam
                   <span
                     title="Clear selection"
                     onClick={() => setSelectedForExam([])}
-                    style={{cursor:"pointer", marginLeft:"2px", opacity:0.75, fontWeight:"400", fontSize:"0.72rem"}}>✕</span>
+                    style={{cursor:"pointer", marginLeft:"2px", opacity:0.75, fontWeight:"400", fontSize:"0.72rem"}}>âœ•</span>
                 </span>
               )}
               {bankIssueCount > 0 && (
                 <button
                   style={{...S.ghostBtn(filterIssuesOnly ? "#f87171" : text3), alignSelf:"center", border: filterIssuesOnly ? "1px solid #f8717144" : "1px solid "+border}}
                   onClick={() => setFilterIssuesOnly(p => !p)}>
-                  {filterIssuesOnly ? "⚠ Issues only ✕" : `⚠ Show ${bankIssueCount} with issues`}
+                  {filterIssuesOnly ? "âš  Issues only âœ•" : `âš  Show ${bankIssueCount} with issues`}
                 </button>
               )}
               {bankDupCount > 0 && (
                 <span style={{fontSize:"0.72rem", color:"#f59e0b", alignSelf:"center", border:"1px solid #f59e0b44", borderRadius:"4px", padding:"0.18rem 0.5rem"}}>
-                  ⚠ {bankDupCount} possible duplicate{bankDupCount>1?"s":""}
+                  âš  {bankDupCount} possible duplicate{bankDupCount>1?"s":""}
                 </span>
               )}
             </div>
 
-            {!bankLoaded && <div style={{color:text2}}>Loading from database…</div>}
+            {!bankLoaded && <div style={{color:text2}}>Loading from databaseâ€¦</div>}
             {bankLoaded && bank.length === 0 && (
               <div style={{...S.card, textAlign:"center", padding:"3rem 2rem"}}>
-                <div style={{fontSize:"2.5rem", marginBottom:"1rem"}}>📭</div>
+                <div style={{fontSize:"2.5rem", marginBottom:"1rem"}}>ðŸ“­</div>
                 <div style={{fontSize:"1rem", fontWeight:"600", color:text1, marginBottom:"0.5rem"}}>Your bank is empty</div>
                 <div style={{fontSize:"0.82rem", color:text2, marginBottom:"1.5rem", lineHeight:1.6}}>
                   Generate your first questions to get started.<br/>
                   Choose a course, pick sections, and copy the prompt to Claude.
                 </div>
                 <button style={S.btn(accent, false)} onClick={() => setScreen("generate")}>
-                  ✦ Generate Questions
+                  âœ¦ Generate Questions
                 </button>
               </div>
             )}
@@ -2194,15 +1501,15 @@ ${questionsText}`;
                       <span style={{flex:1, fontSize:"0.8rem", color:text1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
                         {q.type==="Branched" ? q.stem : q.question}
                       </span>
-                      {used > 0 && <span style={{fontSize:"0.62rem", color:"#06b6d4", flexShrink:0}}>📋×{used}</span>}
-                      {issues.length > 0 && <span style={{fontSize:"0.62rem", color:"#f87171", flexShrink:0}}>⚠</span>}
+                      {used > 0 && <span style={{fontSize:"0.62rem", color:"#06b6d4", flexShrink:0}}>ðŸ“‹Ã—{used}</span>}
+                      {issues.length > 0 && <span style={{fontSize:"0.62rem", color:"#f87171", flexShrink:0}}>âš </span>}
                       <button style={{...S.smBtn, flexShrink:0, color:inExam?"#e11d48":text3, border:"1px solid "+(inExam?"#e11d4844":border)}}
                         onClick={() => setSelectedForExam(p => p.includes(q.id) ? p.filter(id=>id!==q.id) : [...p,q.id])}>
-                        {inExam?"✓":"+"}</button>
+                        {inExam?"âœ“":"+"}</button>
                       <button style={{...S.smBtn, flexShrink:0, color:"#7C3AED", border:"1px solid #a78bfa33"}}
-                        onClick={() => { setInlineEditQId(inlineEditQId===q.id?null:q.id); setGraphEditorQId(null); }}>✏</button>
+                        onClick={() => { setInlineEditQId(inlineEditQId===q.id?null:q.id); setGraphEditorQId(null); }}>âœ</button>
                       <button style={{...S.smBtn, flexShrink:0, color:"#f87171", border:"1px solid #f8717133"}}
-                        onClick={() => setConfirmDelete({id:q.id, label:(q.question||q.stem||"").slice(0,60)})}>✕</button>
+                        onClick={() => setConfirmDelete({id:q.id, label:(q.question||q.stem||"").slice(0,60)})}>âœ•</button>
                     </div>
                   );
                 })}
@@ -2225,13 +1532,13 @@ ${questionsText}`;
                   {usedInExams[q.id] > 0 && (
                     <span title={`Used in ${usedInExams[q.id]} saved exam${usedInExams[q.id]>1?"s":""}`}
                       style={{...S.tag(), background:"#06b6d415", color:"#06b6d4", border:"1px solid #06b6d433"}}>
-                      📋 ×{usedInExams[q.id]}
+                      ðŸ“‹ Ã—{usedInExams[q.id]}
                     </span>
                   )}
                   {duplicateIds.has(q.id) && (
-                    <span title="Possible duplicate — similar question exists in same section"
+                    <span title="Possible duplicate â€” similar question exists in same section"
                       style={{...S.tag(), background:"#f59e0b15", color:"#f59e0b", border:"1px solid #f59e0b44"}}>
-                      ⚠ dup
+                      âš  dup
                     </span>
                   )}
                   {bankSelectMode && (
@@ -2242,7 +1549,7 @@ ${questionsText}`;
                   {!bankSelectMode && (
                     <button style={{...S.smBtn, marginLeft:"auto", color:"#f87171", border:"1px solid #f8717144"}}
                       onClick={() => setConfirmDelete({id: q.id, label: (q.question||q.stem||"").slice(0,60)})}>
-                      ✕
+                      âœ•
                     </button>
                   )}
                   <button style={{...S.smBtn, color:"#f59e0b", border:"1px solid #f59e0b44"}}
@@ -2250,18 +1557,18 @@ ${questionsText}`;
                       const prompt = buildReplacePrompt(q, "numbers");
                       setGeneratedPrompt(prompt);
                       setPendingType("bank_replace"); setPendingMeta({qId: q.id}); setPasteInput(""); setPasteError("");
-                    }}>↻</button>
+                    }}>â†»</button>
                   <button style={{...S.smBtn, color:"#185FA5", border:"1px solid #60a5fa44"}}
                     onClick={() => { setGraphEditorQId(graphEditorQId === q.id ? null : q.id); setInlineEditQId(null); }}>
-                    📈{q.hasGraph ? " Edit" : " Graph"}
+                    ðŸ“ˆ{q.hasGraph ? " Edit" : " Graph"}
                   </button>
                   <button style={{...S.smBtn, color: inlineEditQId===q.id ? "#60a5fa" : "#a78bfa", border:"1px solid #a78bfa44"}}
                     onClick={() => { setInlineEditQId(inlineEditQId===q.id ? null : q.id); setGraphEditorQId(null); }}>
-                    ✏️ Edit
+                    âœï¸ Edit
                   </button>
                   <button style={{...S.smBtn, color:inExam?"#e11d48":text2, border:"1px solid "+(inExam?"#e11d4844":border)}}
                     onClick={() => setSelectedForExam(p => p.includes(q.id) ? p.filter(id => id !== q.id) : [...p, q.id])}>
-                    {inExam ? "✓ In exam" : "+ Exam"}
+                    {inExam ? "âœ“ In exam" : "+ Exam"}
                   </button>
                 </div>
 
@@ -2276,7 +1583,7 @@ ${questionsText}`;
                       await saveQuestion(updated);
                       setBank(prev => prev.map(bq => bq.id === q.id ? updated : bq));
                       setGraphEditorQId(null);
-                      showToast("Graph saved ✓");
+                      showToast("Graph saved âœ“");
                     }}
                     onRemove={async () => {
                       const updated = { ...q, hasGraph: false, graphConfig: null };
@@ -2294,7 +1601,7 @@ ${questionsText}`;
                       await saveQuestion(updated);
                       setBank(prev => prev.map(bq => bq.id === q.id ? updated : bq));
                       setInlineEditQId(null);
-                      showToast("Question saved ✓");
+                      showToast("Question saved âœ“");
                     }}
                     onClose={() => setInlineEditQId(null)}
                   />
@@ -2314,8 +1621,8 @@ ${questionsText}`;
                   <>
                     <div style={S.qText}><MathText>{q.question}</MathText></div>
                     {q.choices && <ul style={S.cList}>{q.choices.map((c,ci) => <li key={ci} style={S.cItem(c===q.answer)}>{String.fromCharCode(65+ci)}. <MathText>{c}</MathText></li>)}</ul>}
-                    {q.answer && <div style={S.ans}>✓ <MathText>{q.answer}</MathText></div>}
-                    {q.explanation && <div style={S.expl}>💡 <MathText>{q.explanation}</MathText></div>}
+                    {q.answer && <div style={S.ans}>âœ“ <MathText>{q.answer}</MathText></div>}
+                    {q.explanation && <div style={S.expl}>ðŸ’¡ <MathText>{q.explanation}</MathText></div>}
                   </>
                 )}
 
@@ -2323,7 +1630,7 @@ ${questionsText}`;
                 {pendingType === "bank_replace" && pendingMeta?.qId === q.id && generatedPrompt && (
                   <div style={{marginTop:"0.75rem", borderTop:"1px solid #f59e0b33", paddingTop:"0.75rem"}}>
                     <div style={{fontSize:"0.72rem", color:"#f59e0b", fontWeight:"600", marginBottom:"0.4rem"}}>
-                      ↻ Replace this question — copy prompt to Claude, paste response back:
+                      â†» Replace this question â€” copy prompt to Claude, paste response back:
                     </div>
                     <div style={{display:"flex", gap:"0.5rem", marginBottom:"0.35rem", flexWrap:"wrap"}}>
                       <span style={{fontSize:"0.65rem", color:text3, alignSelf:"center"}}>Regenerate:</span>
@@ -2334,14 +1641,14 @@ ${questionsText}`;
                       <div style={{display:"flex", gap:"0.5rem", marginBottom:"0.5rem", flexWrap:"wrap", paddingTop:"0.35rem", borderTop:"1px solid "+border}}>
                         <span style={{fontSize:"0.65rem", color:text3, alignSelf:"center"}}>Convert to:</span>
                         {!q.hasGraph && (
-                          <button style={S.ghostBtn("#10b981")} onClick={() => { const p = buildConvertPrompt(q,"graph"); setGeneratedPrompt(p); }}>📈 Graph</button>
+                          <button style={S.ghostBtn("#10b981")} onClick={() => { const p = buildConvertPrompt(q,"graph"); setGeneratedPrompt(p); }}>ðŸ“ˆ Graph</button>
                         )}
                         {q.hasGraph && (
-                          <button style={S.ghostBtn("#94a3b8")} onClick={() => { const p = buildConvertPrompt(q,"text"); setGeneratedPrompt(p); }}>📝 Text only</button>
+                          <button style={S.ghostBtn("#94a3b8")} onClick={() => { const p = buildConvertPrompt(q,"text"); setGeneratedPrompt(p); }}>ðŸ“ Text only</button>
                         )}
                         {(q.course === "Quantitative Methods I" || q.course === "Quantitative Methods II") && (<>
-                          {!q.hasGraph && <button style={S.ghostBtn("#185FA5")} onClick={() => { const p = buildConvertPrompt(q,"table"); setGeneratedPrompt(p); }}>📊 Table</button>}
-                          {q.hasGraph && <button style={S.ghostBtn("#185FA5")} onClick={() => { const p = buildConvertPrompt(q,"table"); setGeneratedPrompt(p); }}>📊 Table</button>}
+                          {!q.hasGraph && <button style={S.ghostBtn("#185FA5")} onClick={() => { const p = buildConvertPrompt(q,"table"); setGeneratedPrompt(p); }}>ðŸ“Š Table</button>}
+                          {q.hasGraph && <button style={S.ghostBtn("#185FA5")} onClick={() => { const p = buildConvertPrompt(q,"table"); setGeneratedPrompt(p); }}>ðŸ“Š Table</button>}
                         </>)}
                       </div>
                     )}
@@ -2351,11 +1658,11 @@ ${questionsText}`;
                     <div style={S.promptBox}>{generatedPrompt}</div>
                     {isAdmin && <div style={{display:"flex", gap:"0.5rem", marginBottom:"0.5rem", flexWrap:"wrap"}}>
                       <button style={{...S.oBtn("#f59e0b"), fontSize:"0.72rem", padding:"0.3rem 0.7rem"}}
-                        onClick={() => navigator.clipboard.writeText(generatedPrompt)}>📋 Copy Prompt</button>
+                        onClick={() => navigator.clipboard.writeText(generatedPrompt)}>ðŸ“‹ Copy Prompt</button>
                       <button style={{...S.btn("#10b981", autoGenLoading), fontSize:"0.72rem", padding:"0.3rem 0.7rem"}}
                         disabled={autoGenLoading}
                         onClick={() => autoGenerateVersions(generatedPrompt, "bank_replace", pendingMeta)}>
-                        {autoGenLoading ? "⏳ Generating..." : "⚡ Auto-Generate"}
+                        {autoGenLoading ? "â³ Generating..." : "âš¡ Auto-Generate"}
                       </button>
                     </div>}
                     <PastePanel
@@ -2381,7 +1688,7 @@ ${questionsText}`;
                   </div>
                 )}
 
-                {/* Inline mutation selector — only shown when question is selected for exam */}
+                {/* Inline mutation selector â€” only shown when question is selected for exam */}
                 {inExam && (
                   <div style={{display:"flex", alignItems:"center", gap:"0.5rem", marginTop:"0.6rem", paddingTop:"0.6rem", borderTop:"1px solid "+accent+"33"}}>
                     <span style={{fontSize:"0.68rem", color:accent, fontWeight:"bold", letterSpacing:"0.08em", textTransform:"uppercase"}}>Mutation:</span>
@@ -2427,34 +1734,34 @@ ${questionsText}`;
                 {/* Per-section build buttons */}
                 <div style={{display:"flex", gap:"0.5rem", flexWrap:"wrap", marginBottom:"0.5rem"}}>
                   <button style={S.btn(accent, false)} onClick={() => setScreen("versions")}>
-                    ✦ Build Exam →
+                    âœ¦ Build Exam â†’
                   </button>
                   {Object.keys(classSectionVersions).length > 0 && (
                     <button style={{...S.oBtn("#10b981")}} onClick={() => setScreen("versions")}>
-                      📋 View Versions
+                      ðŸ“‹ View Versions
                     </button>
                   )}
                 </div>
                 <div style={{fontSize:"0.68rem", color:text3}}>
                   {numClassSections > 1
                     ? "Section 1: numbers mutation (same time). Section 2+: function mutation (different time)."
-                    : "Tip: set numbers/function mutation on each question card above ↑"}
+                    : "Tip: set numbers/function mutation on each question card above â†‘"}
                 </div>
 
-                {/* Prompt + paste panel — appears after Build is clicked */}
+                {/* Prompt + paste panel â€” appears after Build is clicked */}
                 {(pendingType === "version_all" || pendingType === "version_all_sections") && generatedPrompt && (
                   <div style={{marginTop:"1rem"}}>
                     <div style={{fontSize:"0.78rem", color:accent, fontWeight:"600", marginBottom:"0.5rem"}}>
-                      📋 {pendingType === "version_all_sections"
-                        ? `Copy this prompt — generates ALL ${pendingMeta?.numClassSections} sections × ${pendingMeta?.labels?.join(", ")} versions in one go:`
-                        : `Copy this prompt — generates ${pendingMeta?.labels?.join(", ")} versions:`}
+                      ðŸ“‹ {pendingType === "version_all_sections"
+                        ? `Copy this prompt â€” generates ALL ${pendingMeta?.numClassSections} sections Ã— ${pendingMeta?.labels?.join(", ")} versions in one go:`
+                        : `Copy this prompt â€” generates ${pendingMeta?.labels?.join(", ")} versions:`}
                     </div>
                     <div style={S.promptBox}>{generatedPrompt}</div>
                     <div style={{display:"flex", gap:"0.75rem", marginBottom:"1rem", flexWrap:"wrap"}}>
                       <button style={{...S.btn("#10b981", autoGenLoading), minWidth:"160px"}}
                         disabled={autoGenLoading}
                         onClick={() => autoGenerateVersions(generatedPrompt, pendingType, pendingMeta)}>
-                        {autoGenLoading ? "⏳ Generating..." : "⚡ Generate Versions"}
+                        {autoGenLoading ? "â³ Generating..." : "âš¡ Generate Versions"}
                       </button>
                       {isAdmin && <button style={S.oBtn(accent)} onClick={() => navigator.clipboard.writeText(generatedPrompt)}>
                         Copy Prompt
@@ -2476,7 +1783,7 @@ ${questionsText}`;
             )}
             </>)}
 
-            {/* ── HISTORY TAB ── */}
+            {/* â”€â”€ HISTORY TAB â”€â”€ */}
             {bankTabState === "history" && (() => {
               // Group questions by date batch (same createdAt minute = same batch)
               const batches = [];
@@ -2525,16 +1832,16 @@ ${questionsText}`;
                               <span style={S.tag(color)}>{batch.questions.length} questions</span>
                             </div>
                             <div style={{fontSize:"0.72rem", color:text2, marginBottom:"0.25rem"}}>
-                              {dateStr} · {timeStr}
+                              {dateStr} Â· {timeStr}
                             </div>
                             <div style={{fontSize:"0.7rem", color:text3}}>
-                              {sections.slice(0,4).join(" · ")}{sections.length > 4 ? ` +${sections.length-4} more` : ""}
+                              {sections.slice(0,4).join(" Â· ")}{sections.length > 4 ? ` +${sections.length-4} more` : ""}
                             </div>
                           </div>
                           <div style={{display:"flex", gap:"0.5rem", alignItems:"center", flexWrap:"wrap"}}>
                             <button style={S.ghostBtn(color)}
                               onClick={() => toggleExpand()}>
-                              {expanded ? "▲ Hide" : "▼ Show"} questions
+                              {expanded ? "â–² Hide" : "â–¼ Show"} questions
                             </button>
                             <button style={S.ghostBtn(text2)}
                               onClick={() => {
@@ -2580,7 +1887,7 @@ ${questionsText}`;
           <div>
             <div style={S.pageHeader}>
               <h1 style={S.h1}>Exam Builder</h1>
-              <p style={S.sub}>{versions.length} version{versions.length !== 1 ? "s" : ""} created{Object.keys(classSectionVersions).length > 1 ? ` · ${Object.keys(classSectionVersions).length} classroom sections` : ""}.</p>
+              <p style={S.sub}>{versions.length} version{versions.length !== 1 ? "s" : ""} created{Object.keys(classSectionVersions).length > 1 ? ` Â· ${Object.keys(classSectionVersions).length} classroom sections` : ""}.</p>
             </div>
 
             {/* Classroom section tabs */}
@@ -2600,44 +1907,44 @@ ${questionsText}`;
             {versions.length === 0 && selectedForExam.length === 0 && (
               <>
                 <div style={{...S.card, textAlign:"center", padding:"3rem 2rem"}}>
-                  <div style={{fontSize:"2.5rem", marginBottom:"1rem"}}>📋</div>
+                  <div style={{fontSize:"2.5rem", marginBottom:"1rem"}}>ðŸ“‹</div>
                   <div style={{fontSize:"1rem", fontWeight:"600", color:text1, marginBottom:"0.5rem"}}>No exam built yet</div>
                   <div style={{fontSize:"0.82rem", color:text2, marginBottom:"1.5rem", lineHeight:1.6}}>
                     Select questions from the bank, then click Build Exam here to create multiple versions.
                   </div>
                   <div style={{display:"flex", gap:"0.75rem", justifyContent:"center", flexWrap:"wrap"}}>
-                    <button style={S.btn(accent, false)} onClick={() => setScreen("bank")}>▦ Browse Question Bank</button>
-                    <button style={S.oBtn(text2)} onClick={() => setScreen("generate")}>✦ Generate Questions</button>
+                    <button style={S.btn(accent, false)} onClick={() => setScreen("bank")}>â–¦ Browse Question Bank</button>
+                    <button style={S.oBtn(text2)} onClick={() => setScreen("generate")}>âœ¦ Generate Questions</button>
                   </div>
                 </div>
 
-                {/* ── Saved Masters ── */}
+                {/* â”€â”€ Saved Masters â”€â”€ */}
                 {(mastersLoading || savedMasters.length > 0) && (
                   <div style={{...S.card, marginTop:"1rem"}}>
                     <div style={{fontSize:"0.82rem", fontWeight:"700", color:text1, marginBottom:"0.75rem", display:"flex", alignItems:"center", gap:"0.5rem"}}>
-                      💾 Saved Masters
-                      <button onClick={loadSavedMasters} style={{...S.smBtn, marginLeft:"auto", fontSize:"0.68rem"}}>↻ Refresh</button>
+                      ðŸ’¾ Saved Masters
+                      <button onClick={loadSavedMasters} style={{...S.smBtn, marginLeft:"auto", fontSize:"0.68rem"}}>â†» Refresh</button>
                     </div>
-                    {mastersLoading && <div style={{fontSize:"0.78rem", color:text3, textAlign:"center", padding:"1rem"}}>Loading…</div>}
+                    {mastersLoading && <div style={{fontSize:"0.78rem", color:text3, textAlign:"center", padding:"1rem"}}>Loadingâ€¦</div>}
                     {!mastersLoading && savedMasters.map(m => (
                       <div key={m.id} style={{display:"flex", alignItems:"center", gap:"0.6rem", padding:"0.6rem 0", borderBottom:"1px solid "+border+"44", flexWrap:"wrap"}}>
                         <div style={{flex:1, minWidth:"150px"}}>
                           <div style={{fontSize:"0.85rem", fontWeight:"600", color:text1}}>{m.name}</div>
                           <div style={{fontSize:"0.68rem", color:text3, marginTop:"0.15rem"}}>
-                            {new Date(m.created_at).toLocaleDateString()} · {(m.master_questions||[]).length} questions
-                            {m.settings?.course ? ` · ${m.settings.course}` : ""}
-                            {m.settings?.versionCount ? ` · ${m.settings.versionCount} variants` : ""}
+                            {new Date(m.created_at).toLocaleDateString()} Â· {(m.master_questions||[]).length} questions
+                            {m.settings?.course ? ` Â· ${m.settings.course}` : ""}
+                            {m.settings?.versionCount ? ` Â· ${m.settings.versionCount} variants` : ""}
                           </div>
                         </div>
                         <button
                           style={{...S.btn("#10b981", false), fontSize:"0.78rem", padding:"0.3rem 0.8rem"}}
                           onClick={() => loadMaster(m)}>
-                          ▶ Load
+                          â–¶ Load
                         </button>
                         <button
                           style={{...S.ghostBtn("#f87171"), fontSize:"0.78rem", padding:"0.3rem 0.7rem"}}
                           onClick={() => deleteSavedMaster(m.id)}>
-                          🗑
+                          ðŸ—‘
                         </button>
                       </div>
                     ))}
@@ -2649,7 +1956,7 @@ ${questionsText}`;
               </>
             )}
 
-            {/* ── STAGE 1: Questions selected, ready to create master ── */}
+            {/* â”€â”€ STAGE 1: Questions selected, ready to create master â”€â”€ */}
             {selectedForExam.length > 0 && (() => {
               const selected = bank
                 .filter(q => selectedForExam.includes(q.id))
@@ -2667,11 +1974,11 @@ ${questionsText}`;
                           {selected.length} questions selected
                         </div>
                         <div style={{fontSize:"0.72rem", color:text2}}>
-                          {[...new Set(selected.map(q => q.course))].join(", ")} · {[...new Set(selected.map(q => q.section))].length} sections
+                          {[...new Set(selected.map(q => q.course))].join(", ")} Â· {[...new Set(selected.map(q => q.section))].length} sections
                         </div>
                       </div>
                       <button style={S.ghostBtn("#f87171")} onClick={() => setSelectedForExam([])}>
-                        ✕ Clear selection
+                        âœ• Clear selection
                       </button>
                     </div>
                     <div style={{display:"flex", flexDirection:"column", gap:"0.3rem", marginBottom:"1rem"}}>
@@ -2683,7 +1990,7 @@ ${questionsText}`;
                             {q.type==="Branched" ? q.stem : q.question}
                           </span>
                           <button style={{...S.smBtn, color:"#f87171", border:"none", padding:"0.1rem 0.3rem"}}
-                            onClick={() => setSelectedForExam(p => p.filter(id => id !== q.id))}>✕</button>
+                            onClick={() => setSelectedForExam(p => p.filter(id => id !== q.id))}>âœ•</button>
                         </div>
                       ))}
                     </div>
@@ -2694,23 +2001,23 @@ ${questionsText}`;
                         setActiveVersion(0);
                         setMasterLocked(false);
                       }}>
-                      ❆ Create Master Exam (Version A)
+                      â† Create Master Exam (Version A)
                     </button>
                   </div>
                 </div>
               );
             })()}
 
-            {/* ── STAGE 2: Master Version A created — proof and verify ── */}
+            {/* â”€â”€ STAGE 2: Master Version A created â€” proof and verify â”€â”€ */}
             {versions.length === 1 && !masterLocked && (() => {
               const v = versions[0];
               return (
                 <div>
                   <div style={{background:"#451a0322", border:"1px solid #f59e0b44", borderRadius:"8px", padding:"0.75rem 1rem", marginBottom:"1.25rem", display:"flex", alignItems:"center", gap:"0.75rem", flexWrap:"wrap"}}>
-                    <span style={{fontSize:"1.1rem"}}>⚠️</span>
+                    <span style={{fontSize:"1.1rem"}}>âš ï¸</span>
                     <div style={{flex:1}}>
                       <div style={{fontSize:"0.82rem", fontWeight:"600", color:"#f59e0b"}}>Export and proof your master exam before generating variants</div>
-                      <div style={{fontSize:"0.72rem", color:text3, marginTop:"0.2rem"}}>Edit any question below, then click “Master Verified” when you’re satisfied with Version A.</div>
+                      <div style={{fontSize:"0.72rem", color:text3, marginTop:"0.2rem"}}>Edit any question below, then click â€œMaster Verifiedâ€ when youâ€™re satisfied with Version A.</div>
                     </div>
                   </div>
                   <div style={{display:"flex", gap:"0.75rem", marginBottom:"1.25rem", flexWrap:"wrap"}}>
@@ -2720,9 +2027,9 @@ ${questionsText}`;
                         const blob = await buildDocx(v.questions, v.questions[0]?.course||"Calculus", v.label, null);
                         dlBlob(blob, `Version_A_Master_Exam.docx`);
                       } finally { setExportLoading(""); }
-                    }}>⬇ Word (.docx)</button>
+                    }}>â¬‡ Word (.docx)</button>
                     <button style={S.oBtn("#06b6d4")} onClick={() => setShowPrintPreview(true)}>
-                      👁 Print Preview
+                      ðŸ‘ Print Preview
                     </button>
                     <button style={S.oBtn("#f43f5e")} disabled={exportLoading !== ""} onClick={async () => {
                       setExportLoading("Building answer key...");
@@ -2730,13 +2037,13 @@ ${questionsText}`;
                         const blob = await buildAnswerKey([v], v.questions[0]?.course || "Exam");
                         if (blob) dlBlob(blob, `Version_A_Answer_Key.docx`);
                       } finally { setExportLoading(""); }
-                    }}>🔑 Answer Key (.docx)</button>
+                    }}>ðŸ”‘ Answer Key (.docx)</button>
                     <button style={S.oBtn("#8b5cf6")} onClick={async () => {
                       const xml = buildQTI(v.questions, v.questions[0]?.course||"Exam", v.label, qtiUseGroups, parseFloat(qtiPointsPerQ) || 1);
                       const blob = await buildQTIZip(xml, `Version_A`);
                       dlBlob(blob, `Version_A_Canvas_QTI.zip`);
-                    }}>⬇ QTI (.zip)</button>
-                    {exportLoading && <span style={{fontSize:"0.75rem", color:text3, alignSelf:"center"}}>⏳ {exportLoading}</span>}
+                    }}>â¬‡ QTI (.zip)</button>
+                    {exportLoading && <span style={{fontSize:"0.75rem", color:text3, alignSelf:"center"}}>â³ {exportLoading}</span>}
                   </div>
                   {v.questions.map((q,qi) => (
                     <div key={q.id||qi} style={S.qCard}>
@@ -2748,7 +2055,7 @@ ${questionsText}`;
                         <div style={{marginLeft:"auto", display:"flex", gap:"0.3rem"}}>
                           <button style={{...S.smBtn, color: inlineEditQId===`master_${qi}` ? "#60a5fa" : "#a78bfa", border:"1px solid #a78bfa44"}}
                             onClick={() => setInlineEditQId(inlineEditQId===`master_${qi}` ? null : `master_${qi}`)}>
-                            ✏️
+                            âœï¸
                           </button>
                         </div>
                       </div>
@@ -2758,7 +2065,7 @@ ${questionsText}`;
                           onSave={(updated) => {
                             setVersions([{ ...v, questions: v.questions.map((vq,vqi) => vqi !== qi ? vq : updated) }]);
                             setInlineEditQId(null);
-                            showToast("Question updated ✓");
+                            showToast("Question updated âœ“");
                           }}
                           onClose={() => setInlineEditQId(null)}
                         />
@@ -2771,7 +2078,7 @@ ${questionsText}`;
                               <div style={{fontSize:"0.7rem",color:text3,marginBottom:"0.2rem"}}>({String.fromCharCode(97+pi)})</div>
                               <div style={S.qText}><MathText>{p.question}</MathText></div>
                               {p.answer&&<div style={S.ans}>Answer: <MathText>{p.answer}</MathText></div>}
-                              {p.explanation&&<div style={S.expl}>💡 <MathText>{p.explanation}</MathText></div>}
+                              {p.explanation&&<div style={S.expl}>ðŸ’¡ <MathText>{p.explanation}</MathText></div>}
                             </div>
                           ))}
                         </>
@@ -2779,8 +2086,8 @@ ${questionsText}`;
                         <>
                           <div style={S.qText}><MathText>{q.question}</MathText></div>
                           {q.choices&&<ul style={S.cList}>{q.choices.map((c,ci)=><li key={ci} style={S.cItem(c===q.answer)}>{String.fromCharCode(65+ci)}. <MathText>{c}</MathText></li>)}</ul>}
-                          {q.answer&&<div style={S.ans}>✓ <MathText>{q.answer}</MathText></div>}
-                          {q.explanation&&<div style={S.expl}>💡 <MathText>{q.explanation}</MathText></div>}
+                          {q.answer&&<div style={S.ans}>âœ“ <MathText>{q.answer}</MathText></div>}
+                          {q.explanation&&<div style={S.expl}>ðŸ’¡ <MathText>{q.explanation}</MathText></div>}
                         </>
                       )}
                     </div>
@@ -2793,13 +2100,13 @@ ${questionsText}`;
                     <button
                       style={{...S.btn("#10b981", false), fontSize:"0.88rem", padding:"0.55rem 1.4rem"}}
                       onClick={() => setMasterLocked(true)}>
-                      ✅ Master Verified — Generate Variants
+                      âœ… Master Verified â€” Generate Variants
                     </button>
                   </div>
 
-                  {/* ── Save Master ── */}
+                  {/* â”€â”€ Save Master â”€â”€ */}
                   <div style={{marginTop:"0.75rem", padding:"0.85rem 1rem", background:bg2, borderRadius:"8px", border:"1px solid "+border, display:"flex", alignItems:"center", gap:"0.6rem", flexWrap:"wrap"}}>
-                    <span style={{fontSize:"0.75rem", color:text2, fontWeight:"600", whiteSpace:"nowrap"}}>💾 Save Master</span>
+                    <span style={{fontSize:"0.75rem", color:text2, fontWeight:"600", whiteSpace:"nowrap"}}>ðŸ’¾ Save Master</span>
                     <input
                       value={masterName}
                       onChange={e => setMasterName(e.target.value)}
@@ -2810,19 +2117,19 @@ ${questionsText}`;
                       onClick={saveMaster}
                       disabled={savingMaster}
                       style={{...S.btn("#4f46e5", savingMaster), fontSize:"0.8rem", padding:"0.35rem 0.9rem", opacity: savingMaster ? 0.6 : 1}}>
-                      {savingMaster ? "Saving…" : "💾 Save Master"}
+                      {savingMaster ? "Savingâ€¦" : "ðŸ’¾ Save Master"}
                     </button>
                   </div>
                 </div>
               );
             })()}
 
-            {/* ── STAGE 3: Master verified — configure variants ── */}
+            {/* â”€â”€ STAGE 3: Master verified â€” configure variants â”€â”€ */}
             {versions.length === 1 && masterLocked && (
               <div>
                 <div style={{...S.card, borderColor:"#10b98144", marginBottom:"1rem"}}>
                   <div style={{fontSize:"0.78rem", color:"#10b981", fontWeight:"700", marginBottom:"0.75rem"}}>
-                    ✅ Version A locked · Now configure variants (B, C, D…)
+                    âœ… Version A locked Â· Now configure variants (B, C, Dâ€¦)
                   </div>
                   <div style={{display:"flex", gap:"1rem", flexWrap:"wrap", alignItems:"flex-end"}}>
                     <div>
@@ -2841,7 +2148,7 @@ ${questionsText}`;
                         onChange={e => setNumClassSections(Math.max(1, Number(e.target.value)||1))} />
                     </div>
                     <button style={S.btn(accent, false)} onClick={() => {
-                      // Stage 3: always use Version A questions directly — never re-query bank
+                      // Stage 3: always use Version A questions directly â€” never re-query bank
                       const masterQs = versions[0].questions;
                       console.log("Stage3 triggerVariants masterQs", masterQs.map(q => ({id:q.id, hasGraph:q.hasGraph, hasGC:!!q.graphConfig})));
                       const varLabels = VERSIONS.slice(1, 1 + versionCount);
@@ -2858,7 +2165,7 @@ ${questionsText}`;
                       }
                       setPasteInput(""); setPasteError("");
                     }}>
-                      ❆ {numClassSections > 1 ? `Generate All ${numClassSections} Sections` : "Generate Variants"}
+                      â† {numClassSections > 1 ? `Generate All ${numClassSections} Sections` : "Generate Variants"}
                     </button>
                   </div>
                   <div style={{marginTop:"0.75rem"}}>
@@ -2888,7 +2195,7 @@ ${questionsText}`;
                 {pendingType === "version_all" && generatedPrompt && (
                   <>
                     <div style={{fontSize:"0.78rem", color:accent, fontWeight:"600", marginBottom:"0.5rem"}}>
-                      📋 Copy this prompt — paste to Claude — paste response back:
+                      ðŸ“‹ Copy this prompt â€” paste to Claude â€” paste response back:
                     </div>
                     <div style={S.promptBox}>{generatedPrompt}</div>
                     {(() => {
@@ -2897,14 +2204,14 @@ ${questionsText}`;
                       const ncs = pendingMeta?.numClassSections || 1;
                       const totalVersions = numV * ncs;
                       const cost = (numQ * totalVersions * 400 * 3 / 1_000_000) + (numQ * totalVersions * 350 * 15 / 1_000_000);
-                      const label = ncs > 1 ? `${numQ} questions × ${numV} versions × ${ncs} sections` : `${numQ} questions × ${numV} versions`;
+                      const label = ncs > 1 ? `${numQ} questions Ã— ${numV} versions Ã— ${ncs} sections` : `${numQ} questions Ã— ${numV} versions`;
                       return <div style={{fontSize:"0.72rem", color:text3, marginBottom:"0.5rem"}}>Estimated cost: ~${cost.toFixed(3)} ({label})</div>;
                     })()}
                     <div style={{display:"flex", gap:"0.75rem", marginBottom:"1rem", flexWrap:"wrap"}}>
                       <button style={{...S.btn("#10b981", autoGenLoading), minWidth:"160px"}}
                         disabled={autoGenLoading}
                         onClick={() => autoGenerateVersions(generatedPrompt, pendingType, pendingMeta)}>
-                        {autoGenLoading ? "⏳ Generating..." : "⚡ Generate Variants"}
+                        {autoGenLoading ? "â³ Generating..." : "âš¡ Generate Variants"}
                       </button>
                       {isAdmin && <button style={S.oBtn(accent)} onClick={() => navigator.clipboard.writeText(generatedPrompt)}>Copy Prompt</button>}
                     </div>
@@ -2922,7 +2229,7 @@ ${questionsText}`;
                 {pendingType === "version_all_sections" && generatedPrompt && (
                   <>
                     <div style={{fontSize:"0.78rem", color:accent, fontWeight:"600", marginBottom:"0.5rem"}}>
-                      📋 Copy this prompt — generates ALL {pendingMeta?.numClassSections} sections × {pendingMeta?.labels?.join(", ")} versions in one go:
+                      ðŸ“‹ Copy this prompt â€” generates ALL {pendingMeta?.numClassSections} sections Ã— {pendingMeta?.labels?.join(", ")} versions in one go:
                     </div>
                     <div style={S.promptBox}>{generatedPrompt}</div>
                     {(() => {
@@ -2931,14 +2238,14 @@ ${questionsText}`;
                       const ncs = pendingMeta?.numClassSections || 1;
                       const totalVersions = numV * ncs;
                       const cost = (numQ * totalVersions * 400 * 3 / 1_000_000) + (numQ * totalVersions * 350 * 15 / 1_000_000);
-                      const label = ncs > 1 ? `${numQ} questions × ${numV} versions × ${ncs} sections` : `${numQ} questions × ${numV} versions`;
+                      const label = ncs > 1 ? `${numQ} questions Ã— ${numV} versions Ã— ${ncs} sections` : `${numQ} questions Ã— ${numV} versions`;
                       return <div style={{fontSize:"0.72rem", color:text3, marginBottom:"0.5rem"}}>Estimated cost: ~${cost.toFixed(3)} ({label})</div>;
                     })()}
                     <div style={{display:"flex", gap:"0.75rem", marginBottom:"1rem", flexWrap:"wrap"}}>
                       <button style={{...S.btn("#10b981", autoGenLoading), minWidth:"160px"}}
                         disabled={autoGenLoading}
                         onClick={() => autoGenerateVersions(generatedPrompt, pendingType, pendingMeta)}>
-                        {autoGenLoading ? "⏳ Generating..." : "⚡ Generate Variants"}
+                        {autoGenLoading ? "â³ Generating..." : "âš¡ Generate Variants"}
                       </button>
                       {isAdmin && <button style={S.oBtn(accent)} onClick={() => navigator.clipboard.writeText(generatedPrompt)}>Copy Prompt</button>}
                     </div>
@@ -2956,13 +2263,13 @@ ${questionsText}`;
               </div>
             )}
 
-            {/* ── STAGE 4: Variants generated — full export and compare flow ── */}
+            {/* â”€â”€ STAGE 4: Variants generated â€” full export and compare flow â”€â”€ */}
             {versions.length > 1 && (
               <>
                 {/* Save to DB */}
                 {!examSaved && (
                   <div style={{...S.card, borderColor:"#10b98144", marginBottom:"1.5rem"}}>
-                    <div style={{fontSize:"0.78rem", color:"#10b981", fontWeight:"bold", marginBottom:"0.5rem"}}>💾 Save this exam to database</div>
+                    <div style={{fontSize:"0.78rem", color:"#10b981", fontWeight:"bold", marginBottom:"0.5rem"}}>ðŸ’¾ Save this exam to database</div>
                     <div style={{display:"flex", gap:"0.75rem", alignItems:"center", flexWrap:"wrap"}}>
                       <input
                         style={{...S.input, maxWidth:"300px"}}
@@ -2975,7 +2282,7 @@ ${questionsText}`;
                         disabled={!saveExamName.trim() || savingExam}
                         onClick={async () => {
                           setSavingExam(true);
-                          // Save all sections — if multi-section, flatten all versions; otherwise just current versions
+                          // Save all sections â€” if multi-section, flatten all versions; otherwise just current versions
                           const allVersions = Object.keys(classSectionVersions).length > 1
                             ? Object.values(classSectionVersions).flat()
                             : versions;
@@ -2984,14 +2291,14 @@ ${questionsText}`;
                           setSavingExam(false);
                         }}
                       >
-                        {savingExam ? "Saving…" : "Save Exam"}
+                        {savingExam ? "Savingâ€¦" : "Save Exam"}
                       </button>
                     </div>
                   </div>
                 )}
                 {examSaved && (
                   <div style={{...S.card, borderColor:"#10b98144", marginBottom:"1.5rem", color:"#10b981"}}>
-                    ✅ Exam saved! View it in the Saved Exams tab.
+                    âœ… Exam saved! View it in the Saved Exams tab.
                   </div>
                 )}
 
@@ -2999,14 +2306,14 @@ ${questionsText}`;
                 <div style={{display:"flex", gap:"0.5rem", marginBottom:"1.25rem", alignItems:"center", flexWrap:"wrap"}}>
                   <span style={{fontSize:"0.72rem", color:text2, marginRight:"0.25rem"}}>View:</span>
                   <button style={S.vTab(versionsViewMode==="single","#f43f5e")} onClick={() => setVersionsViewMode("single")}>
-                    📄 Single Version
+                    ðŸ“„ Single Version
                   </button>
                   <button style={S.vTab(versionsViewMode==="compare","#8b5cf6")} onClick={() => setVersionsViewMode("compare")}>
-                    📋 Canvas Versions
+                    ðŸ“‹ Canvas Versions
                   </button>
                 </div>
 
-                {/* ── SINGLE VERSION MODE ── */}
+                {/* â”€â”€ SINGLE VERSION MODE â”€â”€ */}
                 {versionsViewMode === "single" && (() => {
                   const v = versions[activeVersion];
                   return (
@@ -3029,8 +2336,8 @@ ${questionsText}`;
                         return allIssues.length > 0 ? (
                           <div style={{background:"#7c2d1222", border:"1px solid #f8717144", borderRadius:"6px",
                             padding:"0.6rem 0.85rem", marginBottom:"0.75rem", fontSize:"0.75rem", color:"#9B1C1C"}}>
-                            <div style={{fontWeight:"600", marginBottom:"0.3rem"}}>⚠️ {allIssues.length} issue{allIssues.length>1?"s":""} found in this version</div>
-                            {allIssues.map((issue,i) => <div key={i} style={{opacity:0.85}}>• {issue}</div>)}
+                            <div style={{fontWeight:"600", marginBottom:"0.3rem"}}>âš ï¸ {allIssues.length} issue{allIssues.length>1?"s":""} found in this version</div>
+                            {allIssues.map((issue,i) => <div key={i} style={{opacity:0.85}}>â€¢ {issue}</div>)}
                           </div>
                         ) : null;
                       })()}
@@ -3046,9 +2353,9 @@ ${questionsText}`;
                             dlBlob(blob,`Version_${v.label}${secStr}_Exam.docx`);
                             if (examSaved && saveExamName) await logExport(saveExamName, "Word", v.label);
                           } finally { setExportLoading(""); }
-                        }}>⬇ Word (.docx)</button>
+                        }}>â¬‡ Word (.docx)</button>
                         <button style={S.oBtn("#06b6d4")} onClick={() => setShowPrintPreview(true)}>
-                          👁 Print Preview
+                          ðŸ‘ Print Preview
                         </button>
                         {Object.keys(classSectionVersions).length > 1 && (
                           <button style={S.oBtn("#8b5cf6")} disabled={exportLoading !== ""} onClick={async () => {
@@ -3061,7 +2368,7 @@ ${questionsText}`;
                                 }
                               }
                             } finally { setExportLoading(""); }
-                          }}>⬇ All Sections Word</button>
+                          }}>â¬‡ All Sections Word</button>
                         )}
                         <button style={S.oBtn("#f43f5e")} disabled={exportLoading !== ""} onClick={async () => {
                           setExportLoading("Building answer key...");
@@ -3073,21 +2380,21 @@ ${questionsText}`;
                             const blob = await buildAnswerKey(allVers, course);
                             if (blob) dlBlob(blob, `${course.replace(/\s+/g,"_")}_Answer_Key.docx`);
                           } finally { setExportLoading(""); }
-                        }}>🔑 Answer Key (.docx)</button>
+                        }}>ðŸ”‘ Answer Key (.docx)</button>
                         {isAdmin && (
                           <button style={S.btn("#7c3aed", validating)} disabled={validating} onClick={autoValidateAllVersions}>
-                            {validating ? "⏳ Validating..." : "✅ Auto Validate"}
+                            {validating ? "â³ Validating..." : "âœ… Auto Validate"}
                           </button>
                         )}
                         {isAdmin && (
                           <button style={S.oBtn("#7c3aed")} onClick={() => { copyValidationPrompt(); }}>
-                            📋 Copy Validation Prompt
+                            ðŸ“‹ Copy Validation Prompt
                           </button>
                         )}
                       </div>
                       {isAdmin && validationError && (
                         <div style={{background:"#1a0a0a", border:"1px solid #7f1d1d", borderRadius:"6px", padding:"0.5rem 0.85rem", marginBottom:"0.75rem", fontSize:"0.78rem", color:"#f87171"}}>
-                          ⚠️ {validationError}
+                          âš ï¸ {validationError}
                         </div>
                       )}
                       {isAdmin && Object.keys(validationResults).length > 0 && (() => {
@@ -3095,12 +2402,12 @@ ${questionsText}`;
                         return (
                           <div style={{background: issues.length === 0 ? "#052e16" : "#1c1002", border:`1px solid ${issues.length === 0 ? "#14532d" : "#f59e0b44"}`, borderRadius:"6px", padding:"0.6rem 0.85rem", marginBottom:"0.75rem", fontSize:"0.78rem", color: issues.length === 0 ? "#4ade80" : "#f59e0b"}}>
                             {issues.length === 0
-                              ? "✅ All questions verified — no issues found."
+                              ? "âœ… All questions verified â€” no issues found."
                               : <>
-                                  <div style={{fontWeight:"600", marginBottom:"0.3rem"}}>⚠️ {issues.length} issue{issues.length>1?"s":""} found</div>
+                                  <div style={{fontWeight:"600", marginBottom:"0.3rem"}}>âš ï¸ {issues.length} issue{issues.length>1?"s":""} found</div>
                                   {issues.map(([id, r]) => (
                                     <div key={id} style={{marginBottom:"0.25rem", opacity:0.9}}>
-                                      • <strong>Q{id}:</strong> {r.reason}{r.corrected_answer ? ` → Correct: ${r.corrected_answer}` : ""}
+                                      â€¢ <strong>Q{id}:</strong> {r.reason}{r.corrected_answer ? ` â†’ Correct: ${r.corrected_answer}` : ""}
                                     </div>
                                   ))}
                                 </>
@@ -3112,7 +2419,7 @@ ${questionsText}`;
                       {/* Canvas QTI Export Panel */}
                       {Object.keys(classSectionVersions).length > 1 ? (
                         <div style={{...S.card, borderColor:"#8b5cf644", marginBottom:"1rem", padding:"1rem"}}>
-                          <div style={{fontSize:"0.72rem", color:"#8b5cf6", fontWeight:"bold", marginBottom:"0.6rem", letterSpacing:"0.08em", textTransform:"uppercase"}}>Canvas QTI Export — Classroom Sections</div>
+                          <div style={{fontSize:"0.72rem", color:"#8b5cf6", fontWeight:"bold", marginBottom:"0.6rem", letterSpacing:"0.08em", textTransform:"uppercase"}}>Canvas QTI Export â€” Classroom Sections</div>
                           <div style={{display:"flex", alignItems:"center", gap:"0.5rem", marginBottom:"0.75rem", flexWrap:"wrap"}}>
                             <span style={{fontSize:"0.72rem", color:text2, flexShrink:0}}>Quiz name in Canvas:</span>
                             <input
@@ -3137,8 +2444,8 @@ ${questionsText}`;
                           </div>
                           <div style={{fontSize:"0.72rem", color:text3, marginBottom:"0.75rem"}}>
                             {qtiUseGroups
-                              ? "Grouped: one question group per question number — Canvas randomly picks 1 version per student."
-                              : "Flat: all question versions listed sequentially — no Canvas grouping."}
+                              ? "Grouped: one question group per question number â€” Canvas randomly picks 1 version per student."
+                              : "Flat: all question versions listed sequentially â€” no Canvas grouping."}
                           </div>
                           <div style={{display:"flex", gap:"0.5rem", flexWrap:"wrap"}}>
                             {(() => {
@@ -3146,7 +2453,7 @@ ${questionsText}`;
                               const warnings = validateQTIExport(allVers);
                               return warnings.length > 0 && (
                                 <div style={{width:"100%", fontSize:"0.7rem", color:"#f59e0b", background:"#451a0322", border:"1px solid #f59e0b44", borderRadius:"4px", padding:"0.35rem 0.6rem", marginBottom:"0.35rem"}}>
-                                  ⚠ {warnings.length} issue{warnings.length>1?"s":""} detected before export: {warnings.slice(0,2).join(" · ")}{warnings.length>2?` +${warnings.length-2} more`:""}
+                                  âš  {warnings.length} issue{warnings.length>1?"s":""} detected before export: {warnings.slice(0,2).join(" Â· ")}{warnings.length>2?` +${warnings.length-2} more`:""}
                                 </div>
                               );
                             })()}
@@ -3159,7 +2466,7 @@ ${questionsText}`;
                                 );
                                 const safeName = (qtiExamName.trim() || "Section").replace(/[^a-zA-Z0-9]/g,"_");
                                 dlBlob(blobs[sec], `${safeName}_S${sec}_QTI.zip`);
-                              }}>⬇ Section {sec} QTI (.zip)</button>
+                              }}>â¬‡ Section {sec} QTI (.zip)</button>
                             ))}
                             <button style={S.btn("#10b981", false)} onClick={async () => {
                               const examTitle = qtiExamName.trim() || versions[0]?.questions[0]?.course || "Exam";
@@ -3170,7 +2477,7 @@ ${questionsText}`;
                               for(const [sec, blob] of Object.entries(blobs)){
                                 dlBlob(blob, `${safeName}_S${sec}_QTI.zip`);
                               }
-                            }}>⬇ All Sections QTI (.zip)</button>
+                            }}>â¬‡ All Sections QTI (.zip)</button>
                           </div>
                         </div>
                       ) : (
@@ -3195,13 +2502,13 @@ ${questionsText}`;
                                 const xml = buildQTI(v.questions, v.questions[0]?.course||"Exam", v.label, qtiUseGroups, parseFloat(qtiPointsPerQ) || 1);
                                 const blob = await buildQTIZip(xml, `Version_${v.label}`);
                                 dlBlob(blob, `Version_${v.label}_Canvas_QTI.zip`);
-                              }}>⬇ V{v.label} QTI (.zip)</button>
+                              }}>â¬‡ V{v.label} QTI (.zip)</button>
                             ))}
                             <button style={S.btn("#8b5cf6", false)} onClick={async () => {
                               const xml = buildQTICompare(versions, versions[0]?.questions[0]?.course || "Exam", qtiUseGroups, parseFloat(qtiPointsPerQ) || 1);
                               const blob = await buildQTIZip(xml, "AllVersions");
                               dlBlob(blob, "AllVersions_Canvas_QTI.zip");
-                            }}>⬇ All Versions QTI (.zip)</button>
+                            }}>â¬‡ All Versions QTI (.zip)</button>
                           </div>
                         </div>
                       )}
@@ -3219,17 +2526,17 @@ ${questionsText}`;
                               <span title={issues.join("\n")} style={{cursor:"help",
                                 background:"#7c2d12", color:"#9B1C1C", fontSize:"0.68rem", fontWeight:"600",
                                 padding:"0.1rem 0.4rem", borderRadius:"4px", whiteSpace:"nowrap"}}>
-                                ⚠️ {issues.length}
+                                âš ï¸ {issues.length}
                               </span>
                             )}
                             <div style={{marginLeft:"auto", display:"flex", gap:"0.3rem"}}>
                               <button style={{...S.smBtn, color:"#f59e0b", border:"1px solid #f59e0b44"}}
-                                onClick={() => isAdmin ? triggerReplace(activeVersion,qi,"numbers") : triggerReplaceAuto(activeVersion,qi,"numbers")}>↻ Replace</button>
+                                onClick={() => isAdmin ? triggerReplace(activeVersion,qi,"numbers") : triggerReplaceAuto(activeVersion,qi,"numbers")}>â†» Replace</button>
                               <button style={{...S.smBtn, color:"#e879f9", border:"1px solid #e879f944"}}
-                                onClick={() => isAdmin ? triggerReplace(activeVersion,qi,"function") : triggerReplaceAuto(activeVersion,qi,"function")}>↻ Diff.</button>
+                                onClick={() => isAdmin ? triggerReplace(activeVersion,qi,"function") : triggerReplaceAuto(activeVersion,qi,"function")}>â†» Diff.</button>
                               <button style={{...S.smBtn, color: inlineEditQId===`v${activeVersion}_${qi}` ? "#60a5fa" : "#a78bfa", border:"1px solid #a78bfa44"}}
                                 onClick={() => setInlineEditQId(inlineEditQId===`v${activeVersion}_${qi}` ? null : `v${activeVersion}_${qi}`)}>
-                                ✏️
+                                âœï¸
                               </button>
                             </div>
                           </div>
@@ -3252,7 +2559,7 @@ ${questionsText}`;
                                   return next;
                                 });
                                 setInlineEditQId(null);
-                                showToast("Question updated ✓");
+                                showToast("Question updated âœ“");
                               }}
                               onSaveAll={(updated) => {
                                 const updVers = versions.map(v => ({
@@ -3269,7 +2576,7 @@ ${questionsText}`;
                                   return next;
                                 });
                                 setInlineEditQId(null);
-                                showToast("Pushed to all versions ✓");
+                                showToast("Pushed to all versions âœ“");
                               }}
                               onClose={() => setInlineEditQId(null)}
                             />
@@ -3285,7 +2592,7 @@ ${questionsText}`;
                                   <div style={{fontSize:"0.7rem",color:text3,marginBottom:"0.2rem"}}>({String.fromCharCode(97+pi)})</div>
                                   <div style={S.qText}><MathText>{p.question}</MathText></div>
                                   {p.answer&&<div style={S.ans}>Answer: <MathText>{p.answer}</MathText></div>}
-                                  {p.explanation&&<div style={S.expl}>💡 <MathText>{p.explanation}</MathText></div>}
+                                  {p.explanation&&<div style={S.expl}>ðŸ’¡ <MathText>{p.explanation}</MathText></div>}
                                 </div>
                               ))}
                             </>
@@ -3293,22 +2600,22 @@ ${questionsText}`;
                             <>
                               <div style={S.qText}><MathText>{q.question}</MathText></div>
                               {q.choices&&<ul style={S.cList}>{q.choices.map((c,ci)=><li key={ci} style={S.cItem(c===q.answer)}>{String.fromCharCode(65+ci)}. <MathText>{c}</MathText></li>)}</ul>}
-                              {q.answer&&<div style={S.ans}>✓ <MathText>{q.answer}</MathText></div>}
-                              {q.explanation&&<div style={S.expl}>💡 <MathText>{q.explanation}</MathText></div>}
+                              {q.answer&&<div style={S.ans}>âœ“ <MathText>{q.answer}</MathText></div>}
+                              {q.explanation&&<div style={S.expl}>ðŸ’¡ <MathText>{q.explanation}</MathText></div>}
                             </>
                           )}
                           {pendingType === "replace" && pendingMeta?.vIdx === activeVersion && pendingMeta?.qIdx === qi && (
                             <>
                               {isAdmin && generatedPrompt && (
                                 <>
-                                  <div style={{fontSize:"0.75rem", color:"#f59e0b", fontWeight:"bold", margin:"0.75rem 0 0.4rem"}}>📋 Replacement prompt:</div>
+                                  <div style={{fontSize:"0.75rem", color:"#f59e0b", fontWeight:"bold", margin:"0.75rem 0 0.4rem"}}>ðŸ“‹ Replacement prompt:</div>
                                   <div style={S.promptBox}>{generatedPrompt}</div>
                                   <div style={{display:"flex", gap:"0.5rem", marginBottom:"0.75rem", flexWrap:"wrap"}}>
                                     <button
                                       style={{...S.btn("#10b981", autoGenLoading), minWidth:"150px"}}
                                       disabled={autoGenLoading}
                                       onClick={() => autoGenerateVersions(generatedPrompt, "replace", pendingMeta)}>
-                                      {autoGenLoading ? "⏳ Generating..." : "⚡ Auto-Generate"}
+                                      {autoGenLoading ? "â³ Generating..." : "âš¡ Auto-Generate"}
                                     </button>
                                     <button style={S.oBtn("#f59e0b")} onClick={() => navigator.clipboard.writeText(generatedPrompt)}>Copy Prompt</button>
                                   </div>
@@ -3325,10 +2632,10 @@ ${questionsText}`;
                               {!isAdmin && (
                                 <div style={{marginTop:"0.75rem", display:"flex", gap:"0.5rem", alignItems:"center", flexWrap:"wrap", padding:"0.6rem 0.75rem", background:"#052e1688", borderRadius:"6px", border:"1px solid #22c55e22"}}>
                                   {autoGenLoading
-                                    ? <><span style={{fontSize:"0.75rem", color:"#86efac"}}>⏳ Generating replacement...</span></>
+                                    ? <><span style={{fontSize:"0.75rem", color:"#86efac"}}>â³ Generating replacement...</span></>
                                     : autoGenError
                                       ? <span style={{fontSize:"0.72rem", color:"#f87171"}}>{autoGenError}</span>
-                                      : <span style={{fontSize:"0.72rem", color:"#86efac"}}>✓ Done</span>
+                                      : <span style={{fontSize:"0.72rem", color:"#86efac"}}>âœ“ Done</span>
                                   }
                                   <button style={{...S.smBtn, color:text2, marginLeft:"auto"}}
                                     onClick={() => { setPendingType(null); setGeneratedPrompt(""); }}>
@@ -3344,7 +2651,7 @@ ${questionsText}`;
                   );
                 })()}
 
-                {/* ── COMPARE ALL VERSIONS MODE ── */}
+                {/* â”€â”€ COMPARE ALL VERSIONS MODE â”€â”€ */}
                 {versionsViewMode === "compare" && (() => {
                   const numQ = versions[0]?.questions?.length || 0;
                   const allSections = [...new Set(versions.flatMap(v => v.questions.map(q => q.section)))];
@@ -3385,26 +2692,26 @@ ${questionsText}`;
                         </div>
                       </div>
 
-                      {/* Export buttons for compare view — single grouped file */}
+                      {/* Export buttons for compare view â€” single grouped file */}
                       <div style={{display:"flex", gap:"0.75rem", marginBottom:"1.25rem", flexWrap:"wrap", alignItems:"center"}}>
-                        <span style={{fontSize:"0.72rem", color:accent, fontWeight:"bold"}}>Canvas export — one file, all versions:</span>
+                        <span style={{fontSize:"0.72rem", color:accent, fontWeight:"bold"}}>Canvas export â€” one file, all versions:</span>
                         <button style={S.btn("#8b5cf6", false)} onClick={async () => {
                           const xml = buildQTICompare(versions, versions[0]?.questions[0]?.course || "Exam", qtiUseGroups, parseFloat(qtiPointsPerQ) || 1);
                           const blob = await buildQTIZip(xml, "AllVersions");
                           dlBlob(blob, "AllVersions_Canvas_QTI.zip");
-                        }}>⬇ Export to Canvas (QTI .zip)</button>
+                        }}>â¬‡ Export to Canvas (QTI .zip)</button>
                         {Object.keys(classSectionVersions).length > 1 && (
                           <button style={S.btn("#f59e0b", false)} onClick={async () => {
                             const course = versions[0]?.questions[0]?.course || "Exam";
                             const xml = buildQTIAllSectionsMerged(classSectionVersions, course, parseFloat(qtiPointsPerQ) || 1);
                             const blob = await buildQTIZip(xml, "AllSections_Merged");
                             dlBlob(blob, "AllSections_Merged_QTI.zip");
-                          }}>⬇ All Sections Merged QTI</button>
+                          }}>â¬‡ All Sections Merged QTI</button>
                         )}
                         <button style={S.btn("#10b981", false)} onClick={async () => {
                           const blob = await buildDocxCompare(versions, versions[0]?.questions[0]?.course || "Exam");
                           dlBlob(blob, "AllVersions_Grouped.docx");
-                        }}>⬇ Export to Word (all versions)</button>
+                        }}>â¬‡ Export to Word (all versions)</button>
                       </div>
 
                       {/* Questions grouped by number, all versions stacked */}
@@ -3412,7 +2719,7 @@ ${questionsText}`;
                         <div key={qi} style={{marginBottom:"1.5rem"}}>
                           {/* Question group header */}
                           <div style={{fontSize:"0.72rem", color:"#f43f5e", fontWeight:"bold", letterSpacing:"0.1em", textTransform:"uppercase", marginBottom:"0.5rem", padding:"0.3rem 0.6rem", background:"#f43f5e18", borderRadius:"5px", display:"inline-block"}}>
-                            Question {qi+1} — {versions[0]?.questions[qi]?.section} — {versions[0]?.questions[qi]?.difficulty}
+                            Question {qi+1} â€” {versions[0]?.questions[qi]?.section} â€” {versions[0]?.questions[qi]?.difficulty}
                           </div>
 
                           {versions.map((v, vi) => {
@@ -3444,7 +2751,7 @@ ${questionsText}`;
                                   <>
                                     <div style={S.qText}><MathText>{q.question}</MathText></div>
                                     {q.choices&&<ul style={S.cList}>{q.choices.map((c,ci)=><li key={ci} style={S.cItem(c===q.answer)}>{String.fromCharCode(65+ci)}. <MathText>{c}</MathText></li>)}</ul>}
-                                    {q.answer&&<div style={S.ans}>✓ <MathText>{q.answer}</MathText></div>}
+                                    {q.answer&&<div style={S.ans}>âœ“ <MathText>{q.answer}</MathText></div>}
                                   </>
                                 )}
                               </div>
@@ -3466,7 +2773,7 @@ ${questionsText}`;
             onLoad={(exam) => {
               // Restore exam into Versions tab
               const vers = exam.versions || [];
-              // detect sections — classSection lives on the version object, fall back to questions[0]
+              // detect sections â€” classSection lives on the version object, fall back to questions[0]
               const sectionNums = [...new Set(vers.map(v => v.classSection ?? v.questions?.[0]?.classSection).filter(Boolean))].sort((a,b)=>a-b);
               if (sectionNums.length > 1) {
                 // multi-section
@@ -3534,13 +2841,13 @@ ${questionsText}`;
 
       </main>
 
-      {/* ── PRINT PREVIEW MODAL ── */}
+      {/* â”€â”€ PRINT PREVIEW MODAL â”€â”€ */}
       {showPrintPreview && (() => {
         const v = versions[activeVersion];
         if (!v) { setShowPrintPreview(false); return null; }
         const cs = v.questions[0]?.classSection;
         const courseName = v.questions[0]?.course || "Exam";
-        const titleLabel = cs ? `Section ${cs} — Version ${v.label}` : `Version ${v.label}`;
+        const titleLabel = cs ? `Section ${cs} â€” Version ${v.label}` : `Version ${v.label}`;
 
         // check if any graph questions still need rendering
         const graphQs = v.questions.filter(q => q.hasGraph && q.graphConfig);
@@ -3550,11 +2857,11 @@ ${questionsText}`;
         const getGraphImg = (q) => {
           const b64 = printGraphCache[q.id || q.question];
           if (b64) return `<img src="${b64}" style="max-width:100%;display:block;margin-bottom:8pt;" />`;
-          return ""; // graphs not ready yet — will re-render when cache updates
+          return ""; // graphs not ready yet â€” will re-render when cache updates
         };
 
         const printHTML = `
-          <h2 style="font-size:16pt;margin-bottom:4pt;">${courseName} — ${titleLabel}</h2>
+          <h2 style="font-size:16pt;margin-bottom:4pt;">${courseName} â€” ${titleLabel}</h2>
           <div style="font-size:10pt;color:#555;margin-bottom:20pt;">Name: _________________________ &nbsp;&nbsp; Date: _____________</div>
           ${v.questions.map((q, qi) => {
             const graphImg = getGraphImg(q);
@@ -3586,7 +2893,7 @@ ${questionsText}`;
             {/* Top bar */}
             <div style={{background:bg1, borderBottom:"1px solid #1e2d45", padding:"0.65rem 1.5rem", display:"flex", alignItems:"center", gap:"1rem", flexShrink:0}}>
               <span style={{fontSize:"0.85rem", fontWeight:"600", color:text1, flex:1}}>
-                👁 Print Preview — {courseName} {titleLabel}
+                ðŸ‘ Print Preview â€” {courseName} {titleLabel}
               </span>
               <button style={{background:"#2D6A4F", color:"#fff", border:"none", borderRadius:"6px", padding:"0.4rem 1.1rem", fontSize:"0.82rem", fontWeight:"600", cursor:"pointer"}}
                 onClick={() => {
@@ -3603,16 +2910,16 @@ ${questionsText}`;
                     </style></head><body>${printHTML}</body></html>`);
                   win.document.close();
                   setTimeout(() => win.print(), 400);
-                }}>🖨 Print</button>
+                }}>ðŸ–¨ Print</button>
               <button style={{background:"transparent", color:text2, border:"1px solid #1e2d45", borderRadius:"6px", padding:"0.4rem 0.9rem", fontSize:"0.82rem", cursor:"pointer"}}
-                onClick={() => setShowPrintPreview(false)}>✕ Close</button>
+                onClick={() => setShowPrintPreview(false)}>âœ• Close</button>
             </div>
 
             {/* Preview content */}
             <div style={{flex:1, overflowY:"auto", display:"flex", justifyContent:"center", padding:"2rem 1rem", flexDirection:"column", alignItems:"center"}}>
               {graphsLoading && (
                 <div style={{color:"#185FA5", fontSize:"0.85rem", marginBottom:"1rem", padding:"0.5rem 1rem", background:border, borderRadius:"6px"}}>
-                  ⏳ Rendering graphs...
+                  â³ Rendering graphs...
                 </div>
               )}
               <div key={Object.keys(printGraphCache).length} style={{background:"#fff", color:"#000", width:"min(21cm, 95vw)", minHeight:"29.7cm", padding:"min(2cm, 4vw)", boxShadow:"0 4px 32px rgba(0,0,0,0.5)", fontFamily:"'Times New Roman',serif", fontSize:"12pt", lineHeight:1.6, boxSizing:"border-box"}}
