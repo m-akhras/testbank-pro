@@ -1307,7 +1307,7 @@ ${questionsText}`;
             versionsViewMode={versionsViewMode} setVersionsViewMode={setVersionsViewMode}
             exportHighlight={exportHighlight}
             inlineEditQId={inlineEditQId} setInlineEditQId={setInlineEditQId}
-            validating={validating} validationError={validationError} validationResults={validationResults}
+            validating={validating} validationError={validationError} validationResults={validationResults} setValidationResults={setValidationResults}
             qtiUseGroups={qtiUseGroups} setQtiUseGroups={setQtiUseGroups}
             qtiPointsPerQ={qtiPointsPerQ} setQtiPointsPerQ={setQtiPointsPerQ}
             qtiExamName={qtiExamName} setQtiExamName={setQtiExamName}

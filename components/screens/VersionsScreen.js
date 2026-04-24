@@ -1,4 +1,5 @@
 "use client";
+import { useState } from "react";
 import MathText from "../display/MathText.js";
 import GraphDisplay from "../display/GraphDisplay.js";
 import InlineEditor from "../editors/InlineEditor.js";
@@ -43,7 +44,7 @@ export default function VersionsScreen({
   versionsViewMode, setVersionsViewMode,
   exportHighlight,
   inlineEditQId, setInlineEditQId,
-  validating, validationError, validationResults,
+  validating, validationError, validationResults, setValidationResults,
   qtiUseGroups, setQtiUseGroups,
   qtiPointsPerQ, setQtiPointsPerQ,
   qtiExamName, setQtiExamName,
@@ -66,6 +67,10 @@ export default function VersionsScreen({
   setScreen,
   setShowPrintPreview,
 }) {
+  const [pointsInput, setPointsInput] = useState(String(qtiPointsPerQ));
+  const [showValidationPaste, setShowValidationPaste] = useState(false);
+  const [validationPasteInput, setValidationPasteInput] = useState("");
+  const [validationPasteError, setValidationPasteError] = useState("");
   return (
 <div>
   <div style={S.pageHeader}>
@@ -570,9 +575,14 @@ export default function VersionsScreen({
                 </button>
               )}
               {isAdmin && (
-                <button style={S.oBtn("#7c3aed")} onClick={() => { copyValidationPrompt(); }}>
-                  ðŸ“‹ Copy Validation Prompt
-                </button>
+                <>
+                  <button style={S.oBtn(“#7c3aed”)} onClick={() => { copyValidationPrompt(); }}>
+                    ðŸ”‹ Copy Validation Prompt
+                  </button>
+                  <button style={S.oBtn(“#7c3aed”)} onClick={() => { setValidationPasteInput(“”); setValidationPasteError(“”); setShowValidationPaste(true); }}>
+                    ðŸ”¥ Paste Validation Result
+                  </button>
+                </>
               )}
             </div>
             {isAdmin && validationError && (
@@ -620,8 +630,9 @@ export default function VersionsScreen({
                   </label>
                   <label style={{display:"flex", alignItems:"center", gap:"0.4rem", fontSize:"0.78rem", color:text2}}>
                     Points per question:
-                    <input type="number" min={0.25} max={100} step={0.25} value={qtiPointsPerQ}
-                      onChange={e => setQtiPointsPerQ(e.target.value)}
+                    <input type="number" min={0.25} max={100} step={0.25} value={pointsInput}
+                      onChange={e => setPointsInput(e.target.value)}
+                      onBlur={e => { const v = parseFloat(e.target.value); if (!isNaN(v) && v >= 0.25) { setQtiPointsPerQ(v); setPointsInput(String(v)); } else { setPointsInput(String(qtiPointsPerQ)); } }}
                       style={{width:"60px", ...S.input, padding:"0.25rem 0.4rem", fontSize:"0.78rem"}} />
                   </label>
                 </div>
@@ -674,8 +685,9 @@ export default function VersionsScreen({
                   </label>
                   <label style={{display:"flex", alignItems:"center", gap:"0.4rem", fontSize:"0.78rem", color:text2}}>
                     Points per question:
-                    <input type="number" min={0.25} max={100} step={0.25} value={qtiPointsPerQ}
-                      onChange={e => setQtiPointsPerQ(e.target.value)}
+                    <input type="number" min={0.25} max={100} step={0.25} value={pointsInput}
+                      onChange={e => setPointsInput(e.target.value)}
+                      onBlur={e => { const v = parseFloat(e.target.value); if (!isNaN(v) && v >= 0.25) { setQtiPointsPerQ(v); setPointsInput(String(v)); } else { setPointsInput(String(qtiPointsPerQ)); } }}
                       style={{width:"60px", ...S.input, padding:"0.25rem 0.4rem", fontSize:"0.78rem"}} />
                   </label>
                 </div>
@@ -868,8 +880,9 @@ export default function VersionsScreen({
                 </label>
                 <label style={{display:"flex", alignItems:"center", gap:"0.4rem", fontSize:"0.78rem", color:text2}}>
                   Points per question:
-                  <input type="number" min={0.25} max={100} step={0.25} value={qtiPointsPerQ}
-                    onChange={e => setQtiPointsPerQ(e.target.value)}
+                  <input type="number" min={0.25} max={100} step={0.25} value={pointsInput}
+                    onChange={e => setPointsInput(e.target.value)}
+                    onBlur={e => { const v = parseFloat(e.target.value); if (!isNaN(v) && v >= 0.25) { setQtiPointsPerQ(v); setPointsInput(String(v)); } else { setPointsInput(String(qtiPointsPerQ)); } }}
                     style={{width:"60px", ...S.input, padding:"0.25rem 0.4rem", fontSize:"0.78rem"}} />
                 </label>
               </div>
@@ -946,6 +959,45 @@ export default function VersionsScreen({
         );
       })()}
     </>
+  )}
+
+  {showValidationPaste && (
+    <div style={{position:"fixed",inset:0,background:"#00000088",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:"1rem"}}>
+      <div style={{background:bg1,border:"1px solid "+border,borderRadius:"12px",padding:"1.5rem",width:"100%",maxWidth:"560px",display:"flex",flexDirection:"column",gap:"0.75rem"}}>
+        <div style={{fontSize:"0.95rem",fontWeight:"700",color:text1}}>📥 Paste Validation Result</div>
+        <div style={{fontSize:"0.78rem",color:text2,lineHeight:1.5}}>
+          Paste Claude's JSON response. Expected format:&nbsp;
+          <code style={{fontSize:"0.72rem",color:"#a78bfa",wordBreak:"break-all"}}>{'{"validated":[{"id":"...","validation":{"valid":false,"reason":"...","corrected_answer":"..."}}]}'}</code>
+        </div>
+        <textarea
+          value={validationPasteInput}
+          onChange={e => setValidationPasteInput(e.target.value)}
+          placeholder='{ "validated": [{ "id": "abc123", "validation": { "valid": false, "reason": "...", "corrected_answer": "..." } }] }'
+          style={{...S.input,width:"100%",height:"180px",resize:"vertical",fontFamily:"monospace",fontSize:"0.75rem",padding:"0.5rem 0.6rem",boxSizing:"border-box"}}
+        />
+        {validationPasteError && (
+          <div style={{fontSize:"0.78rem",color:"#f87171"}}>{validationPasteError}</div>
+        )}
+        <div style={{display:"flex",gap:"0.5rem",justifyContent:"flex-end"}}>
+          <button style={S.oBtn(text2)} onClick={() => setShowValidationPaste(false)}>Cancel</button>
+          <button style={S.btn("#7c3aed",false)} onClick={() => {
+            try {
+              const data = JSON.parse(validationPasteInput.trim());
+              const list = data.validated || (Array.isArray(data) ? data : null);
+              if (!list) throw new Error('Expected { "validated": [...] } or a top-level array.');
+              const results = {};
+              list.forEach(q => { if (q.id && q.validation) results[q.id] = q.validation; });
+              if (Object.keys(results).length === 0) throw new Error("No valid entries found — check the format.");
+              setValidationResults(results);
+              setShowValidationPaste(false);
+              setValidationPasteError("");
+            } catch (e) {
+              setValidationPasteError("Invalid JSON: " + e.message);
+            }
+          }}>Apply</button>
+        </div>
+      </div>
+    </div>
   )}
 </div>
   );
