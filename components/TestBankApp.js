@@ -19,84 +19,19 @@ import CoursesScreen from "./screens/CoursesScreen.jsx";
 import { useCourses } from "../hooks/useCourses.js";
 import { seedBuiltinCourses } from "../lib/supabase/seedCourses.js";
 import { normalizeUnicodeMath } from "../lib/normalizeUnicodeMath";
+import { S, bg0, bg1, bg2, bg3, border, text1, text2, text3, green1, green2, green3, amber1 } from "../styles/theme.js";
+import { loadBank, saveQuestion, deleteQuestion } from "../lib/db/questions.js";
+import { saveExam, loadExams } from "../lib/db/exams.js";
+import { logExport } from "../lib/db/exportHistory.js";
 
 const supabase = createBrowserClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
-import { S, bg0, bg1, bg2, bg3, border, text1, text2, text3, green1, green2, green3, amber1 } from "../styles/theme.js";
-
-// Math rendering and display components — imported from components/display/
-// GraphEditor and InlineEditor — imported from components/editors/
-
 const QTYPES = ["Multiple Choice","Free Response","True/False","Fill in the Blank","Formula","Branched"];
 const DIFFICULTIES = ["Easy","Medium","Hard","Mixed"];
 const VERSIONS = ["A","B","C","D","E","F","G","H"];
-
-// ─── Supabase DB helpers ──────────────────────────────────────────────────────
-async function loadBank() {
-  try {
-    const { data, error } = await supabase
-      .from("questions")
-      .select("*")
-      .order("created_at", { ascending: false });
-    if (error) throw error;
-    return data.map(r => ({ ...r.data, id: r.id, createdAt: new Date(r.created_at).getTime() }));
-  } catch (e) { console.error("loadBank error:", e); return []; }
-}
-
-async function saveQuestion(q) {
-  try {
-    const { error } = await supabase.from("questions").upsert({
-      id: q.id,
-      course: q.course,
-      section: q.section,
-      type: q.type,
-      difficulty: q.difficulty,
-      data: q,
-    });
-    if (error) throw error;
-  } catch (e) { console.error("saveQuestion error:", e); }
-}
-
-async function deleteQuestion(id) {
-  try {
-    const { error } = await supabase.from("questions").delete().eq("id", id);
-    if (error) throw error;
-  } catch (e) { console.error("deleteQuestion error:", e); }
-}
-
-async function saveExam(name, versions) {
-  try {
-    const { data, error } = await supabase.from("exams").insert({
-      name,
-      versions,
-      created_at: new Date().toISOString(),
-    }).select();
-    if (error) throw error;
-    return data[0];
-  } catch (e) { console.error("saveExam error:", e); return null; }
-}
-
-async function loadExams() {
-  try {
-    const { data, error } = await supabase.from("exams").select("*").order("created_at", { ascending: false });
-    if (error) throw error;
-    return data;
-  } catch (e) { console.error("loadExams error:", e); return []; }
-}
-
-async function logExport(examName, format, versionLabel) {
-  try {
-    await supabase.from("export_history").insert({
-      exam_name: examName,
-      format,
-      version_label: versionLabel,
-      exported_at: new Date().toISOString(),
-    });
-  } catch (e) { console.error("logExport error:", e); }
-}
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
 // escapeXML moved to lib/exports/helpers.js (used only by QTI functions)
