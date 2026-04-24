@@ -80,6 +80,7 @@ export default function BankScreen({
   showToast,
   setConfirmDelete,
   setScreen,
+  setMasterLocked,
 }) {
   return (
     <div>
@@ -116,6 +117,7 @@ export default function BankScreen({
           <button style={{...S.btn("#8b5cf6", false), fontSize:"0.75rem"}} onClick={() => {
             const ids = lastGenerated.map(q => q.id).filter(Boolean);
             if (ids.length) setSelectedForExam(prev => [...new Set([...prev, ...ids])]);
+            setMasterLocked(false);
             setScreen("versions");
           }}>Build Exam →</button>
         </div>
@@ -603,7 +605,7 @@ export default function BankScreen({
 
           {/* Per-section build buttons */}
           <div style={{display:"flex", gap:"0.5rem", flexWrap:"wrap", marginBottom:"0.5rem"}}>
-            <button style={S.btn(accent, false)} onClick={() => setScreen("versions")}>
+            <button style={S.btn(accent, false)} onClick={() => { setMasterLocked(false); setScreen("versions"); }}>
               ✦ Build Exam →
             </button>
             {Object.keys(classSectionVersions).length > 0 && (

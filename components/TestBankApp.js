@@ -1270,6 +1270,7 @@ ${questionsText}`;
             showToast={showToast}
             setConfirmDelete={setConfirmDelete}
             setScreen={setScreen}
+            setMasterLocked={setMasterLocked}
           />
         )}
 
