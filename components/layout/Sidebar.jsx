@@ -92,7 +92,7 @@ export default function Sidebar({ user, bank = [], lastGenerated = [], selectedF
       <div style={S.sidebarLogo}>
         <div style={S.logoMark}>T</div>
         <div>
-          <div style={S.logoText}>TestBank Pro</div>
+          <div style={S.logoText}>TestArca</div>
           <div style={S.logoSub}>Exam Authoring Suite</div>
         </div>
       </div>
@@ -179,7 +179,7 @@ export default function Sidebar({ user, bank = [], lastGenerated = [], selectedF
           </div>
         )}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <span style={{ fontSize: "0.57rem", color: text3 }}>TestBank Pro</span>
+          <span style={{ fontSize: "0.57rem", color: text3 }}>TestArca</span>
           <span style={{ fontSize: "0.57rem", color: text3, background: bg3, padding: "0.1rem 0.4rem", borderRadius: "4px", fontWeight: "600" }}>v55</span>
         </div>
       </div>

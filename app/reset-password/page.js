@@ -48,7 +48,7 @@ export default function ResetPasswordPage() {
         <div style={{ textAlign: "center", marginBottom: "2rem" }}>
           <a href="/" style={{ textDecoration: "none" }}>
             <div style={{ fontSize: "1.6rem", fontWeight: "800", color: "#e8e8e0", letterSpacing: "-0.5px" }}>
-              TestBank <span style={{ color: "#10b981" }}>Pro</span>
+              TestArca
             </div>
           </a>
           <div style={{ fontSize: "0.8rem", color: "#64748b", marginTop: "0.4rem" }}>Reset your password</div>

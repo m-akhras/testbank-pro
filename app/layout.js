@@ -1,7 +1,7 @@
 import "./globals.css";
 
 export const metadata = {
-  title: "TestBank Pro",
+  title: "TestArca",
   description: "AI-powered exam question generator for college math",
 };
 

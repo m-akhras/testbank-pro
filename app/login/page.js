@@ -57,7 +57,7 @@ export default function LoginPage() {
       <div style={{ width: "100%", maxWidth: "400px", padding: "2.5rem", background: "#0f1629", border: "1px solid #1e3a5f", borderRadius: "12px", boxShadow: "0 25px 50px rgba(0,0,0,0.5)" }}>
         <div style={{ textAlign: "center", marginBottom: "2rem" }}>
           <div style={{ fontSize: "1.6rem", fontWeight: "800", color: "#e8e8e0", letterSpacing: "-0.5px" }}>
-            TestBank <span style={{ color: "#10b981" }}>Pro</span>
+            TestArca
           </div>
           <div style={{ fontSize: "0.8rem", color: "#64748b", marginTop: "0.4rem" }}>Exam Authoring Suite</div>
         </div>
