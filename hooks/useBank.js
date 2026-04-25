@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import { validateQuestion, questionSimilarity, sectionSortKey } from "../lib/utils/questions.js";
 
@@ -76,11 +76,12 @@ export function useBank() {
       const supabase = getSupabase();
       const { error } = await supabase.from("questions").delete().eq("id", id);
       if (error) throw error;
+      setBank(prev => prev.filter(q => q.id !== id));
     } catch (e) { console.error("deleteQuestion error:", e); }
   }
 
   // Computed: filtered + sorted view of the bank
-  const filteredBank = bank.filter(q => {
+  const filteredBank = useMemo(() => bank.filter(q => {
     const searchLower = bankSearch.toLowerCase().trim();
     const matchesSearch = !searchLower || (
       (q.question || "").toLowerCase().includes(searchLower) ||
@@ -110,17 +111,20 @@ export function useBank() {
     if (aMaj !== bMaj) return aMaj - bMaj;
     if (aMin !== bMin) return aMin - bMin;
     return (a.createdAt || 0) - (b.createdAt || 0);
-  });
+  }), [bank, bankSearch, filterCourse, filterType, filterDiff, filterSection, filterIssuesOnly, filterYear, filterMonth, filterDay, filterTime]);
 
   // Duplicate detection
-  const duplicateIds = new Set();
-  for (let i = 0; i < bank.length; i++) {
-    for (let j = i + 1; j < bank.length; j++) {
-      const a = bank[i]; const b = bank[j];
-      if (a.section !== b.section) continue;
-      if (questionSimilarity(a, b) > 0.75) { duplicateIds.add(a.id); duplicateIds.add(b.id); }
+  const duplicateIds = useMemo(() => {
+    const ids = new Set();
+    for (let i = 0; i < bank.length; i++) {
+      for (let j = i + 1; j < bank.length; j++) {
+        const a = bank[i]; const b = bank[j];
+        if (a.section !== b.section) continue;
+        if (questionSimilarity(a, b) > 0.75) { ids.add(a.id); ids.add(b.id); }
+      }
     }
-  }
+    return ids;
+  }, [bank]);
 
   return {
     bank, setBank,
