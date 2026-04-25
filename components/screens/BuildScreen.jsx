@@ -17,10 +17,9 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
-import MathText from "../display/MathText.js";
-import GraphDisplay from "../display/GraphDisplay.js";
 import InlineEditor from "../editors/InlineEditor.js";
 import PastePanel from "../panels/PastePanel.js";
+import QuestionCard from "../question/QuestionCard.jsx";
 
 const VERSIONS = ["A", "B", "C", "D", "E", "F", "G", "H"];
 
@@ -358,117 +357,48 @@ export default function BuildScreen({
         {v.questions.map((q, qi) => {
           const issues = validateQuestion ? validateQuestion(q) : [];
           const hasNone = q.choices && /none of (these|the above)/i.test(q.choices[q.choices.length - 1] || "");
+          const editing = inlineEditQId === `master_${qi}`;
           return (
             <SortableMasterCard key={q.id || qi} id={q.id} S={S} text3={text3}>
-              <div style={S.qMeta}>
-                <span style={{ fontWeight: "bold", color: text1 }}>Q{qi + 1}</span>
-                <span style={S.tag("#f43f5e")}>{q.type}</span>
-                <span style={S.tag()}>{q.section}</span>
-                <span style={S.tag()}>{q.difficulty}</span>
-                {issues.length > 0 && (
-                  <span title={issues.join("\n")} style={{ cursor: "help", background: "#7c2d12", color: "#9B1C1C", fontSize: "0.68rem", fontWeight: "600", padding: "0.1rem 0.4rem", borderRadius: "4px", whiteSpace: "nowrap" }}>
-                    ⚠️ {issues.length}
-                  </span>
+              <QuestionCard
+                q={q}
+                index={qi + 1}
+                issues={issues}
+                authorMode={true}
+                showCourse={false}
+                typeColor="#f43f5e"
+                S={S}
+                accent={accent}
+                text1={text1}
+                text2={text2}
+                text3={text3}
+                border={border}
+                onEdit={() => setInlineEditQId(editing ? null : `master_${qi}`)}
+                onDelete={() => removeMasterQuestion(q.id)}
+                onReplace={() => showToast && showToast("Replace from the Bank screen for now", "info")}
+                headerExtra={q.choices && q.type !== "Branched" && (
+                  <label style={{ display: "flex", alignItems: "center", gap: "0.3rem", fontSize: "0.68rem", color: text2, cursor: "pointer", border: "1px solid " + border, padding: "0.15rem 0.45rem", borderRadius: "4px" }}>
+                    <input
+                      type="checkbox"
+                      checked={hasNone}
+                      onChange={() => toggleNoneOfAbove(qi)}
+                      style={{ accentColor: accent, width: "12px", height: "12px" }}
+                    />
+                    None of these
+                  </label>
                 )}
-                <div style={{ marginLeft: "auto", display: "flex", gap: "0.3rem", alignItems: "center", flexWrap: "wrap" }}>
-                  {q.choices && q.type !== "Branched" && (
-                    <label style={{ display: "flex", alignItems: "center", gap: "0.3rem", fontSize: "0.68rem", color: text2, cursor: "pointer", border: "1px solid " + border, padding: "0.15rem 0.45rem", borderRadius: "4px" }}>
-                      <input
-                        type="checkbox"
-                        checked={hasNone}
-                        onChange={() => toggleNoneOfAbove(qi)}
-                        style={{ accentColor: accent, width: "12px", height: "12px" }}
-                      />
-                      None of these
-                    </label>
-                  )}
-                  <button
-                    style={{ ...S.smBtn, color: "#f59e0b", border: "1px solid #f59e0b44" }}
-                    onClick={() => showToast && showToast("Replace from the Bank screen for now", "info")}
-                    title="Replace question"
-                  >
-                    ↻ Replace
-                  </button>
-                  <button
-                    style={{ ...S.smBtn, color: inlineEditQId === `master_${qi}` ? "#60a5fa" : "#a78bfa", border: "1px solid #a78bfa44" }}
-                    onClick={() => setInlineEditQId(inlineEditQId === `master_${qi}` ? null : `master_${qi}`)}
-                  >
-                    ✏️
-                  </button>
-                  <button
-                    style={{ ...S.smBtn, color: "#f87171", border: "1px solid #f8717144" }}
-                    onClick={() => removeMasterQuestion(q.id)}
-                    title="Remove from master"
-                  >
-                    ✕
-                  </button>
-                </div>
-              </div>
-
-              {inlineEditQId === `master_${qi}` && (
-                <InlineEditor
-                  q={q}
-                  onSave={updated => {
-                    setVersions([{ ...v, questions: v.questions.map((vq, vqi) => (vqi !== qi ? vq : updated)) }]);
-                    setInlineEditQId(null);
-                    showToast && showToast("Question updated ✓");
-                  }}
-                  onClose={() => setInlineEditQId(null)}
-                />
-              )}
-
-              {q.hasGraph && q.graphConfig && <GraphDisplay graphConfig={q.graphConfig} authorMode={true} />}
-
-              {q.type === "Branched" ? (
-                <>
-                  <div style={{ ...S.qText, color: "#f43f5e99" }}>
-                    Given: <MathText>{q.stem}</MathText>
-                  </div>
-                  {(q.parts || []).map((p, pi) => (
-                    <div key={pi} style={{ marginBottom: "0.6rem", paddingLeft: "0.75rem", borderLeft: "2px solid " + border }}>
-                      <div style={{ fontSize: "0.7rem", color: text3, marginBottom: "0.2rem" }}>({String.fromCharCode(97 + pi)})</div>
-                      <div style={S.qText}>
-                        <MathText>{p.question}</MathText>
-                      </div>
-                      {p.answer && (
-                        <div style={S.ans}>
-                          Answer: <MathText>{p.answer}</MathText>
-                        </div>
-                      )}
-                      {p.explanation && (
-                        <div style={S.expl}>
-                          💡 <MathText>{p.explanation}</MathText>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </>
-              ) : (
-                <>
-                  <div style={S.qText}>
-                    <MathText>{q.question}</MathText>
-                  </div>
-                  {q.choices && (
-                    <ul style={S.cList}>
-                      {q.choices.map((c, ci) => (
-                        <li key={ci} style={S.cItem(c === q.answer)}>
-                          {String.fromCharCode(65 + ci)}. <MathText>{c}</MathText>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                  {q.answer && (
-                    <div style={S.ans}>
-                      ✓ <MathText>{q.answer}</MathText>
-                    </div>
-                  )}
-                  {q.explanation && (
-                    <div style={S.expl}>
-                      💡 <MathText>{q.explanation}</MathText>
-                    </div>
-                  )}
-                </>
-              )}
+                bodyTop={editing && (
+                  <InlineEditor
+                    q={q}
+                    onSave={updated => {
+                      setVersions([{ ...v, questions: v.questions.map((vq, vqi) => (vqi !== qi ? vq : updated)) }]);
+                      setInlineEditQId(null);
+                      showToast && showToast("Question updated ✓");
+                    }}
+                    onClose={() => setInlineEditQId(null)}
+                  />
+                )}
+              />
             </SortableMasterCard>
           );
         })}

@@ -1,6 +1,5 @@
 "use client";
-import MathText from "../display/MathText.js";
-import GraphDisplay from "../display/GraphDisplay.js";
+import QuestionCard from "../question/QuestionCard.jsx";
 
 export default function ReviewScreen({
   lastGenerated,
@@ -56,58 +55,19 @@ export default function ReviewScreen({
       )}
 
       {lastGenerated.map((q, qi) => (
-        <div key={q.id || qi} style={S.qCard}>
-          {(() => {
-            const issues = validateQuestion(q);
-            return (
-              <div style={S.qMeta}>
-                <span>Q{qi+1}</span>
-                <span style={S.tag(courseColors[q.course])}>{q.course}</span>
-                <span style={S.tag()}>{q.type}</span>
-                <span style={S.tag()}>{q.section}</span>
-                <span style={S.tag()}>{q.difficulty}</span>
-                {issues.length > 0 && (
-                  <span title={issues.join("\n")} style={{marginLeft:"auto", cursor:"help",
-                    background:"#7c2d12", color:"#9B1C1C", fontSize:"0.68rem", fontWeight:"600",
-                    padding:"0.1rem 0.4rem", borderRadius:"4px", whiteSpace:"nowrap"}}>
-                    ⚠️ {issues.length} issue{issues.length > 1 ? "s" : ""}
-                  </span>
-                )}
-              </div>
-            );
-          })()}
-
-          {q.hasGraph && q.graphConfig && (
-            <GraphDisplay graphConfig={q.graphConfig} authorMode={true} />
-          )}
-
-          {q.type === "Branched" ? (
-            <>
-              <div style={{...S.qText, color:accent+"cc"}}>Given: <MathText>{q.stem}</MathText></div>
-              {(q.parts || []).map((p, pi) => (
-                <div key={pi} style={{marginBottom:"0.6rem", paddingLeft:"0.75rem", borderLeft:"2px solid "+border}}>
-                  <div style={{fontSize:"0.7rem", color:text3, marginBottom:"0.2rem"}}>({String.fromCharCode(97+pi)})</div>
-                  <div style={S.qText}><MathText>{p.question}</MathText></div>
-                  {p.answer && <div style={S.ans}>Answer: <MathText>{p.answer}</MathText></div>}
-                  {p.explanation && <div style={S.expl}>💡 <MathText>{p.explanation}</MathText></div>}
-                </div>
-              ))}
-            </>
-          ) : (
-            <>
-              <div style={S.qText}><MathText>{q.question}</MathText></div>
-              {q.choices && (
-                <ul style={S.cList}>
-                  {q.choices.map((c, ci) => (
-                    <li key={ci} style={S.cItem(c === q.answer)}>{String.fromCharCode(65+ci)}. <MathText>{c}</MathText></li>
-                  ))}
-                </ul>
-              )}
-              {q.answer && <div style={S.ans}>✓ <MathText>{q.answer}</MathText></div>}
-              {q.explanation && <div style={S.expl}>💡 <MathText>{q.explanation}</MathText></div>}
-            </>
-          )}
-        </div>
+        <QuestionCard
+          key={q.id || qi}
+          q={q}
+          index={qi + 1}
+          issues={validateQuestion(q)}
+          authorMode={true}
+          S={S}
+          accent={courseColors[q.course]}
+          text1={text1}
+          text2={text2}
+          text3={text3}
+          border={border}
+        />
       ))}
     </div>
   );
