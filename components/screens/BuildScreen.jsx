@@ -271,6 +271,23 @@ export default function BuildScreen({
       updateMasterQuestion({ ...q, choices: nextChoices });
     };
 
+    const addNoneOfTheseToAll = () => {
+      let updated = 0;
+      const nextQuestions = v.questions.map(q => {
+        if (!Array.isArray(q.choices) || q.choices.length === 0) return q;
+        const last = q.choices[q.choices.length - 1];
+        if (/none of (these|the above)/i.test(last || "")) return q;
+        updated++;
+        return { ...q, choices: [...q.choices, "None of these"] };
+      });
+      if (updated === 0) {
+        showToast && showToast("All MCQ questions already have 'None of these' ✓", "info");
+        return;
+      }
+      setVersions([{ ...v, questions: nextQuestions }]);
+      showToast && showToast(`✓ Added "None of these" to ${updated} question${updated > 1 ? "s" : ""}`);
+    };
+
     const numQ = v.questions.length;
     const totalVersions = versionCount * numClassSections;
     const overLimit = numQ * totalVersions > 15;
@@ -305,6 +322,16 @@ export default function BuildScreen({
             <div style={{ fontSize: "0.82rem", fontWeight: "600", color: "#4ade80" }}>Master Version A locked · {v.questions.length} question{v.questions.length !== 1 ? "s" : ""}</div>
             <div style={{ fontSize: "0.72rem", color: text3, marginTop: "0.2rem" }}>Click ✏️ to edit, ↻ to replace, or toggle "None of these" per MCQ.</div>
           </div>
+        </div>
+
+        {/* Bulk MCQ tools */}
+        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginBottom: "1rem" }}>
+          <button
+            style={{ ...S.oBtn("#3b82f6"), fontSize: "0.75rem" }}
+            onClick={addNoneOfTheseToAll}
+          >
+            ＋ Toggle None of These for All
+          </button>
         </div>
 
         {/* Save Master */}
