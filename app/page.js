@@ -1,26 +1,4 @@
-"use client";
-import { useState } from "react";
-
 export default function LandingPage() {
-  const [form, setForm] = useState({ name: "", email: "", institution: "" });
-  const [status, setStatus] = useState(null);
-
-  const handleSubmit = async () => {
-    if (!form.name || !form.email || !form.institution) {
-      setStatus("error");
-      return;
-    }
-    try {
-      const res = await fetch("/api/waitlist", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
-      });
-      if (res.ok) { setStatus("success"); setForm({ name: "", email: "", institution: "" }); }
-      else setStatus("error");
-    } catch { setStatus("error"); }
-  };
-
   return (
     <>
       <style>{`
@@ -492,17 +470,9 @@ export default function LandingPage() {
       <div id="waitlist" className="waitlist-wrap">
         <h2>Ready to save<br /><em>hours every semester?</em></h2>
         <p>TestArca is invite-only. Join the waitlist and we'll reach out when access opens for your institution.</p>
-        {status === "success" ? (
-          <div className="waitlist-success">✓ You're on the list. We'll be in touch soon.</div>
-        ) : (
-          <div className="waitlist-form">
-            <input className="waitlist-input" placeholder="Full name" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} />
-            <input className="waitlist-input" placeholder="Institutional email" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} />
-            <input className="waitlist-input" placeholder="University / Institution" value={form.institution} onChange={e => setForm(p => ({ ...p, institution: e.target.value }))} />
-            <button className="waitlist-btn" onClick={handleSubmit}>Join the Waitlist →</button>
-            {status === "error" && <p className="waitlist-error">Please fill in all fields and try again.</p>}
-          </div>
-        )}
+        <a href="mailto:mohammadalakhrass@yahoo.com?subject=TestArca Access Request" className="btn-primary">
+          Request Access →
+        </a>
       </div>
 
       {/* FOOTER */}
