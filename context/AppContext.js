@@ -7,6 +7,7 @@ import { useGenerate } from "../hooks/useGenerate";
 import { useExamBuilder } from "../hooks/useExamBuilder";
 import { useExport } from "../hooks/useExport";
 import { useCourses } from "../hooks/useCourses";
+import { useValidation } from "../hooks/useValidation";
 import { COURSES, getCourse } from "../lib/courses/index.js";
 
 const SCREEN_ROUTES = {
@@ -118,6 +119,11 @@ export function AppProvider({ children }) {
   const courseObject = course ? (coursesHook.courses.find(c => c.name === course) || null) : null;
   const chapters = course ? (getCourse(course)?.chapters ?? allCourses[course]?.chapters ?? []) : [];
 
+  const validationHook = useValidation({
+    versions: examBuilderHook.versions,
+    courseObject,
+  });
+
   const value = {
     auth,
     toast, showToast,
@@ -126,6 +132,7 @@ export function AppProvider({ children }) {
     examBuilder: examBuilderHook,
     exportHook,
     courses: coursesHook,
+    validation: validationHook,
     // Derived convenience
     allCourses,
     courseColors,

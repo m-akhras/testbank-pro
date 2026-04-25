@@ -19,7 +19,7 @@ export default function ExportPage() {
   const exp = useExportContext();
   const S = makeStyles(green1);
   const accent = green1;
-  const { bank, examBuilder, generate, exportHook } = ctx;
+  const { bank, examBuilder, generate, exportHook, validation } = ctx;
 
   const setScreen = (s) => { if (SCREEN_ROUTES[s]) router.push(SCREEN_ROUTES[s]); };
 
@@ -65,6 +65,11 @@ export default function ExportPage() {
       autoGenError={examBuilder.autoGenError}
       autoGenerateVersions={examBuilder.autoGenerateVersions}
       inlineEditQId={null} setInlineEditQId={() => {}}
+      validating={validation.validating}
+      validationResults={validation.validationResults}
+      validationError={validation.validationError}
+      autoValidateAllVersions={validation.autoValidateAllVersions}
+      copyValidationPrompt={validation.copyValidationPrompt}
       showToast={ctx.showToast}
       validateQuestion={validateQuestion}
       setScreen={setScreen}
