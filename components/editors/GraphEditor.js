@@ -199,7 +199,7 @@ export default function GraphEditor({ initialConfig, onSave, onRemove, onClose }
     "single": "Single curve", "piecewise": "Piecewise function", "area": "Area between curves",
     "domain": "Domain sketch", "bar": "Bar chart", "histogram": "Histogram",
     "scatter": "Scatter plot", "discrete_dist": "Discrete probability distribution",
-    "mapping": "Mapping diagram", "relation_digraph": "Relation digraph",
+    "mapping": "Mapping diagram", "relation_digraph": "Relation digraph", "venn": "Venn Diagram",
     "continuous_dist": initialConfig?.distType === "standard_normal"
       ? "Standard Normal Distribution (Z)"
       : initialConfig?.distType === "uniform" ? "Uniform Distribution"
