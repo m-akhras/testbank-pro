@@ -250,6 +250,20 @@ export default function BankScreen({
                 setBulkReplaceIds(new Set(bankSelected));
                 setBulkReplacePaste(""); setBulkReplaceError("");
               }}>🔄 Replace {bankSelected.size} with new</button>
+              <button style={S.ghostBtn("#3b82f6")} onClick={async () => {
+                let updated = 0, skipped = 0;
+                for (const id of bankSelected) {
+                  const q = bank.find(b => b.id === id);
+                  if (!q || q.type !== "Multiple Choice" || !Array.isArray(q.choices)) { skipped++; continue; }
+                  const last = q.choices[q.choices.length - 1];
+                  if (/none of (these|the above)/i.test(last || "")) { skipped++; continue; }
+                  await saveQuestion({ ...q, choices: [...q.choices, "None of these"] });
+                  updated++;
+                }
+                showToast(updated > 0
+                  ? `✓ Added "None of these" to ${updated} question${updated>1?"s":""}${skipped?` (${skipped} skipped)`:""}`
+                  : "No eligible MCQ questions to update");
+              }}>＋ None of these</button>
               <button style={S.ghostBtn(text2)} onClick={() => {
                 const ids = new Set(filteredBank.map(q => q.id));
                 setBankSelected(ids);
