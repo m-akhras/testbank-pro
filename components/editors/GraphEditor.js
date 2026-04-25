@@ -85,6 +85,26 @@ export default function GraphEditor({ initialConfig, onSave, onRemove, onClose }
   const [exportProbLabel, setExportProbLabel] = useState(initialConfig?.exportProbLabel ?? false);
   const [holeInput,   setHoleInput]   = useState("");
   const [pointInput,  setPointInput]  = useState("");
+  // mapping & relation_digraph fields — stored as raw text, parsed in buildConfig
+  const [domainText,    setDomainText]    = useState(
+    Array.isArray(initialConfig?.domain) ? initialConfig.domain.join(", ") : ""
+  );
+  const [codomainText,  setCodomainText]  = useState(
+    Array.isArray(initialConfig?.codomain) ? initialConfig.codomain.join(", ") : ""
+  );
+  const [domainLabel,   setDomainLabel]   = useState(initialConfig?.domainLabel   || "");
+  const [codomainLabel, setCodomainLabel] = useState(initialConfig?.codomainLabel || "");
+  const [arrowsText,    setArrowsText]    = useState(
+    Array.isArray(initialConfig?.arrows)
+      ? initialConfig.arrows.map(p => p.join(",")).join("\n") : ""
+  );
+  const [nodesText,     setNodesText]     = useState(
+    Array.isArray(initialConfig?.nodes) ? initialConfig.nodes.join(", ") : ""
+  );
+  const [edgesText,     setEdgesText]     = useState(
+    Array.isArray(initialConfig?.edges)
+      ? initialConfig.edges.map(p => p.join(",")).join("\n") : ""
+  );
   const previewRef = useRef(null);
 
   const getYDomain = () => {
@@ -108,6 +128,26 @@ export default function GraphEditor({ initialConfig, onSave, onRemove, onClose }
     if (type === "piecewise") return { ...base, fn, fnLabel: fnLabel||undefined, showFnLabel, holes, points };
     if (type === "area")      return { ...base, fnTop, fnBottom, fnTopLabel: fnTopLabel||undefined, fnBottomLabel: fnBottomLabel||undefined, showFnLabel, shadeFrom: Number(shadeFrom), shadeTo: Number(shadeTo), topLabelOffsetX: Number(topLabelOffsetX)||0, topLabelOffsetY: Number(topLabelOffsetY)||0, botLabelOffsetX: Number(botLabelOffsetX)||0, botLabelOffsetY: Number(botLabelOffsetY)||0 };
     if (type === "domain")    return { ...base, boundary, shadeAbove, boundaryDashed: boundDashed, boundaryLabel: boundLabel, showFnLabel };
+    if (type === "mapping") {
+      const domain   = domainText.split(",").map(s => s.trim()).filter(Boolean);
+      const codomain = codomainText.split(",").map(s => s.trim()).filter(Boolean);
+      const arrows   = arrowsText.split("\n").map(line => {
+        const parts = line.split(",").map(s => parseInt(s.trim(), 10));
+        return (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) ? parts : null;
+      }).filter(Boolean);
+      return { type:"mapping", domain, codomain, arrows,
+        domainLabel:   domainLabel   || undefined,
+        codomainLabel: codomainLabel || undefined,
+        hasGraph: true };
+    }
+    if (type === "relation_digraph") {
+      const nodes = nodesText.split(",").map(s => s.trim()).filter(Boolean);
+      const edges = edgesText.split("\n").map(line => {
+        const parts = line.split(",").map(s => parseInt(s.trim(), 10));
+        return (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) ? parts : null;
+      }).filter(Boolean);
+      return { type:"relation_digraph", nodes, edges, hasGraph: true };
+    }
     if (["bar","histogram","scatter","discrete_dist","continuous_dist","standard_normal"].includes(type)) {
       return { ...(initialConfig || {}), showAxisNumbers: showNumbers, showGrid, showFnLabel,
                labelOffsetX: Number(labelOffsetX)||0, labelOffsetY: Number(labelOffsetY)||0,
@@ -254,6 +294,46 @@ export default function GraphEditor({ initialConfig, onSave, onRemove, onClose }
           </label>
         </>)}
         {row(<>{lbl("Boundary label:")} {inp(boundLabel, setBoundLabel, "y = x²", "140px")}</>)}
+      </>}
+
+      {/* Mapping diagram */}
+      {type === "mapping" && <>
+        {row(<>
+          {lbl("Domain:")}
+          {inp(domainText, setDomainText, "p, q, r, s", "220px")}
+        </>)}
+        {row(<>
+          {lbl("Codomain:")}
+          {inp(codomainText, setCodomainText, "1, 2, 3", "220px")}
+        </>)}
+        {row(<>
+          {lbl("Domain label:")}
+          {inp(domainLabel, setDomainLabel, "A", "60px")}
+          {lbl("Codomain label:")}
+          {inp(codomainLabel, setCodomainLabel, "B", "60px")}
+        </>)}
+        {row(<>
+          {lbl("Arrows (one per line, e.g. 0,1):")}
+          <textarea value={arrowsText} onChange={e=>setArrowsText(e.target.value)}
+            placeholder={"0,1\n1,2\n2,0"} rows={4}
+            style={{width:"200px",padding:"0.3rem 0.4rem",background:bg2,border:"1px solid "+border,
+              color:text1,borderRadius:"4px",fontSize:"0.78rem",fontFamily:"monospace"}} />
+        </>)}
+      </>}
+
+      {/* Relation digraph */}
+      {type === "relation_digraph" && <>
+        {row(<>
+          {lbl("Nodes:")}
+          {inp(nodesText, setNodesText, "1, 2, 3, 4", "220px")}
+        </>)}
+        {row(<>
+          {lbl("Edges (one per line; use 0,0 for self-loop):")}
+          <textarea value={edgesText} onChange={e=>setEdgesText(e.target.value)}
+            placeholder={"0,1\n1,2\n0,0"} rows={4}
+            style={{width:"200px",padding:"0.3rem 0.4rem",background:bg2,border:"1px solid "+border,
+              color:text1,borderRadius:"4px",fontSize:"0.78rem",fontFamily:"monospace"}} />
+        </>)}
       </>}
 
       {/* x domain + display toggles */}
