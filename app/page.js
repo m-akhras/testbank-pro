@@ -359,6 +359,7 @@ export default function LandingPage() {
           <a href="#features" className="nav-link">Features</a>
           <a href="#how" className="nav-link">How it works</a>
           <a href="#courses" className="nav-link">Courses</a>
+          <a href="/login" className="nav-link">Sign In</a>
           <a href="#waitlist" className="nav-cta">Request Access</a>
         </div>
       </nav>
