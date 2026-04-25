@@ -391,11 +391,13 @@ export default function ExportScreen({
                   <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.78rem", color: text2 }}>
                     Points per question:
                     <input
-                      type="number"
-                      min={1}
-                      max={100}
+                      type="text"
                       value={qtiPointsPerQ}
-                      onChange={e => setQtiPointsPerQ(Number(e.target.value) || 1)}
+                      onChange={e => setQtiPointsPerQ(e.target.value)}
+                      onBlur={e => {
+                        const n = parseFloat(e.target.value);
+                        setQtiPointsPerQ(isNaN(n) ? 1 : n);
+                      }}
                       style={{ width: "52px", ...S.input, padding: "0.25rem 0.4rem", fontSize: "0.78rem" }}
                     />
                   </label>
@@ -457,11 +459,13 @@ export default function ExportScreen({
                   <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.78rem", color: text2 }}>
                     Points per question:
                     <input
-                      type="number"
-                      min={1}
-                      max={100}
+                      type="text"
                       value={qtiPointsPerQ}
-                      onChange={e => setQtiPointsPerQ(Number(e.target.value) || 1)}
+                      onChange={e => setQtiPointsPerQ(e.target.value)}
+                      onBlur={e => {
+                        const n = parseFloat(e.target.value);
+                        setQtiPointsPerQ(isNaN(n) ? 1 : n);
+                      }}
                       style={{ width: "52px", ...S.input, padding: "0.25rem 0.4rem", fontSize: "0.78rem" }}
                     />
                   </label>
@@ -695,11 +699,13 @@ export default function ExportScreen({
                 <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.78rem", color: text2 }}>
                   Points per question:
                   <input
-                    type="number"
-                    min={1}
-                    max={100}
+                    type="text"
                     value={qtiPointsPerQ}
-                    onChange={e => setQtiPointsPerQ(Number(e.target.value) || 1)}
+                    onChange={e => setQtiPointsPerQ(e.target.value)}
+                    onBlur={e => {
+                      const n = parseFloat(e.target.value);
+                      setQtiPointsPerQ(isNaN(n) ? 1 : n);
+                    }}
                     style={{ width: "52px", ...S.input, padding: "0.25rem 0.4rem", fontSize: "0.78rem" }}
                   />
                 </label>
