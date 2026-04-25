@@ -348,22 +348,23 @@ export default function ExportScreen({
               </div>
             )}
 
-            {isAdmin && validationResults && Object.keys(validationResults).length > 0 && (() => {
-              const issues = Object.entries(validationResults).filter(([, r]) => !r.valid);
+            {isAdmin && Array.isArray(validationResults) && validationResults.length > 0 && (() => {
+              const total = validationResults.length;
+              const flagged = validationResults.filter(r => !r.correct);
+              const passed = total - flagged.length;
+              const allPassed = flagged.length === 0;
               return (
-                <div style={{ background: issues.length === 0 ? "#052e16" : "#1c1002", border: `1px solid ${issues.length === 0 ? "#14532d" : "#f59e0b44"}`, borderRadius: "6px", padding: "0.6rem 0.85rem", marginBottom: "0.75rem", fontSize: "0.78rem", color: issues.length === 0 ? "#4ade80" : "#f59e0b" }}>
-                  {issues.length === 0 ? (
-                    "✅ All questions verified — no issues found."
-                  ) : (
-                    <>
-                      <div style={{ fontWeight: "600", marginBottom: "0.3rem" }}>⚠️ {issues.length} issue{issues.length > 1 ? "s" : ""} found</div>
-                      {issues.map(([id, r]) => (
-                        <div key={id} style={{ marginBottom: "0.25rem", opacity: 0.9 }}>
-                          • <strong>Q{id}:</strong> {r.reason}{r.corrected_answer ? ` → Correct: ${r.corrected_answer}` : ""}
-                        </div>
-                      ))}
-                    </>
-                  )}
+                <div style={{ background: allPassed ? "#052e16" : "#1c1002", border: `1px solid ${allPassed ? "#14532d" : "#f59e0b44"}`, borderRadius: "6px", padding: "0.6rem 0.85rem", marginBottom: "0.75rem", fontSize: "0.78rem", color: allPassed ? "#4ade80" : "#f59e0b" }}>
+                  <div style={{ fontWeight: "600", marginBottom: flagged.length ? "0.3rem" : 0 }}>
+                    {allPassed
+                      ? `✅ ${passed} of ${total} passed — no issues found.`
+                      : `⚠️ ${flagged.length} flagged of ${total} (${passed} passed)`}
+                  </div>
+                  {flagged.map(r => (
+                    <div key={r.questionId} style={{ marginBottom: "0.25rem", opacity: 0.9 }}>
+                      • <strong>Q{r.questionId}:</strong> {r.issue || "(no detail)"}
+                    </div>
+                  ))}
                 </div>
               );
             })()}

@@ -3,7 +3,7 @@ import { useState } from "react";
 
 export function useValidation({ versions, courseObject } = {}) {
   const [validating, setValidating] = useState(false);
-  const [validationResults, setValidationResults] = useState({});
+  const [validationResults, setValidationResults] = useState([]);
   const [validationError, setValidationError] = useState("");
 
   const collectQuestions = () => {
@@ -52,24 +52,38 @@ ${choices}
   const autoValidateAllVersions = async () => {
     setValidating(true);
     setValidationError("");
+    setValidationResults([]);
     try {
-      const prompt = buildValidationPrompt();
-      const res = await fetch("/api/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || `HTTP ${res.status}`);
-      }
-      const data = await res.json();
-      const text = data.content?.[0]?.text || "";
-      const match = text.match(/\[[\s\S]*\]/);
-      if (!match) throw new Error("Could not find JSON array in response");
-      const arr = JSON.parse(match[0]);
-      const results = {};
-      arr.forEach(r => { if (r && r.id) results[r.id] = r; });
+      const questions = collectQuestions();
+      const results = await Promise.all(questions.map(async (q) => {
+        try {
+          const res = await fetch("/api/generate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              questions: [{
+                question: q.question || q.stem || "",
+                choices: q.choices || [],
+                answer: q.answer || "",
+                explanation: q.explanation || "",
+              }],
+              mode: "validate",
+            }),
+          });
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            return { questionId: q.id, correct: false, issue: `API error: ${err.error || res.status}` };
+          }
+          const data = await res.json();
+          const v = data.validated?.[0]?.validation || { valid: true };
+          const issue = v.reason
+            ? v.reason + (v.corrected_answer ? ` (correct: ${v.corrected_answer})` : "")
+            : "";
+          return { questionId: q.id, correct: !!v.valid, issue };
+        } catch (e) {
+          return { questionId: q.id, correct: false, issue: `Request failed: ${e.message || e}` };
+        }
+      }));
       setValidationResults(results);
     } catch (e) {
       setValidationError(e.message || "Validation failed");
