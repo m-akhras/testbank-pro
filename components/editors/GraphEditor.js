@@ -105,6 +105,18 @@ export default function GraphEditor({ initialConfig, onSave, onRemove, onClose }
     Array.isArray(initialConfig?.edges)
       ? initialConfig.edges.map(p => p.join(",")).join("\n") : ""
   );
+  // venn
+  const [vennLabelA,        setVennLabelA]        = useState(initialConfig?.sets?.[0]?.label || "A");
+  const [vennLabelB,        setVennLabelB]        = useState(initialConfig?.sets?.[1]?.label || "B");
+  const [vennColorA,        setVennColorA]        = useState(initialConfig?.sets?.[0]?.color || "#3b82f6");
+  const [vennColorB,        setVennColorB]        = useState(initialConfig?.sets?.[1]?.color || "#ef4444");
+  const [vennShaded,        setVennShaded]        = useState((initialConfig?.shaded     || []).join(", "));
+  const [vennElemsA,        setVennElemsA]        = useState((initialConfig?.elementsA  || []).join(", "));
+  const [vennElemsB,        setVennElemsB]        = useState((initialConfig?.elementsB  || []).join(", "));
+  const [vennElemsAB,       setVennElemsAB]       = useState((initialConfig?.elementsAB || []).join(", "));
+  const [vennUniverseLabel, setVennUniverseLabel] = useState(initialConfig?.universeLabel || "U");
+  // fallback JSON editor for unknown types
+  const [rawJson, setRawJson] = useState(JSON.stringify(initialConfig || {}, null, 2));
   const previewRef = useRef(null);
 
   const getYDomain = () => {
@@ -148,6 +160,19 @@ export default function GraphEditor({ initialConfig, onSave, onRemove, onClose }
       }).filter(Boolean);
       return { type:"relation_digraph", nodes, edges, hasGraph: true };
     }
+    if (type === "venn") return {
+      type: "venn",
+      sets: [
+        { label: vennLabelA, color: vennColorA },
+        { label: vennLabelB, color: vennColorB },
+      ],
+      shaded:     vennShaded.split(",").map(s => s.trim()).filter(Boolean),
+      elementsA:  vennElemsA.split(",").map(s => s.trim()).filter(Boolean),
+      elementsB:  vennElemsB.split(",").map(s => s.trim()).filter(Boolean),
+      elementsAB: vennElemsAB.split(",").map(s => s.trim()).filter(Boolean),
+      universeLabel: vennUniverseLabel,
+      hasGraph: true,
+    };
     if (["bar","histogram","scatter","discrete_dist","continuous_dist","standard_normal"].includes(type)) {
       return { ...(initialConfig || {}), showAxisNumbers: showNumbers, showGrid, showFnLabel,
                labelOffsetX: Number(labelOffsetX)||0, labelOffsetY: Number(labelOffsetY)||0,
@@ -157,6 +182,10 @@ export default function GraphEditor({ initialConfig, onSave, onRemove, onClose }
                exportTitle: exportTitle,
                exportProbLabel: exportProbLabel };
     }
+    try {
+      const parsed = JSON.parse(rawJson);
+      if (parsed && typeof parsed === "object") return { ...parsed, hasGraph: true };
+    } catch(e) {}
     return base;
   };
 
@@ -334,6 +363,23 @@ export default function GraphEditor({ initialConfig, onSave, onRemove, onClose }
             style={{width:"200px",padding:"0.3rem 0.4rem",background:bg2,border:"1px solid "+border,
               color:text1,borderRadius:"4px",fontSize:"0.78rem",fontFamily:"monospace"}} />
         </>)}
+      </>}
+
+      {/* Venn diagram */}
+      {type === "venn" && <>
+        {row(<>{lbl("Set A label:")} {inp(vennLabelA, setVennLabelA, "A", "50px")} {lbl("Color:")} {inp(vennColorA, setVennColorA, "#3b82f6", "80px")} {lbl("Elements only in A:")} {inp(vennElemsA, setVennElemsA, "e.g. 1, 3", "120px")}</>)}
+        {row(<>{lbl("Set B label:")} {inp(vennLabelB, setVennLabelB, "B", "50px")} {lbl("Color:")} {inp(vennColorB, setVennColorB, "#ef4444", "80px")} {lbl("Elements only in B:")} {inp(vennElemsB, setVennElemsB, "e.g. 4, 5", "120px")}</>)}
+        {row(<>{lbl("Elements in both A∩B:")} {inp(vennElemsAB, setVennElemsAB, "e.g. 2", "120px")} {lbl("Universe label:")} {inp(vennUniverseLabel, setVennUniverseLabel, "U", "50px")}</>)}
+        {row(<>{lbl("Shaded regions (comma-separated):")} {inp(vennShaded, setVennShaded, "AandB, AnotB, BnotA, AorB, A, B", "280px")}</>)}
+      </>}
+
+      {/* Fallback JSON editor for unknown graph types */}
+      {!["single","piecewise","area","domain","multi","bar","histogram","scatter","discrete_dist","continuous_dist","standard_normal","mapping","relation_digraph","venn"].includes(type) && <>
+        {row(<>{lbl("Raw JSON (unknown graph type):")}</>)}
+        <textarea value={rawJson} onChange={e => setRawJson(e.target.value)}
+          rows={8}
+          style={{width:"100%", padding:"0.3rem 0.5rem", background:"#1a1a2e", border:"1px solid #334155",
+            color:"#e8e8e0", borderRadius:"4px", fontSize:"0.78rem", marginBottom:"0.5rem", fontFamily:"monospace"}} />
       </>}
 
       {/* x domain + display toggles */}
