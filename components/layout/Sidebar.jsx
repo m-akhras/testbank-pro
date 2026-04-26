@@ -12,7 +12,6 @@ const NAV_GROUPS = [
     items: [
       { href: "/app/dashboard", icon: "🏠", label: "Dashboard" },
       { href: "/app/generate",  icon: "✨", label: "Generate" },
-      { href: "/app/review",    icon: "🔍", label: "Review",        badgeKey: "lastGenerated" },
       { href: "/app/bank",      icon: "📚", label: "Question Bank", badgeKey: "bank" },
     ],
   },
@@ -98,22 +97,6 @@ export default function Sidebar({ user, bank = [], lastGenerated = [], selectedF
       </div>
 
       {/* Notification banners */}
-      {lastGenerated.length > 0 && (
-        <div onClick={() => router.push("/app/review")} style={{
-          margin: "0.7rem 0.6rem 0", padding: "0.55rem 0.7rem",
-          background: "#FEF3C7", border: "1px solid #FCD34D",
-          borderRadius: "8px", cursor: "pointer",
-          display: "flex", alignItems: "center", gap: "0.5rem",
-        }}>
-          <span style={{ fontSize: "0.9rem" }}>⚡</span>
-          <div>
-            <div style={{ fontSize: "0.71rem", color: "#f59e0b", fontWeight: "600", lineHeight: 1.3 }}>
-              {lastGenerated.length} questions ready to review
-            </div>
-            <div style={{ fontSize: "0.62rem", color: "#92400E", marginTop: "1px" }}>Click to review →</div>
-          </div>
-        </div>
-      )}
       {bankIssueCount > 0 && (
         <div onClick={() => router.push("/app/bank?issues=1")} style={{
           margin: "0.4rem 0.6rem 0", padding: "0.5rem 0.7rem",

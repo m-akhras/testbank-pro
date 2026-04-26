@@ -44,9 +44,8 @@ export default function DashboardScreen({
         <div style={{display:"flex", gap:"0.5rem", alignItems:"stretch"}}>
           {[
             { step:"1", label:"Generate", sub:"Create with AI", sc:"generate", color:"#2D6A4F", icon:"✦" },
-            { step:"2", label:"Review", sub:"Check & save", sc:"review", color:"#92400E", icon:"◎", badge: lastGenerated.length || 0 },
-            { step:"3", label:"Build Exam", sub:"Select & version", sc:"versions", color:"#7C3AED", icon:"⊞" },
-            { step:"4", label:"Export", sub:"Word · QTI · Print", sc:"export", color:"#185FA5", icon:"⬇" },
+            { step:"2", label:"Build Exam", sub:"Select & version", sc:"versions", color:"#7C3AED", icon:"⊞" },
+            { step:"3", label:"Export", sub:"Word · QTI · Print", sc:"export", color:"#185FA5", icon:"⬇" },
           ].map((s, i) => (
             <div key={i} style={{display:"flex", alignItems:"center", flex:1, gap:"0.5rem"}}>
               <div onClick={() => {
@@ -82,7 +81,7 @@ export default function DashboardScreen({
                   <div style={{fontSize:"0.65rem", color:text3, marginTop:"1px", fontFamily:"'Inter',system-ui,sans-serif"}}>{s.sub}</div>
                 </div>
               </div>
-              {i < 3 && <div style={{color:text3, fontSize:"0.8rem", flexShrink:0}}>›</div>}
+              {i < 2 && <div style={{color:text3, fontSize:"0.8rem", flexShrink:0}}>›</div>}
             </div>
           ))}
         </div>
@@ -122,10 +121,9 @@ export default function DashboardScreen({
       )}
 
       {/* Stats row */}
-      <div style={{display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:"1rem", marginBottom:"2.5rem"}}>
+      <div style={{display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:"1rem", marginBottom:"2.5rem"}}>
         {[
           { label:"Questions in Bank", value:bank.length, color:"#2D6A4F", bg:"#D1FAE5", action:() => setScreen("bank") },
-          { label:"Pending Review", value:lastGenerated.length || 0, color:"#92400E", bg:"#FEF3C7", action:() => setScreen("review") },
           { label:"Issues Found", value:bankIssueCount, color:bankIssueCount>0?"#9B1C1C":"#2D6A4F", bg:bankIssueCount>0?"#FEE2E2":"#D1FAE5", action:() => { setFilterIssuesOnly(bankIssueCount > 0); setScreen("bank"); } },
         ].map((s, i) => (
           <div key={i} onClick={s.action} style={{
