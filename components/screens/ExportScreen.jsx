@@ -1,9 +1,11 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { createBrowserClient } from "@supabase/ssr";
 import MathText from "../display/MathText.js";
 import GraphDisplay from "../display/GraphDisplay.js";
 import InlineEditor from "../editors/InlineEditor.js";
 import PastePanel from "../panels/PastePanel.js";
+import ExportTemplateModal from "../modals/ExportTemplateModal.jsx";
 import { useExportFunctions } from "../../context/ExportFunctionsContext.js";
 
 export default function ExportScreen({
@@ -116,6 +118,26 @@ export default function ExportScreen({
   const validateQTIExport         = exportFns.validateQTIExport         || validateQTIExportProp;
   const dlBlob                    = exportFns.dlBlob                    || dlBlobProp;
 
+  // Word export template (cover page, header, footer)
+  const [templateModal, setTemplateModal] = useState({ open: false, type: null, payload: null });
+  const [templateBusy, setTemplateBusy] = useState(false);
+  const [userSettings, setUserSettings] = useState(null);
+
+  useEffect(() => {
+    const supabase = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    );
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data } = await supabase.from("user_settings").select("*").eq("user_id", user.id).maybeSingle();
+      if (data) setUserSettings(data);
+    })();
+  }, []);
+
+  const openWordExportModal = (type, payload) => setTemplateModal({ open: true, type, payload });
+
   if (!versions || versions.length === 0) {
     return (
       <div>
@@ -141,6 +163,43 @@ export default function ExportScreen({
 
   const v = versions[activeVersion] || versions[0];
   const hasMultiSections = Object.keys(classSectionVersions || {}).length > 1;
+
+  async function runWordExport(templateConfig) {
+    if (!templateModal.type) return;
+    const { type, payload } = templateModal;
+    const fullConfig = {
+      ...templateConfig,
+      universityName:    userSettings?.university_name    || "",
+      universityLogoUrl: userSettings?.university_logo_url || "",
+      instructorName:    userSettings?.instructor_name    || "",
+      pointsPerQuestion: Number(qtiPointsPerQ) || 1,
+    };
+    setTemplateBusy(true);
+    setExportLoading("Building Word document...");
+    try {
+      if (type === "single") {
+        const cs = payload.questions[0]?.classSection || null;
+        const blob = await buildDocx(payload.questions, payload.course, payload.label, cs, 1, fullConfig);
+        const secStr = cs ? `_S${cs}` : "";
+        dlBlob(blob, `Version_${payload.label}${secStr}_Exam.docx`);
+        if (examSaved && saveExamName) await logExport(saveExamName, "Word", payload.label);
+      } else if (type === "sections") {
+        for (const [sec, secVers] of Object.entries(classSectionVersions)) {
+          for (const ver of secVers) {
+            const blob = await buildDocx(ver.questions, ver.questions[0]?.course || "Calculus", ver.label, Number(sec), 1, fullConfig);
+            dlBlob(blob, `S${sec}_Version_${ver.label}_Exam.docx`);
+          }
+        }
+      } else if (type === "compare") {
+        const blob = await buildDocxCompare(versions, versions[0]?.questions[0]?.course || "Exam", fullConfig);
+        dlBlob(blob, "AllVersions_Grouped.docx");
+      }
+      setTemplateModal({ open: false, type: null, payload: null });
+    } finally {
+      setTemplateBusy(false);
+      setExportLoading("");
+    }
+  }
 
   // Classroom section tabs — when multi-section, switch which versions[] is shown
   const classroomTabs = hasMultiSections ? (
@@ -258,18 +317,11 @@ export default function ExportScreen({
               <button
                 style={S.btn("#10b981", exportLoading !== "")}
                 disabled={exportLoading !== ""}
-                onClick={async () => {
-                  setExportLoading("Building Word document...");
-                  try {
-                    const cs = v.questions[0]?.classSection || null;
-                    const blob = await buildDocx(v.questions, v.questions[0]?.course || "Calculus", v.label, cs);
-                    const secStr = cs ? `_S${cs}` : "";
-                    dlBlob(blob, `Version_${v.label}${secStr}_Exam.docx`);
-                    if (examSaved && saveExamName) await logExport(saveExamName, "Word", v.label);
-                  } finally {
-                    setExportLoading("");
-                  }
-                }}
+                onClick={() => openWordExportModal("single", {
+                  questions: v.questions,
+                  course: v.questions[0]?.course || "Calculus",
+                  label: v.label,
+                })}
               >
                 ⬇ Word (.docx)
               </button>
@@ -280,19 +332,7 @@ export default function ExportScreen({
                 <button
                   style={S.oBtn("#8b5cf6")}
                   disabled={exportLoading !== ""}
-                  onClick={async () => {
-                    setExportLoading("Building all sections Word...");
-                    try {
-                      for (const [sec, secVers] of Object.entries(classSectionVersions)) {
-                        for (const ver of secVers) {
-                          const blob = await buildDocx(ver.questions, ver.questions[0]?.course || "Calculus", ver.label, Number(sec));
-                          dlBlob(blob, `S${sec}_Version_${ver.label}_Exam.docx`);
-                        }
-                      }
-                    } finally {
-                      setExportLoading("");
-                    }
-                  }}
+                  onClick={() => openWordExportModal("sections", null)}
                 >
                   ⬇ All Sections Word
                 </button>
@@ -740,10 +780,7 @@ export default function ExportScreen({
               )}
               <button
                 style={S.btn("#10b981", false)}
-                onClick={async () => {
-                  const blob = await buildDocxCompare(versions, versions[0]?.questions[0]?.course || "Exam");
-                  dlBlob(blob, "AllVersions_Grouped.docx");
-                }}
+                onClick={() => openWordExportModal("compare", null)}
               >
                 ⬇ Export to Word (all versions)
               </button>
@@ -815,6 +852,17 @@ export default function ExportScreen({
           </>
         );
       })()}
+
+      <ExportTemplateModal
+        open={templateModal.open}
+        onClose={() => setTemplateModal({ open: false, type: null, payload: null })}
+        onGenerate={runWordExport}
+        defaultExamTitle={saveExamName || ""}
+        busy={templateBusy}
+        S={S}
+        text1={text1} text2={text2} text3={text3} border={border} bg1={bg1} bg2={bg2}
+        accent={accent}
+      />
     </div>
   );
 }
