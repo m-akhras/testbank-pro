@@ -41,6 +41,10 @@ export function useGenerate({
   setActiveClassSection = () => {},
   setExamSaved = () => {},
   setSaveExamName = () => {},
+  setMasterLocked = () => {},
+  setSelectedForExam = () => {},
+  appendToMaster = false,
+  setAppendToMaster = () => {},
   showToast = () => {},
   setScreen = () => {},
   courseObject = null,
@@ -219,9 +223,6 @@ export function useGenerate({
         });
         setDupWarnings(warnings);
         setLastGenerated(tagged);
-        for (const q of tagged) {
-          // saveQuestion is in useBank — caller must wire this if needed
-        }
         const supabase = getSupabase();
         for (const q of tagged) {
           try {
@@ -232,7 +233,25 @@ export function useGenerate({
         }
         setBank(prev => [...tagged, ...prev]);
         setPendingType(null); setPasteInput(""); setPendingMeta(null);
-        setScreen("review");
+
+        const ids = tagged.map(q => q.id);
+        if (appendToMaster && versions.length > 0 && versions[0]?.questions) {
+          // Round-trip: append to the existing master
+          flushSync(() => {
+            setVersions([{ ...versions[0], questions: [...versions[0].questions, ...tagged] }]);
+            setSelectedForExam(prev => [...new Set([...prev, ...ids])]);
+            setAppendToMaster(false);
+          });
+        } else {
+          // Fresh generate: jump straight to master review
+          flushSync(() => {
+            setVersions([{ label: "A", questions: tagged }]);
+            setSelectedForExam(ids);
+            setMasterLocked(true);
+            setActiveVersion(0);
+          });
+        }
+        setScreen("build");
       } else if (pendingType === "version") {
         const { selected, label, allVersions, remaining, mutationType: mt } = pendingMeta;
         const versioned = sanitized.map((q, i) => ({

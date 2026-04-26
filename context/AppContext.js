@@ -91,6 +91,10 @@ export function AppProvider({ children }) {
     setActiveClassSection:   examBuilderHook.setActiveClassSection,
     setExamSaved:            examBuilderHook.setExamSaved,
     setSaveExamName:         examBuilderHook.setSaveExamName,
+    setMasterLocked:         examBuilderHook.setMasterLocked,
+    setSelectedForExam:      examBuilderHook.setSelectedForExam,
+    appendToMaster:          examBuilderHook.appendToMaster,
+    setAppendToMaster:       examBuilderHook.setAppendToMaster,
     showToast,
     setScreen,
     courseObject: null, // set post-render
