@@ -26,8 +26,9 @@ const NAV_GROUPS = [
   {
     label: "SETTINGS",
     items: [
-      { href: "/app/courses", icon: "🎓", label: "Courses" },
-      { href: "/app/admin",   icon: "⚙",  label: "Admin", adminOnly: true },
+      { href: "/app/courses",  icon: "🎓", label: "Courses" },
+      { href: "/app/settings", icon: "👤", label: "Settings" },
+      { href: "/app/admin",    icon: "⚙",  label: "Admin", adminOnly: true },
     ],
   },
 ];
