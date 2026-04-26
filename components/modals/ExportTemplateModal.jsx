@@ -6,6 +6,8 @@ export default function ExportTemplateModal({
   onClose,
   onGenerate,
   defaultExamTitle = "",
+  defaultClassSection = null,
+  numQuestions = 0,
   busy = false,
   S,
   text1, text2, text3, border, bg1, bg2,
@@ -19,16 +21,41 @@ export default function ExportTemplateModal({
   const [includeCover, setIncludeCover] = useState(true);
   const [includeHeader, setIncludeHeader] = useState(true);
   const [includeFooter, setIncludeFooter] = useState(true);
+  const [showVersion, setShowVersion] = useState(false);
+  const [versionLabel, setVersionLabel] = useState("");
+  const [showSection, setShowSection] = useState(false);
+  const [sectionLabel, setSectionLabel] = useState("");
+  const [questionMarks, setQuestionMarks] = useState([]);
   const [error, setError] = useState("");
 
+  // Reset & autofill on open transition (ignore prop drift while open)
   useEffect(() => {
-    if (open) {
-      setExamTitle(defaultExamTitle || "");
-      setError("");
+    if (!open) return;
+    setExamTitle(defaultExamTitle || "");
+    setError("");
+    if (defaultClassSection != null && defaultClassSection !== "") {
+      setShowSection(true);
+      setSectionLabel(`Section ${String(defaultClassSection).padStart(2, "0")}`);
+    } else {
+      setShowSection(false);
+      setSectionLabel("");
     }
-  }, [open, defaultExamTitle]);
+    const n = Number(numQuestions) || 0;
+    setQuestionMarks(Array(n).fill(10));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   if (!open) return null;
+
+  function setMarkAt(i, val) {
+    setQuestionMarks(prev => {
+      const next = [...prev];
+      next[i] = val;
+      return next;
+    });
+  }
+
+  const totalMarks = questionMarks.reduce((sum, m) => sum + (Number(m) || 0), 0);
 
   function submit() {
     if (!examTitle.trim()) {
@@ -44,11 +71,18 @@ export default function ExportTemplateModal({
       includeCover,
       includeHeader,
       includeFooter,
+      showVersion,
+      versionLabel: versionLabel.trim(),
+      showSection,
+      sectionLabel: sectionLabel.trim(),
+      questionMarks: questionMarks.map(m => Number(m) || 0),
     });
   }
 
   const labelStyle = { display: "block", fontSize: "0.74rem", color: text2, marginBottom: "0.3rem", fontWeight: "500" };
   const inputStyle = { ...S.input, width: "100%", padding: "0.45rem 0.65rem", fontSize: "0.82rem" };
+  const sectionBoxStyle = { marginBottom: "0.85rem", padding: "0.65rem 0.85rem", background: bg2, border: "1px solid " + border, borderRadius: "6px" };
+  const checkboxRowStyle = { display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.78rem", color: text2, cursor: "pointer", marginBottom: "0.4rem" };
 
   return (
     <div style={{
@@ -59,7 +93,7 @@ export default function ExportTemplateModal({
     }}>
       <div style={{
         background: bg1, border: "1px solid " + border, borderRadius: "12px",
-        padding: "1.5rem", maxWidth: "560px", width: "100%",
+        padding: "1.5rem", maxWidth: "640px", width: "100%",
         maxHeight: "90vh", overflowY: "auto",
       }}>
         <div style={{ fontSize: "1rem", fontWeight: "700", color: text1, marginBottom: "0.25rem" }}>
@@ -114,6 +148,56 @@ export default function ExportTemplateModal({
           />
         </div>
 
+        {/* Version (optional) */}
+        <div style={sectionBoxStyle}>
+          <label style={checkboxRowStyle}>
+            <input
+              type="checkbox"
+              checked={showVersion}
+              onChange={e => setShowVersion(e.target.checked)}
+              style={{ accentColor: accent, width: "14px", height: "14px" }}
+            />
+            Include version on cover
+          </label>
+          <input
+            type="text"
+            value={versionLabel}
+            onChange={e => setVersionLabel(e.target.value)}
+            placeholder="e.g. Midterm VA"
+            disabled={!showVersion}
+            style={{
+              ...inputStyle,
+              opacity: showVersion ? 1 : 0.5,
+              cursor: showVersion ? "auto" : "not-allowed",
+            }}
+          />
+        </div>
+
+        {/* Section (optional, auto-filled from active version's classSection) */}
+        <div style={sectionBoxStyle}>
+          <label style={checkboxRowStyle}>
+            <input
+              type="checkbox"
+              checked={showSection}
+              onChange={e => setShowSection(e.target.checked)}
+              style={{ accentColor: accent, width: "14px", height: "14px" }}
+            />
+            Include section on cover
+          </label>
+          <input
+            type="text"
+            value={sectionLabel}
+            onChange={e => setSectionLabel(e.target.value)}
+            placeholder="e.g. Section 01"
+            disabled={!showSection}
+            style={{
+              ...inputStyle,
+              opacity: showSection ? 1 : 0.5,
+              cursor: showSection ? "auto" : "not-allowed",
+            }}
+          />
+        </div>
+
         <div style={{ marginBottom: "1rem" }}>
           <label style={labelStyle}>Instructions</label>
           <textarea
@@ -124,6 +208,34 @@ export default function ExportTemplateModal({
             style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }}
           />
         </div>
+
+        {/* Grading table (per-question marks) */}
+        {questionMarks.length > 0 && (
+          <div style={{ marginBottom: "1rem", padding: "0.75rem", background: bg2, border: "1px solid " + border, borderRadius: "6px" }}>
+            <div style={{ fontSize: "0.7rem", color: text2, fontWeight: "600", letterSpacing: "0.05em", textTransform: "uppercase", marginBottom: "0.5rem" }}>
+              Grading table
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(6, minmax(70px, 1fr))", gap: "0.4rem", marginBottom: "0.5rem" }}>
+              {questionMarks.map((m, i) => (
+                <div key={i}>
+                  <div style={{ fontSize: "0.65rem", color: text3, marginBottom: "0.15rem", textAlign: "center" }}>
+                    Q{i + 1}
+                  </div>
+                  <input
+                    type="number"
+                    min={0}
+                    value={m}
+                    onChange={e => setMarkAt(i, e.target.value)}
+                    style={{ ...inputStyle, padding: "0.3rem 0.4rem", fontSize: "0.78rem", textAlign: "center" }}
+                  />
+                </div>
+              ))}
+            </div>
+            <div style={{ fontSize: "0.78rem", color: text2, fontWeight: "600", textAlign: "right" }}>
+              Total: {totalMarks} marks
+            </div>
+          </div>
+        )}
 
         <div style={{ background: bg2, border: "1px solid " + border, borderRadius: "6px", padding: "0.75rem 1rem", marginBottom: "1rem" }}>
           <div style={{ fontSize: "0.7rem", color: text2, fontWeight: "600", letterSpacing: "0.05em", textTransform: "uppercase", marginBottom: "0.5rem" }}>

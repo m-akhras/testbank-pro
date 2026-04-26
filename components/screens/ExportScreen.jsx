@@ -186,7 +186,12 @@ export default function ExportScreen({
       } else if (type === "sections") {
         for (const [sec, secVers] of Object.entries(classSectionVersions)) {
           for (const ver of secVers) {
-            const blob = await buildDocx(ver.questions, ver.questions[0]?.course || "Calculus", ver.label, Number(sec), 1, fullConfig);
+            // Per-section override: when "Include section on cover" is ticked, label each
+            // generated doc with its own section number rather than the modal-active one.
+            const perSecConfig = fullConfig.showSection
+              ? { ...fullConfig, sectionLabel: `Section ${String(sec).padStart(2, "0")}` }
+              : fullConfig;
+            const blob = await buildDocx(ver.questions, ver.questions[0]?.course || "Calculus", ver.label, Number(sec), 1, perSecConfig);
             dlBlob(blob, `S${sec}_Version_${ver.label}_Exam.docx`);
           }
         }
@@ -858,6 +863,8 @@ export default function ExportScreen({
         onClose={() => setTemplateModal({ open: false, type: null, payload: null })}
         onGenerate={runWordExport}
         defaultExamTitle={saveExamName || ""}
+        defaultClassSection={v?.questions?.[0]?.classSection ?? null}
+        numQuestions={v?.questions?.length || 0}
         busy={templateBusy}
         S={S}
         text1={text1} text2={text2} text3={text3} border={border} bg1={bg1} bg2={bg2}
