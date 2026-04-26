@@ -122,6 +122,11 @@ export default function BuildScreen({
   isAdmin,
   // Validation context (from generate hook, surfaced in master review)
   dupWarnings = [],
+  // Round-trip flow flags
+  appendToMaster,
+  setAppendToMaster,
+  pendingAddFromBank,
+  setPendingAddFromBank,
   // Styles
   S,
   text1,
@@ -345,7 +350,56 @@ export default function BuildScreen({
           >
             ＋ Toggle None of These for All
           </button>
+          <button
+            style={{ ...S.oBtn("#10b981"), fontSize: "0.75rem" }}
+            onClick={() => {
+              setPendingAddFromBank && setPendingAddFromBank(true);
+              setScreen && setScreen("bank");
+            }}
+          >
+            ＋ Add from Bank
+          </button>
+          <button
+            style={{ ...S.oBtn("#8b5cf6"), fontSize: "0.75rem" }}
+            onClick={() => {
+              setAppendToMaster && setAppendToMaster(true);
+              setScreen && setScreen("generate");
+            }}
+          >
+            ＋ Generate more
+          </button>
         </div>
+
+        {(() => {
+          if (!pendingAddFromBank) return null;
+          const inMaster = new Set(v.questions.map(q => q.id));
+          const newIds = (selectedForExam || []).filter(id => !inMaster.has(id));
+          if (newIds.length === 0) return null;
+          return (
+            <div style={{ background: "#1e3a5f33", border: "1px solid #3b82f644", borderRadius: "8px", padding: "0.75rem 1rem", marginBottom: "1rem", display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+              <div style={{ flex: 1, fontSize: "0.78rem", color: "#3b82f6", fontWeight: "500" }}>
+                ＋ {newIds.length} new question{newIds.length > 1 ? "s" : ""} selected from Bank — add to master?
+              </div>
+              <button
+                style={{ ...S.btn("#10b981", false), fontSize: "0.74rem", padding: "0.3rem 0.8rem" }}
+                onClick={() => {
+                  const newQs = bank.filter(q => newIds.includes(q.id));
+                  setVersions([{ ...v, questions: [...v.questions, ...newQs] }]);
+                  setPendingAddFromBank(false);
+                  showToast && showToast(`✓ Added ${newQs.length} question${newQs.length > 1 ? "s" : ""} to master`);
+                }}
+              >
+                Add to Master
+              </button>
+              <button
+                style={{ ...S.oBtn(text2), fontSize: "0.74rem", padding: "0.3rem 0.8rem" }}
+                onClick={() => setPendingAddFromBank(false)}
+              >
+                Cancel
+              </button>
+            </div>
+          );
+        })()}
 
         {/* Save Master */}
         <div style={{ padding: "0.85rem 1rem", background: bg2, borderRadius: "8px", border: "1px solid " + border, display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap", marginBottom: "1rem" }}>

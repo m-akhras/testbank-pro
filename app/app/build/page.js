@@ -46,6 +46,10 @@ export default function BuildPage() {
       pasteError={generate.pasteError} setPasteError={generate.setPasteError}
       handlePaste={generate.handlePaste}
       dupWarnings={generate.dupWarnings}
+      appendToMaster={examBuilder.appendToMaster}
+      setAppendToMaster={examBuilder.setAppendToMaster}
+      pendingAddFromBank={examBuilder.pendingAddFromBank}
+      setPendingAddFromBank={examBuilder.setPendingAddFromBank}
       showToast={ctx.showToast}
       validateQuestion={validateQuestion}
       sectionSortKey={sectionSortKey}

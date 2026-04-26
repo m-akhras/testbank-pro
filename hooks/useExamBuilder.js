@@ -45,6 +45,7 @@ export function useExamBuilder({
   const [versionMutationType, setVersionMutationType] = useState({});
   const [masterLocked, setMasterLocked] = useState(false);
   const [appendToMaster, setAppendToMaster] = useState(false);
+  const [pendingAddFromBank, setPendingAddFromBank] = useState(false);
   const [masterName, setMasterName] = useState("");
   const [savedMasters, setSavedMasters] = useState([]);
   const [savingMaster, setSavingMaster] = useState(false);
@@ -213,6 +214,7 @@ export function useExamBuilder({
     versionMutationType, setVersionMutationType,
     masterLocked, setMasterLocked,
     appendToMaster, setAppendToMaster,
+    pendingAddFromBank, setPendingAddFromBank,
     masterName, setMasterName,
     savedMasters, setSavedMasters,
     savingMaster,
