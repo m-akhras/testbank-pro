@@ -7,6 +7,7 @@ import InlineEditor from "../editors/InlineEditor.js";
 import PastePanel from "../panels/PastePanel.js";
 import ExportTemplateModal from "../modals/ExportTemplateModal.jsx";
 import { useExportFunctions } from "../../context/ExportFunctionsContext.js";
+import { getCourse } from "../../lib/courses/index.js";
 
 export default function ExportScreen({
   // Versions state
@@ -863,7 +864,10 @@ export default function ExportScreen({
         onClose={() => setTemplateModal({ open: false, type: null, payload: null })}
         onGenerate={runWordExport}
         defaultExamTitle={saveExamName || ""}
+        defaultCourseTitle={v?.questions?.[0]?.course || ""}
+        defaultCourseCode={getCourse(v?.questions?.[0]?.course)?.courseCode || ""}
         defaultClassSection={v?.questions?.[0]?.classSection ?? null}
+        classSections={Object.keys(classSectionVersions || {}).map(Number).filter(n => !Number.isNaN(n)).sort((a, b) => a - b)}
         numQuestions={v?.questions?.length || 0}
         busy={templateBusy}
         S={S}
