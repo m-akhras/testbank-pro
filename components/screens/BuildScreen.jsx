@@ -18,6 +18,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 
 import InlineEditor from "../editors/InlineEditor.js";
+import GraphEditor from "../editors/GraphEditor.js";
 import PastePanel from "../panels/PastePanel.js";
 import QuestionCard from "../question/QuestionCard.jsx";
 
@@ -119,6 +120,8 @@ export default function BuildScreen({
   setScreen,
   // Permissions
   isAdmin,
+  // Validation context (from generate hook, surfaced in master review)
+  dupWarnings = [],
   // Styles
   S,
   text1,
@@ -131,6 +134,7 @@ export default function BuildScreen({
   courseColors,
 }) {
   const [inlineEditQId, setInlineEditQId] = useState(null);
+  const [graphEditorQId, setGraphEditorQId] = useState(null);
   const [orderedSelected, setOrderedSelected] = useState(null);
 
   const sensors = useSensors(
@@ -323,6 +327,16 @@ export default function BuildScreen({
           </div>
         </div>
 
+        {dupWarnings && dupWarnings.length > 0 && (
+          <div style={{ ...S.card, borderColor: "#f59e0b44", background: "#f59e0b08", marginBottom: "1rem" }}>
+            <div style={{ fontSize: "0.75rem", color: "#f59e0b", fontWeight: "600", marginBottom: "0.4rem" }}>⚠ Possible duplicates detected (same section)</div>
+            {dupWarnings.map((w, i) => (
+              <div key={i} style={{ fontSize: "0.72rem", color: text2, marginBottom: "0.2rem" }}>• {w}</div>
+            ))}
+            <div style={{ fontSize: "0.68rem", color: text3, marginTop: "0.4rem" }}>These questions were still saved — review and delete if needed.</div>
+          </div>
+        )}
+
         {/* Bulk MCQ tools */}
         <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginBottom: "1rem" }}>
           <button
@@ -358,6 +372,7 @@ export default function BuildScreen({
           const issues = validateQuestion ? validateQuestion(q) : [];
           const hasNone = q.choices && /none of (these|the above)/i.test(q.choices[q.choices.length - 1] || "");
           const editing = inlineEditQId === `master_${qi}`;
+          const editingGraph = graphEditorQId === q.id;
           return (
             <SortableMasterCard key={q.id || qi} id={q.id} S={S} text3={text3}>
               <QuestionCard
@@ -373,7 +388,8 @@ export default function BuildScreen({
                 text2={text2}
                 text3={text3}
                 border={border}
-                onEdit={() => setInlineEditQId(editing ? null : `master_${qi}`)}
+                onEdit={() => { setInlineEditQId(editing ? null : `master_${qi}`); setGraphEditorQId(null); }}
+                onGraphEdit={() => { setGraphEditorQId(editingGraph ? null : q.id); setInlineEditQId(null); }}
                 onDelete={() => removeMasterQuestion(q.id)}
                 onReplace={() => showToast && showToast("Replace from the Bank screen for now", "info")}
                 headerExtra={q.choices && q.type !== "Branched" && (
@@ -387,16 +403,37 @@ export default function BuildScreen({
                     None of these
                   </label>
                 )}
-                bodyTop={editing && (
-                  <InlineEditor
-                    q={q}
-                    onSave={updated => {
-                      setVersions([{ ...v, questions: v.questions.map((vq, vqi) => (vqi !== qi ? vq : updated)) }]);
-                      setInlineEditQId(null);
-                      showToast && showToast("Question updated ✓");
-                    }}
-                    onClose={() => setInlineEditQId(null)}
-                  />
+                bodyTop={(editing || editingGraph) && (
+                  <>
+                    {editing && (
+                      <InlineEditor
+                        q={q}
+                        onSave={updated => {
+                          setVersions([{ ...v, questions: v.questions.map((vq, vqi) => (vqi !== qi ? vq : updated)) }]);
+                          setInlineEditQId(null);
+                          showToast && showToast("Question updated ✓");
+                        }}
+                        onClose={() => setInlineEditQId(null)}
+                      />
+                    )}
+                    {editingGraph && (
+                      <GraphEditor
+                        initialConfig={q.graphConfig || null}
+                        onSave={cfg => {
+                          const updated = { ...q, hasGraph: true, graphConfig: cfg };
+                          setVersions([{ ...v, questions: v.questions.map((vq, vqi) => (vqi !== qi ? vq : updated)) }]);
+                          setGraphEditorQId(null);
+                          showToast && showToast("Graph saved ✓");
+                        }}
+                        onRemove={() => {
+                          const updated = { ...q, hasGraph: false, graphConfig: null };
+                          setVersions([{ ...v, questions: v.questions.map((vq, vqi) => (vqi !== qi ? vq : updated)) }]);
+                          setGraphEditorQId(null);
+                        }}
+                        onClose={() => setGraphEditorQId(null)}
+                      />
+                    )}
+                  </>
                 )}
               />
             </SortableMasterCard>

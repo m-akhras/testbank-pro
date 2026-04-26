@@ -45,6 +45,7 @@ export default function BuildPage() {
       pasteInput={generate.pasteInput} setPasteInput={generate.setPasteInput}
       pasteError={generate.pasteError} setPasteError={generate.setPasteError}
       handlePaste={generate.handlePaste}
+      dupWarnings={generate.dupWarnings}
       showToast={ctx.showToast}
       validateQuestion={validateQuestion}
       sectionSortKey={sectionSortKey}
