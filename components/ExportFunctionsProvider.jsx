@@ -3,7 +3,6 @@ import { ExportFunctionsContext } from "../context/ExportFunctionsContext.js";
 import {
   buildDocx,
   buildDocxCompare,
-  buildAnswerKey,
   buildQTI,
   buildQTIZip,
   buildQTICompare,
@@ -28,7 +27,6 @@ const value = {
   // Exports
   buildDocx,
   buildDocxCompare,
-  buildAnswerKey,
   buildQTI,
   buildQTIZip,
   buildQTICompare,

@@ -43,7 +43,6 @@ export default function ExportPage() {
       logExport={exportHook.logExport}
       buildDocx={exp.buildDocx}
       buildDocxCompare={exp.buildDocxCompare}
-      buildAnswerKey={exp.buildAnswerKey}
       buildQTI={exp.buildQTI}
       buildQTIZip={exp.buildQTIZip}
       buildQTICompare={exp.buildQTICompare}

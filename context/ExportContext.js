@@ -3,7 +3,6 @@ import { createContext, useContext } from "react";
 import {
   buildDocx,
   buildDocxCompare,
-  buildAnswerKey,
   buildQTI,
   buildQTIZip,
   buildQTICompare,
@@ -16,7 +15,6 @@ import {
 const defaultValue = {
   buildDocx,
   buildDocxCompare,
-  buildAnswerKey,
   buildQTI,
   buildQTIZip,
   buildQTICompare,

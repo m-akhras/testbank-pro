@@ -50,7 +50,6 @@ export default function ExportScreen({
   // Export helpers — now resolved from ExportFunctionsContext; props kept as fallback
   buildDocx: buildDocxProp,
   buildDocxCompare: buildDocxCompareProp,
-  buildAnswerKey: buildAnswerKeyProp,
   buildQTI: buildQTIProp,
   buildQTIZip: buildQTIZipProp,
   buildQTICompare: buildQTICompareProp,
@@ -110,7 +109,6 @@ export default function ExportScreen({
   const exportFns = useExportFunctions() || {};
   const buildDocx                 = exportFns.buildDocx                 || buildDocxProp;
   const buildDocxCompare          = exportFns.buildDocxCompare          || buildDocxCompareProp;
-  const buildAnswerKey            = exportFns.buildAnswerKey            || buildAnswerKeyProp;
   const buildQTI                  = exportFns.buildQTI                  || buildQTIProp;
   const buildQTIZip               = exportFns.buildQTIZip               || buildQTIZipProp;
   const buildQTICompare           = exportFns.buildQTICompare           || buildQTICompareProp;
@@ -199,6 +197,20 @@ export default function ExportScreen({
       } else if (type === "compare") {
         const blob = await buildDocxCompare(versions, versions[0]?.questions[0]?.course || "Exam", fullConfig);
         dlBlob(blob, "AllVersions_Grouped.docx");
+      } else if (type === "answerKey") {
+        // Same code path as the Word button — only includeAnswers differs.
+        // Loops every version (and section, if multi-section) so each gets its
+        // own cover/header/footer matching the Word export byte-for-byte.
+        const allVers = hasMultiSections ? Object.values(classSectionVersions).flat() : versions;
+        for (const ver of allVers) {
+          const cs = ver.questions[0]?.classSection ?? null;
+          const perSecConfig = (fullConfig.showSection && cs)
+            ? { ...fullConfig, sectionLabel: `Section ${String(cs).padStart(2, "0")}` }
+            : fullConfig;
+          const blob = await buildDocx(ver.questions, ver.questions[0]?.course || "Exam", ver.label, cs, 1, perSecConfig, true);
+          const secStr = cs ? `_S${cs}` : "";
+          dlBlob(blob, `Version_${ver.label}${secStr}_Answer_Key.docx`);
+        }
       }
       setTemplateModal({ open: false, type: null, payload: null });
     } finally {
@@ -346,17 +358,7 @@ export default function ExportScreen({
               <button
                 style={S.oBtn("#f43f5e")}
                 disabled={exportLoading !== ""}
-                onClick={async () => {
-                  setExportLoading("Building answer key...");
-                  try {
-                    const allVers = hasMultiSections ? Object.values(classSectionVersions).flat() : versions;
-                    const course = allVers[0]?.questions[0]?.course || "Exam";
-                    const blob = await buildAnswerKey(allVers, course);
-                    if (blob) dlBlob(blob, `${course.replace(/\s+/g, "_")}_Answer_Key.docx`);
-                  } finally {
-                    setExportLoading("");
-                  }
-                }}
+                onClick={() => openWordExportModal("answerKey", null)}
               >
                 🔑 Answer Key (.docx)
               </button>

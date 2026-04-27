@@ -5,7 +5,7 @@ import GraphDisplay from "../display/GraphDisplay.js";
 import InlineEditor from "../editors/InlineEditor.js";
 import PastePanel from "../panels/PastePanel.js";
 import { buildQTI, buildQTIZip, buildClassroomSectionsQTI, buildQTICompare, buildQTIAllSectionsMerged, validateQTIExport } from "../../lib/exports/qti.js";
-import { buildAnswerKey, buildDocx, buildDocxCompare } from "../../lib/exports/docx.js";
+import { buildDocx, buildDocxCompare } from "../../lib/exports/docx.js";
 import { dlBlob } from "../../lib/exports/utils.js";
 import { buildAllVersionsPrompt, buildAllSectionsPrompt } from "../../lib/prompts/index.js";
 import { saveExam } from "../../lib/db/exams.js";
@@ -222,7 +222,7 @@ export default function VersionsScreen({
           <button style={S.oBtn("#f43f5e")} disabled={exportLoading !== ""} onClick={async () => {
             setExportLoading("Building answer key...");
             try {
-              const blob = await buildAnswerKey([v], v.questions[0]?.course || "Exam");
+              const blob = await buildDocx(v.questions, v.questions[0]?.course || "Exam", v.label, null, 1, null, true);
               if (blob) dlBlob(blob, `Version_A_Answer_Key.docx`);
             } finally { setExportLoading(""); }
           }}>ðŸ”‘ Answer Key (.docx)</button>
@@ -565,8 +565,12 @@ export default function VersionsScreen({
                     ? Object.values(classSectionVersions).flat()
                     : versions;
                   const course = allVers[0]?.questions[0]?.course || "Exam";
-                  const blob = await buildAnswerKey(allVers, course);
-                  if (blob) dlBlob(blob, `${course.replace(/\s+/g,"_")}_Answer_Key.docx`);
+                  for (const ver of allVers) {
+                    const cs = ver.questions[0]?.classSection ?? null;
+                    const blob = await buildDocx(ver.questions, course, ver.label, cs, 1, null, true);
+                    const secStr = cs ? `_S${cs}` : "";
+                    if (blob) dlBlob(blob, `Version_${ver.label}${secStr}_Answer_Key.docx`);
+                  }
                 } finally { setExportLoading(""); }
               }}>ðŸ”‘ Answer Key (.docx)</button>
               {isAdmin && (
