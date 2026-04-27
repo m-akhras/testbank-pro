@@ -36,6 +36,9 @@ export default function BankScreen({
   setFilterTime,
   filterIssuesOnly,
   setFilterIssuesOnly,
+  filterValidation,
+  setFilterValidation,
+  validationCounts,
   bankSelectMode,
   setBankSelectMode,
   bankSelected,
@@ -352,6 +355,19 @@ export default function BankScreen({
           </select>
           <select style={{...S.sel, width:"130px"}} value={filterDiff} onChange={e => setFilterDiff(e.target.value)}>
             <option>All</option>{DIFFICULTIES.map(d => <option key={d}>{d}</option>)}
+          </select>
+          {/* AI-validation status filter — counts come from useBank.validationCounts */}
+          <select
+            style={{...S.sel, width:"210px"}}
+            value={filterValidation || "All"}
+            onChange={e => setFilterValidation && setFilterValidation(e.target.value)}
+            title="Filter by AI validation status"
+          >
+            <option value="All">All validation ({bank.length})</option>
+            <option value="ok">✅ Validated OK ({validationCounts?.ok || 0})</option>
+            <option value="warning">⚠️ Has warnings ({validationCounts?.warning || 0})</option>
+            <option value="error">❌ Has errors ({validationCounts?.error || 0})</option>
+            <option value="none">⚪ Not validated ({validationCounts?.none || 0})</option>
           </select>
           <select style={{...S.sel, width:"175px"}} value={filterYear} onChange={e => { setFilterYear(e.target.value); setFilterMonth("All"); setFilterDay("All"); setFilterTime("All"); }}>
             <option value="All">All Years</option>

@@ -126,6 +126,8 @@ export function AppProvider({ children }) {
   const validationHook = useValidation({
     versions: examBuilderHook.versions,
     courseObject,
+    // Persist each verdict back to the bank row keyed by question id.
+    onResult: bankHook.saveValidationResult,
   });
 
   const value = {

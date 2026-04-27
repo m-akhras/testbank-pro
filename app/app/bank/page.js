@@ -81,6 +81,8 @@ export default function BankPage() {
       filterDay={bank.filterDay} setFilterDay={bank.setFilterDay}
       filterTime={bank.filterTime} setFilterTime={bank.setFilterTime}
       filterIssuesOnly={bank.filterIssuesOnly} setFilterIssuesOnly={bank.setFilterIssuesOnly}
+      filterValidation={bank.filterValidation} setFilterValidation={bank.setFilterValidation}
+      validationCounts={bank.validationCounts}
       bankSelectMode={bank.bankSelectMode} setBankSelectMode={bank.setBankSelectMode}
       bankSelected={bank.bankSelected} setBankSelected={bank.setBankSelected}
       filteredBank={bank.filteredBank}

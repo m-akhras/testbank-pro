@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 
-export function useValidation({ versions, courseObject } = {}) {
+export function useValidation({ versions, courseObject, onResult } = {}) {
   const [validating, setValidating] = useState(false);
   const [validationResults, setValidationResults] = useState([]);
   const [validationError, setValidationError] = useState("");
@@ -49,6 +49,19 @@ ${choices}
     }
   };
 
+  // Map a single API verdict to the persisted (status, issues) tuple.
+  //   valid=true,  no reason  → 'ok'      []
+  //   valid=true,  with reason → 'warning' [reason]   (answer accepted but flagged)
+  //   valid=false              → 'error'   [reason + corrected_answer]
+  function _toPersisted(v) {
+    const valid = !!v?.valid;
+    const reason = v?.reason || "";
+    const corrected = v?.corrected_answer ? ` (correct: ${v.corrected_answer})` : "";
+    if (valid && !reason) return { status: "ok", issues: [] };
+    if (valid && reason)  return { status: "warning", issues: [reason] };
+    return { status: "error", issues: [(reason || "Stated answer is incorrect") + corrected] };
+  }
+
   const autoValidateAllVersions = async () => {
     setValidating(true);
     setValidationError("");
@@ -72,16 +85,21 @@ ${choices}
           });
           if (!res.ok) {
             const err = await res.json().catch(() => ({}));
-            return { questionId: q.id, correct: false, issue: `API error: ${err.error || res.status}` };
+            const issue = `API error: ${err.error || res.status}`;
+            // Don't persist on transport failures — leave the previous status alone
+            return { questionId: q.id, correct: false, issue, status: null };
           }
           const data = await res.json();
           const v = data.validated?.[0]?.validation || { valid: true };
-          const issue = v.reason
-            ? v.reason + (v.corrected_answer ? ` (correct: ${v.corrected_answer})` : "")
-            : "";
-          return { questionId: q.id, correct: !!v.valid, issue };
+          const { status, issues } = _toPersisted(v);
+          // Persist for the bank as soon as a verdict lands (per-question)
+          if (onResult && q.id) {
+            try { await onResult(q.id, status, issues); } catch (e) { console.warn("onResult failed", e); }
+          }
+          const issue = issues.join("; ");
+          return { questionId: q.id, correct: status === "ok" || status === "warning", issue, status };
         } catch (e) {
-          return { questionId: q.id, correct: false, issue: `Request failed: ${e.message || e}` };
+          return { questionId: q.id, correct: false, issue: `Request failed: ${e.message || e}`, status: null };
         }
       }));
       setValidationResults(results);

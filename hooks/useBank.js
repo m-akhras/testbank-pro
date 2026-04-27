@@ -20,6 +20,7 @@ export function useBank() {
   const [filterDiff, setFilterDiff] = useState("All");
   const [filterSection, setFilterSection] = useState("All");
   const [filterIssuesOnly, setFilterIssuesOnly] = useState(false);
+  const [filterValidation, setFilterValidation] = useState("All"); // All | ok | warning | error | none
   const [filterDate, setFilterDate] = useState("All");
   const [filterYear, setFilterYear] = useState("All");
   const [filterMonth, setFilterMonth] = useState("All");
@@ -44,7 +45,15 @@ export function useBank() {
         .select("*")
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return data.map(r => ({ ...r.data, id: r.id, createdAt: new Date(r.created_at).getTime() }));
+      return data.map(r => ({
+        ...r.data,
+        id: r.id,
+        createdAt: new Date(r.created_at).getTime(),
+        // Persisted AI-validation snapshot (nullable when never validated)
+        validationStatus: r.validation_status || null,
+        validationIssues: Array.isArray(r.validation_issues) ? r.validation_issues : [],
+        validatedAt: r.validated_at ? new Date(r.validated_at).getTime() : null,
+      }));
     } catch (e) { console.error("loadBank error:", e); return []; }
   }
 
@@ -80,6 +89,31 @@ export function useBank() {
     } catch (e) { console.error("deleteQuestion error:", e); }
   }
 
+  // Persist a single AI-validation result. Called by useValidation as each
+  // question's check completes. Status is 'ok' | 'warning' | 'error'.
+  async function saveValidationResult(id, status, issues = []) {
+    if (!id) return;
+    try {
+      const supabase = getSupabase();
+      const validatedAtIso = new Date().toISOString();
+      const safeIssues = Array.isArray(issues) ? issues.filter(Boolean) : [];
+      const { error } = await supabase.from("questions")
+        .update({
+          validation_status: status || null,
+          validation_issues: safeIssues,
+          validated_at: validatedAtIso,
+        })
+        .eq("id", id);
+      if (error) throw error;
+      setBank(prev => prev.map(bq => bq.id === id ? {
+        ...bq,
+        validationStatus: status || null,
+        validationIssues: safeIssues,
+        validatedAt: new Date(validatedAtIso).getTime(),
+      } : bq));
+    } catch (e) { console.error("saveValidationResult error:", e); }
+  }
+
   // Computed: filtered + sorted view of the bank
   const filteredBank = useMemo(() => bank.filter(q => {
     const searchLower = bankSearch.toLowerCase().trim();
@@ -90,12 +124,17 @@ export function useBank() {
       (q.section || "").toLowerCase().includes(searchLower) ||
       (q.choices || []).some(c => c != null && String(c).toLowerCase().includes(searchLower))
     );
+    const matchesValidation =
+      filterValidation === "All" ? true :
+      filterValidation === "none" ? !q.validationStatus :
+      q.validationStatus === filterValidation;
     return matchesSearch &&
       (filterCourse === "All" || q.course === filterCourse) &&
       (filterType === "All" || q.type === filterType) &&
       (filterDiff === "All" || q.difficulty === filterDiff) &&
       (filterSection === "All" || q.section === filterSection) &&
       (!filterIssuesOnly || validateQuestion(q).length > 0) &&
+      matchesValidation &&
       (() => {
         if (filterYear === "All") return true;
         const d = new Date(q.createdAt);
@@ -111,7 +150,17 @@ export function useBank() {
     if (aMaj !== bMaj) return aMaj - bMaj;
     if (aMin !== bMin) return aMin - bMin;
     return (a.createdAt || 0) - (b.createdAt || 0);
-  }), [bank, bankSearch, filterCourse, filterType, filterDiff, filterSection, filterIssuesOnly, filterYear, filterMonth, filterDay, filterTime]);
+  }), [bank, bankSearch, filterCourse, filterType, filterDiff, filterSection, filterIssuesOnly, filterValidation, filterYear, filterMonth, filterDay, filterTime]);
+
+  // Per-status counts for the validation filter dropdown
+  const validationCounts = useMemo(() => {
+    const counts = { ok: 0, warning: 0, error: 0, none: 0 };
+    for (const q of bank) {
+      const s = q.validationStatus || "none";
+      counts[s] = (counts[s] || 0) + 1;
+    }
+    return counts;
+  }, [bank]);
 
   // Duplicate detection
   const duplicateIds = useMemo(() => {
@@ -136,6 +185,7 @@ export function useBank() {
     filterDiff, setFilterDiff,
     filterSection, setFilterSection,
     filterIssuesOnly, setFilterIssuesOnly,
+    filterValidation, setFilterValidation,
     filterDate, setFilterDate,
     filterYear, setFilterYear,
     filterMonth, setFilterMonth,
@@ -149,8 +199,10 @@ export function useBank() {
     confirmDelete, setConfirmDelete,
     filteredBank,
     duplicateIds,
+    validationCounts,
     loadBank,
     saveQuestion,
     deleteQuestion,
+    saveValidationResult,
   };
 }
