@@ -3,6 +3,10 @@ import { useState } from "react";
 
 export function useValidation({ versions, courseObject, onResult } = {}) {
   const [validating, setValidating] = useState(false);
+  // TODO: remove once persisted path is confirmed stable. The bank reads
+  // q.validationStatus / q.validationIssues / q.validatedAt directly now;
+  // this in-memory mirror only exists for legacy consumers that haven't
+  // migrated yet.
   const [validationResults, setValidationResults] = useState([]);
   const [validationError, setValidationError] = useState("");
 
