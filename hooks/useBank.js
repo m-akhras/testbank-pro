@@ -40,16 +40,32 @@ export function useBank() {
   async function _loadBank() {
     try {
       const supabase = getSupabase();
-      const { data, error } = await supabase
-        .from("questions")
-        .select("*")
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return data.map(r => ({
+      // PostgREST caps a single response at 1000 rows by default. We have
+      // users with >1000 questions in the bank, so without pagination the
+      // older rows (including older validated ones) silently get dropped —
+      // which made the validation filter show "0 validated / 1000 not
+      // validated" even though Supabase had populated rows.
+      const PAGE = 1000;
+      const rows = [];
+      for (let from = 0; ; from += PAGE) {
+        const { data, error } = await supabase
+          .from("questions")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .range(from, from + PAGE - 1);
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        rows.push(...data);
+        if (data.length < PAGE) break;
+      }
+      return rows.map(r => ({
         ...r.data,
         id: r.id,
         createdAt: new Date(r.created_at).getTime(),
-        // Persisted AI-validation snapshot (nullable when never validated)
+        // Persisted AI-validation snapshot (nullable when never validated).
+        // r.data may carry a stale validationStatus from save time, but the
+        // explicit assignment AFTER the spread ensures the dedicated column
+        // is the source of truth.
         validationStatus: r.validation_status || null,
         validationIssues: Array.isArray(r.validation_issues) ? r.validation_issues : [],
         validatedAt: r.validated_at ? new Date(r.validated_at).getTime() : null,
