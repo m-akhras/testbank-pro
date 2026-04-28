@@ -128,6 +128,11 @@ export function AppProvider({ children }) {
     courseObject,
     // Persist each verdict back to the bank row keyed by question id.
     onResult: bankHook.saveValidationResult,
+    // Mirror the verdict into the in-memory versions/sections so Build & Export
+    // badges reflect the new status without waiting for a bank reload.
+    setVersions: examBuilderHook.setVersions,
+    setClassSectionVersions: examBuilderHook.setClassSectionVersions,
+    showToast,
   });
 
   const value = {

@@ -1,7 +1,14 @@
 "use client";
 import { useState } from "react";
 
-export function useValidation({ versions, courseObject, onResult } = {}) {
+export function useValidation({
+  versions,
+  courseObject,
+  onResult,
+  setVersions,
+  setClassSectionVersions,
+  showToast,
+} = {}) {
   const [validating, setValidating] = useState(false);
   // TODO: remove once persisted path is confirmed stable. The bank reads
   // q.validationStatus / q.validationIssues / q.validatedAt directly now;
@@ -48,8 +55,11 @@ ${choices}
     const prompt = buildValidationPrompt();
     try {
       await navigator.clipboard.writeText(prompt);
+      showToast?.("Validation prompt copied to clipboard ✓");
     } catch (e) {
-      setValidationError("Failed to copy to clipboard: " + (e.message || e));
+      const msg = "Failed to copy to clipboard: " + (e.message || e);
+      setValidationError(msg);
+      showToast?.(msg, "error");
     }
   };
 
@@ -64,6 +74,25 @@ ${choices}
     if (valid && !reason) return { status: "ok", issues: [] };
     if (valid && reason)  return { status: "warning", issues: [reason] };
     return { status: "error", issues: [(reason || "Stated answer is incorrect") + corrected] };
+  }
+
+  // Mirror persisted verdicts onto the in-memory versions/sections state so
+  // the Build screen badges refresh without a reload. Matches by either the
+  // question's own id (master version A === bank row) or originalId
+  // (variants point back at the bank row).
+  function _patchLocalVersions(dbId, patch) {
+    const matches = (q) => q && (q.id === dbId || q.originalId === dbId);
+    const patchQ  = (q) => (matches(q) ? { ...q, ...patch } : q);
+    const patchVer = (ver) => ({ ...ver, questions: (ver?.questions || []).map(patchQ) });
+    setVersions?.((prev) => (Array.isArray(prev) ? prev.map(patchVer) : prev));
+    setClassSectionVersions?.((prev) => {
+      if (!prev || typeof prev !== "object") return prev;
+      const next = {};
+      for (const [sec, vers] of Object.entries(prev)) {
+        next[sec] = Array.isArray(vers) ? vers.map(patchVer) : vers;
+      }
+      return next;
+    });
   }
 
   const autoValidateAllVersions = async () => {
@@ -96,9 +125,19 @@ ${choices}
           const data = await res.json();
           const v = data.validated?.[0]?.validation || { valid: true };
           const { status, issues } = _toPersisted(v);
-          // Persist for the bank as soon as a verdict lands (per-question)
-          if (onResult && q.id) {
-            try { await onResult(q.id, status, issues); } catch (e) { console.warn("onResult failed", e); }
+          // Persist as soon as a verdict lands. Variants carry a uid() id that
+          // isn't in the questions table — their originalId points to the bank
+          // row, so prefer that. Master version A keeps its bank id directly.
+          const dbId = q.originalId || q.id;
+          if (onResult && dbId) {
+            try {
+              await onResult(dbId, status, issues);
+              _patchLocalVersions(dbId, {
+                validationStatus: status || null,
+                validationIssues: issues,
+                validatedAt: Date.now(),
+              });
+            } catch (e) { console.warn("onResult failed", e); }
           }
           const issue = issues.join("; ");
           return { questionId: q.id, correct: status === "ok" || status === "warning", issue, status };
@@ -107,8 +146,18 @@ ${choices}
         }
       }));
       setValidationResults(results);
+      const total = results.length;
+      const passed = results.filter((r) => r.correct).length;
+      const flagged = total - passed;
+      showToast?.(
+        flagged === 0
+          ? `✅ ${total} validated — all OK`
+          : `⚠️ ${flagged} flagged of ${total}`,
+        flagged === 0 ? "success" : "info"
+      );
     } catch (e) {
       setValidationError(e.message || "Validation failed");
+      showToast?.(e.message || "Validation failed", "error");
     } finally {
       setValidating(false);
     }
