@@ -1,7 +1,9 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
-const RATE_LIMIT = 20;
+// Per-operation hourly buckets. Validation is cheap (Sonnet, ~300 tokens) and
+// users batch-validate whole exams, so it gets its own larger bucket.
+const RATE_LIMITS = { generate: 20, validate: 100 };
 
 // ── Validation prompt ────────────────────────────────────────────────────────
 const VALIDATION_SYSTEM = `You are a mathematics answer validator for university-level exams.
@@ -121,29 +123,38 @@ export async function POST(req) {
     if (!session) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
     const userId = session.user.id;
+    const body = await req.json();
+    const { prompt, file, questions, operation: opHint } = body;
+
+    // Resolve which bucket this request consumes. Explicit `operation` wins;
+    // otherwise infer from shape (questions array → validate, else generate).
+    const operation = opHint === "validate" || opHint === "generate"
+      ? opHint
+      : (questions && Array.isArray(questions) ? "validate" : "generate");
+    const limit = RATE_LIMITS[operation] ?? RATE_LIMITS.generate;
+
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
     const { count } = await supabase
       .from("api_usage")
       .select("*", { count: "exact", head: true })
       .eq("user_id", userId)
+      .eq("operation", operation)
       .gte("created_at", oneHourAgo);
 
-    if (count >= RATE_LIMIT) {
-      return Response.json({ error: `Rate limit exceeded. Maximum ${RATE_LIMIT} generations per hour.` }, { status: 429 });
+    if (count >= limit) {
+      const noun = operation === "validate" ? "validations" : "generations";
+      return Response.json({ error: `Rate limit exceeded. Maximum ${limit} ${noun} per hour.` }, { status: 429 });
     }
 
-    await supabase.from("api_usage").insert({ user_id: userId });
-
-    const { prompt, file, questions } = await req.json();
+    await supabase.from("api_usage").insert({ user_id: userId, operation });
 
     // ── Validation mode ──────────────────────────────────────────────────────
-    // If questions array is passed, run validation only (no generation)
-    if (questions && Array.isArray(questions)) {
+    if (operation === "validate") {
+      if (!questions || !Array.isArray(questions)) {
+        return Response.json({ error: "Validation requires a 'questions' array." }, { status: 400 });
+      }
       const results = await Promise.all(questions.map(validateQuestion));
-      const validated = questions.map((q, i) => ({
-        ...q,
-        validation: results[i],
-      }));
+      const validated = questions.map((q, i) => ({ ...q, validation: results[i] }));
       return Response.json({ validated });
     }
 

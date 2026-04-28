@@ -51,15 +51,72 @@ ${choices}
     return header + "\n" + body;
   };
 
-  const copyValidationPrompt = async () => {
-    const prompt = buildValidationPrompt();
+  // Hidden-textarea fallback for browsers/contexts where navigator.clipboard
+  // is unavailable or rejects (e.g. blurred document, missing permission).
+  function _execCommandCopy(text) {
     try {
-      await navigator.clipboard.writeText(prompt);
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "fixed";
+      ta.style.top = "0";
+      ta.style.left = "0";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      ta.setSelectionRange(0, text.length);
+      const ok = document.execCommand("copy");
+      document.body.removeChild(ta);
+      return ok;
+    } catch (err) {
+      console.warn("[copyValidationPrompt] execCommand fallback threw:", err);
+      return false;
+    }
+  }
+
+  // IMPORTANT: this must stay synchronous up to (and including) the
+  // navigator.clipboard.writeText call. Browsers tie clipboard writes to the
+  // user-gesture context of the click, and any `await` *before* writeText
+  // breaks that chain — silently leaving the clipboard empty.
+  const copyValidationPrompt = () => {
+    const prompt = buildValidationPrompt();
+    console.log("[copyValidationPrompt] prompt length:", prompt.length);
+
+    const onSuccess = () => {
+      console.log("[copyValidationPrompt] writeText succeeded");
       showToast?.("Validation prompt copied to clipboard ✓");
-    } catch (e) {
-      const msg = "Failed to copy to clipboard: " + (e.message || e);
+    };
+    const onFailure = (err) => {
+      console.warn("[copyValidationPrompt] writeText rejected:", err);
+      // Try the legacy path before giving up — it works in some contexts where
+      // the async clipboard API is blocked.
+      if (_execCommandCopy(prompt)) {
+        console.log("[copyValidationPrompt] execCommand fallback succeeded");
+        showToast?.("Validation prompt copied to clipboard ✓");
+        return;
+      }
+      const msg = "Failed to copy to clipboard: " + (err?.message || err || "unknown");
       setValidationError(msg);
       showToast?.(msg, "error");
+    };
+
+    try {
+      if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+        // Call writeText synchronously to preserve user-gesture context, then
+        // attach .then/.catch — do NOT await inside the click handler.
+        navigator.clipboard.writeText(prompt).then(onSuccess, onFailure);
+        return;
+      }
+      console.log("[copyValidationPrompt] navigator.clipboard unavailable — using execCommand");
+      if (_execCommandCopy(prompt)) {
+        onSuccess();
+      } else {
+        onFailure(new Error("Clipboard API unavailable and execCommand failed"));
+      }
+    } catch (e) {
+      console.error("[copyValidationPrompt] threw synchronously:", e);
+      onFailure(e);
     }
   };
 
@@ -107,20 +164,27 @@ ${choices}
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
+              operation: "validate",
               questions: [{
                 question: q.question || q.stem || "",
                 choices: q.choices || [],
                 answer: q.answer || "",
                 explanation: q.explanation || "",
               }],
-              mode: "validate",
             }),
           });
           if (!res.ok) {
+            // Transport / rate-limit failure. NOT a question-quality problem —
+            // do not persist, do not touch local state, just surface the error
+            // so the summary toast can count it separately.
             const err = await res.json().catch(() => ({}));
-            const issue = `API error: ${err.error || res.status}`;
-            // Don't persist on transport failures — leave the previous status alone
-            return { questionId: q.id, correct: false, issue, status: null };
+            return {
+              questionId: q.id,
+              correct: false,
+              errored: true,
+              status: null,
+              issue: `API error: ${err.error || res.status}`,
+            };
           }
           const data = await res.json();
           const v = data.validated?.[0]?.validation || { valid: true };
@@ -140,21 +204,35 @@ ${choices}
             } catch (e) { console.warn("onResult failed", e); }
           }
           const issue = issues.join("; ");
-          return { questionId: q.id, correct: status === "ok" || status === "warning", issue, status };
+          return {
+            questionId: q.id,
+            correct: status === "ok" || status === "warning",
+            errored: false,
+            issue,
+            status,
+          };
         } catch (e) {
-          return { questionId: q.id, correct: false, issue: `Request failed: ${e.message || e}`, status: null };
+          // Network/parse failure — same treatment as a non-OK response.
+          return {
+            questionId: q.id,
+            correct: false,
+            errored: true,
+            status: null,
+            issue: `Request failed: ${e.message || e}`,
+          };
         }
       }));
       setValidationResults(results);
       const total = results.length;
-      const passed = results.filter((r) => r.correct).length;
-      const flagged = total - passed;
-      showToast?.(
-        flagged === 0
-          ? `✅ ${total} validated — all OK`
-          : `⚠️ ${flagged} flagged of ${total}`,
-        flagged === 0 ? "success" : "info"
-      );
+      const errored = results.filter((r) => r.errored).length;
+      const flagged = results.filter((r) => !r.errored && !r.correct).length;
+      const passed = total - errored - flagged;
+      const parts = [];
+      if (passed)  parts.push(`✅ ${passed} passed`);
+      if (flagged) parts.push(`⚠️ ${flagged} flagged`);
+      if (errored) parts.push(`🚫 ${errored} errors (rate limit / network)`);
+      const tone = errored ? "error" : flagged ? "info" : "success";
+      showToast?.(parts.join(" · ") || `Validated ${total}`, tone);
     } catch (e) {
       setValidationError(e.message || "Validation failed");
       showToast?.(e.message || "Validation failed", "error");

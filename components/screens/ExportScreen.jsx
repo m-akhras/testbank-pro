@@ -398,19 +398,31 @@ export default function ExportScreen({
 
             {isAdmin && Array.isArray(validationResults) && validationResults.length > 0 && (() => {
               const total = validationResults.length;
-              const flagged = validationResults.filter(r => !r.correct);
-              const passed = total - flagged.length;
-              const allPassed = flagged.length === 0;
+              const errored = validationResults.filter(r => r.errored);
+              const flagged = validationResults.filter(r => !r.errored && !r.correct);
+              const passed = total - errored.length - flagged.length;
+              const allClean = flagged.length === 0 && errored.length === 0;
+              const tone = errored.length ? { bg: "#1a0a0a", border: "#7f1d1d", color: "#f87171" }
+                         : flagged.length ? { bg: "#1c1002", border: "#f59e0b44", color: "#f59e0b" }
+                                          : { bg: "#052e16", border: "#14532d", color: "#4ade80" };
+              const headline = [
+                passed  ? `✅ ${passed} passed`  : null,
+                flagged.length ? `⚠️ ${flagged.length} flagged` : null,
+                errored.length ? `🚫 ${errored.length} errors (rate limit / network)` : null,
+              ].filter(Boolean).join(" · ") || `Validated ${total}`;
               return (
-                <div style={{ background: allPassed ? "#052e16" : "#1c1002", border: `1px solid ${allPassed ? "#14532d" : "#f59e0b44"}`, borderRadius: "6px", padding: "0.6rem 0.85rem", marginBottom: "0.75rem", fontSize: "0.78rem", color: allPassed ? "#4ade80" : "#f59e0b" }}>
-                  <div style={{ fontWeight: "600", marginBottom: flagged.length ? "0.3rem" : 0 }}>
-                    {allPassed
-                      ? `✅ ${passed} of ${total} passed — no issues found.`
-                      : `⚠️ ${flagged.length} flagged of ${total} (${passed} passed)`}
+                <div style={{ background: tone.bg, border: `1px solid ${tone.border}`, borderRadius: "6px", padding: "0.6rem 0.85rem", marginBottom: "0.75rem", fontSize: "0.78rem", color: tone.color }}>
+                  <div style={{ fontWeight: "600", marginBottom: (flagged.length || errored.length) ? "0.3rem" : 0 }}>
+                    {allClean ? `${headline} — no issues found.` : `${headline} of ${total}`}
                   </div>
                   {flagged.map(r => (
-                    <div key={r.questionId} style={{ marginBottom: "0.25rem", opacity: 0.9 }}>
+                    <div key={`f-${r.questionId}`} style={{ marginBottom: "0.25rem", opacity: 0.9 }}>
                       • <strong>Q{r.questionId}:</strong> {r.issue || "(no detail)"}
+                    </div>
+                  ))}
+                  {errored.map(r => (
+                    <div key={`e-${r.questionId}`} style={{ marginBottom: "0.25rem", opacity: 0.9 }}>
+                      • <strong>Q{r.questionId}:</strong> {r.issue} <em>(not persisted)</em>
                     </div>
                   ))}
                 </div>
