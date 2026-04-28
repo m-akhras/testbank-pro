@@ -72,6 +72,9 @@ export default function GraphEditor({ initialConfig, onSave, onRemove, onClose }
   const [fnTopLabel,   setFnTopLabel]   = useState(initialConfig?.fnTopLabel   || "");
   const [fnBottomLabel,setFnBottomLabel]= useState(initialConfig?.fnBottomLabel|| "");
   const [showFnLabel,  setShowFnLabel]  = useState(initialConfig?.showFnLabel  !== false);
+  // Normal-distribution toggles: hide μ or σ for "find μ" / "find σ" question types.
+  const [showMu,       setShowMu]       = useState(initialConfig?.showMu       !== false);
+  const [showSigma,    setShowSigma]    = useState(initialConfig?.showSigma    !== false);
   const [labelOffsetX,    setLabelOffsetX]    = useState(initialConfig?.labelOffsetX    ?? 0);
   const [labelOffsetY,    setLabelOffsetY]    = useState(initialConfig?.labelOffsetY    ?? 0);
   const [topLabelOffsetX, setTopLabelOffsetX] = useState(initialConfig?.topLabelOffsetX ?? 0);
@@ -175,6 +178,7 @@ export default function GraphEditor({ initialConfig, onSave, onRemove, onClose }
     };
     if (["bar","histogram","scatter","discrete_dist","continuous_dist","standard_normal"].includes(type)) {
       return { ...(initialConfig || {}), showAxisNumbers: showNumbers, showGrid, showFnLabel,
+               showMu, showSigma,
                labelOffsetX: Number(labelOffsetX)||0, labelOffsetY: Number(labelOffsetY)||0,
                title: chartTitle || null,
                xLabel: chartXLabel || null,
@@ -404,6 +408,25 @@ export default function GraphEditor({ initialConfig, onSave, onRemove, onClose }
           <label style={{display:"flex",alignItems:"center",gap:"5px",fontSize:"0.72rem",color:text2,cursor:"pointer"}}>
             <input type="checkbox" checked={showFnLabel} onChange={e=>setShowFnLabel(e.target.checked)} /> Show label
           </label>
+        )}
+        {/* Normal-distribution-only: independent toggles for the μ and σ
+            annotations rendered under the chart. Default both on; flip off
+            for "find μ" / "find σ" question types. The renderer ignores
+            these flags for non-normal distTypes, so we only surface them in
+            the UI when the chart is actually a normal. */}
+        {(type === "standard_normal" ||
+          (type === "continuous_dist" &&
+            (initialConfig?.distType === "normal" ||
+             initialConfig?.distType === "standard_normal" ||
+             !initialConfig?.distType))) && (
+          <>
+            <label style={{display:"flex",alignItems:"center",gap:"5px",fontSize:"0.72rem",color:text2,cursor:"pointer"}}>
+              <input type="checkbox" checked={showMu} onChange={e=>setShowMu(e.target.checked)} /> Show μ
+            </label>
+            <label style={{display:"flex",alignItems:"center",gap:"5px",fontSize:"0.72rem",color:text2,cursor:"pointer"}}>
+              <input type="checkbox" checked={showSigma} onChange={e=>setShowSigma(e.target.checked)} /> Show σ
+            </label>
+          </>
         )}
         {["continuous_dist","discrete_dist","standard_normal"].includes(type) && showFnLabel && (
           <div style={{display:"flex",alignItems:"center",gap:"5px",fontSize:"0.72rem",color:text2}}>
