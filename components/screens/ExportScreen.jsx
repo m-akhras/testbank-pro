@@ -408,7 +408,7 @@ export default function ExportScreen({
               const headline = [
                 passed  ? `✅ ${passed} passed`  : null,
                 flagged.length ? `⚠️ ${flagged.length} flagged` : null,
-                errored.length ? `🚫 ${errored.length} errors (rate limit / network)` : null,
+                errored.length ? `🚫 ${errored.length} errors (rate limit / network / db)` : null,
               ].filter(Boolean).join(" · ") || `Validated ${total}`;
               return (
                 <div style={{ background: tone.bg, border: `1px solid ${tone.border}`, borderRadius: "6px", padding: "0.6rem 0.85rem", marginBottom: "0.75rem", fontSize: "0.78rem", color: tone.color }}>

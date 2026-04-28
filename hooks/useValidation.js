@@ -193,15 +193,31 @@ ${choices}
           // isn't in the questions table — their originalId points to the bank
           // row, so prefer that. Master version A keeps its bank id directly.
           const dbId = q.originalId || q.id;
+          let persistError = null;
           if (onResult && dbId) {
             try {
               await onResult(dbId, status, issues);
+              // Only mirror locally once we've confirmed the row was written —
+              // otherwise the badge would flash green for a question whose DB
+              // status is still NULL and would revert on reload.
               _patchLocalVersions(dbId, {
                 validationStatus: status || null,
                 validationIssues: issues,
                 validatedAt: Date.now(),
               });
-            } catch (e) { console.warn("onResult failed", e); }
+            } catch (e) {
+              console.warn("[autoValidate] persist failed for", dbId, ":", e);
+              persistError = e?.message || String(e);
+            }
+          }
+          if (persistError) {
+            return {
+              questionId: q.id,
+              correct: false,
+              errored: true,
+              status: null,
+              issue: `Not persisted: ${persistError}`,
+            };
           }
           const issue = issues.join("; ");
           return {
@@ -230,7 +246,7 @@ ${choices}
       const parts = [];
       if (passed)  parts.push(`✅ ${passed} passed`);
       if (flagged) parts.push(`⚠️ ${flagged} flagged`);
-      if (errored) parts.push(`🚫 ${errored} errors (rate limit / network)`);
+      if (errored) parts.push(`🚫 ${errored} errors (rate limit / network / db)`);
       const tone = errored ? "error" : flagged ? "info" : "success";
       showToast?.(parts.join(" · ") || `Validated ${total}`, tone);
     } catch (e) {

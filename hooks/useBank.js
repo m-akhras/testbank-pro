@@ -91,27 +91,44 @@ export function useBank() {
 
   // Persist a single AI-validation result. Called by useValidation as each
   // question's check completes. Status is 'ok' | 'warning' | 'error'.
+  //
+  // We use .select() so Supabase actually returns the affected rows — without
+  // it, the previous version silently no-op'd whenever the id didn't match
+  // (deleted row, stale variant, missing migration), and the caller couldn't
+  // tell a successful write from a 0-row update. Now: errors and empty
+  // updates throw, so useValidation can mark the question as errored instead
+  // of falsely flashing a badge that won't survive a reload.
   async function saveValidationResult(id, status, issues = []) {
-    if (!id) return;
-    try {
-      const supabase = getSupabase();
-      const validatedAtIso = new Date().toISOString();
-      const safeIssues = Array.isArray(issues) ? issues.filter(Boolean) : [];
-      const { error } = await supabase.from("questions")
-        .update({
-          validation_status: status || null,
-          validation_issues: safeIssues,
-          validated_at: validatedAtIso,
-        })
-        .eq("id", id);
-      if (error) throw error;
-      setBank(prev => prev.map(bq => bq.id === id ? {
-        ...bq,
-        validationStatus: status || null,
-        validationIssues: safeIssues,
-        validatedAt: new Date(validatedAtIso).getTime(),
-      } : bq));
-    } catch (e) { console.error("saveValidationResult error:", e); }
+    if (!id) throw new Error("saveValidationResult: missing id");
+    const supabase = getSupabase();
+    const validatedAtIso = new Date().toISOString();
+    const safeIssues = Array.isArray(issues) ? issues.filter(Boolean) : [];
+    const { data, error } = await supabase.from("questions")
+      .update({
+        validation_status: status || null,
+        validation_issues: safeIssues,
+        validated_at: validatedAtIso,
+      })
+      .eq("id", id)
+      .select("id");
+    if (error) {
+      console.error("[saveValidationResult] supabase error for id", id, ":", error);
+      throw new Error(`Supabase update failed for ${id}: ${error.message || error}`);
+    }
+    if (!data || data.length === 0) {
+      const msg = `No question row matched id "${id}" — validation result not persisted. ` +
+        `Likely causes: row was deleted, the id is a fresh variant uid() that isn't in the bank, ` +
+        `or the validation columns migration (supabase-validation-fields-migration.sql) hasn't been applied.`;
+      console.warn("[saveValidationResult]", msg);
+      throw new Error(msg);
+    }
+    setBank(prev => prev.map(bq => bq.id === id ? {
+      ...bq,
+      validationStatus: status || null,
+      validationIssues: safeIssues,
+      validatedAt: new Date(validatedAtIso).getTime(),
+    } : bq));
+    return data[0];
   }
 
   // Computed: filtered + sorted view of the bank
