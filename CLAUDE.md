@@ -27,6 +27,16 @@ Database schema is in `supabase-setup.sql` — run it in Supabase SQL editor whe
 
 The codebase is split along three axes: **hooks** own state and business logic, **screens** render that state into a UI, and **AppContext** wires the hooks to the screens. There is no longer a single monolithic component — the previous `components/TestBankApp.js` has been broken up into the layers described below.
 
+### Question types
+
+The app supports these question types:
+- **Multiple Choice** — MC with 4 distinct choices
+- **Free Response** — open-ended with full worked solution
+- **True/False**
+- **Fill in the Blank**
+- **Formula** — randomizable variables, math expression answer
+- **Branched Free Response** — multi-part question: stem + parts labeled `(a)`, `(b)`, `(c)`... rendered as separate sub-questions with per-part workspace; sketch parts get a coordinate grid; QTI-excluded; uses standard schema with parts encoded as text in `question`/`answer`/`explanation` fields
+
 ### Request Flow
 
 1. `middleware.js` — Guards `/app` and `/admin` routes; unauthenticated users are redirected to `/login`
