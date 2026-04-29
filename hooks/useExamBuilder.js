@@ -4,7 +4,8 @@ import { createBrowserClient } from "@supabase/ssr";
 import { sectionSortKey } from "../lib/utils/questions.js";
 import { buildAllVersionsPrompt, buildAllSectionsPrompt } from "../lib/prompts/index.js";
 
-const VERSIONS = ["A", "B", "C", "D", "E", "F", "G", "H"];
+// A is always the master; B–U are the 20 possible variant labels.
+const VERSIONS = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U"];
 
 function getSupabase() {
   return createBrowserClient(

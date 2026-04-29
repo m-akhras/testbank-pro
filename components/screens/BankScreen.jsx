@@ -638,8 +638,8 @@ export default function BankScreen({
               </span>
               <div style={{display:"flex", alignItems:"center", gap:"0.5rem"}}>
                 <span style={{fontSize:"0.72rem", color:text2}}>Versions per class:</span>
-                <select style={{...S.sel, width:"130px", padding:"0.4rem 0.6rem"}} value={versionCount} onChange={e => setVersionCount(Number(e.target.value))}>
-                  {[1,2,3,4,5,6,7,8].map(n => <option key={n} value={n}>{n} version{n>1?"s":""}</option>)}
+                <select style={{...S.sel, width:"140px", padding:"0.4rem 0.6rem"}} value={versionCount} onChange={e => setVersionCount(Number(e.target.value))}>
+                  {Array.from({length:20},(_,i)=>i+1).map(n => <option key={n} value={n}>{n} version{n>1?"s":""}</option>)}
                 </select>
               </div>
               <div style={{display:"flex", alignItems:"center", gap:"0.5rem"}}>

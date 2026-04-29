@@ -1,7 +1,11 @@
 "use client";
 import PastePanel from "../panels/PastePanel.js";
 
-const VERSIONS = ["A", "B", "C", "D", "E", "F", "G", "H"];
+// A is always the master; B–U are the 20 possible variant labels.
+const VERSIONS = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U"];
+const MAX_VARIANTS = 20;
+const SOFT_LIMIT = 50;
+const HARD_LIMIT = 100;
 
 export default function VariantsScreen({
   versions,
@@ -66,9 +70,11 @@ export default function VariantsScreen({
 
   const numQ = master.questions.length;
   const totalVersions = versionCount * numClassSections;
-  const overLimit = numQ * totalVersions > 15;
-  const estTokens = Math.round(numQ * totalVersions * 400 + 1500);
-  const estCost = ((numQ * totalVersions * 400 * 3) / 1_000_000 + (numQ * totalVersions * 350 * 15) / 1_000_000).toFixed(3);
+  const totalItems = numQ * totalVersions;
+  const hardOverLimit = totalItems > HARD_LIMIT;
+  const softOverLimit = !hardOverLimit && totalItems > SOFT_LIMIT;
+  const estTokens = Math.round(totalItems * 400 + 1500);
+  const estCost = ((totalItems * 400 * 3) / 1_000_000 + (totalItems * 350 * 15) / 1_000_000).toFixed(3);
   const variantLabels = VERSIONS.slice(1, 1 + versionCount);
 
   const promptReady = (pendingType === "version_all" || pendingType === "version_all_sections") && !!generatedPrompt;
@@ -104,12 +110,16 @@ export default function VariantsScreen({
         <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap", alignItems: "flex-end" }}>
           <div>
             <div style={S.lbl}>Variants to generate (after Version A)</div>
-            <select style={{ ...S.sel, width: "200px" }} value={versionCount} onChange={e => setVersionCount(Number(e.target.value))}>
-              {[1, 2, 3, 4, 5, 6, 7].map(n => (
-                <option key={n} value={n}>
-                  {n} variant{n > 1 ? "s" : ""} ({VERSIONS.slice(1, 1 + n).join(", ")})
-                </option>
-              ))}
+            <select style={{ ...S.sel, width: "260px" }} value={versionCount} onChange={e => setVersionCount(Number(e.target.value))}>
+              {Array.from({ length: MAX_VARIANTS }, (_, i) => i + 1).map(n => {
+                const labels = VERSIONS.slice(1, 1 + n);
+                const range = n <= 3 ? labels.join(", ") : `${labels[0]}–${labels[labels.length - 1]}`;
+                return (
+                  <option key={n} value={n}>
+                    {n} variant{n > 1 ? "s" : ""} ({range})
+                  </option>
+                );
+              })}
             </select>
           </div>
           <div>
@@ -160,9 +170,15 @@ export default function VariantsScreen({
           <div style={{ fontSize: "0.75rem", color: text2, marginTop: "0.2rem" }}>
             ~{estTokens.toLocaleString()} tokens · ~${estCost}
           </div>
-          {overLimit && (
+          {hardOverLimit && (
+            <div style={{ fontSize: "0.75rem", color: "#fca5a5", marginTop: "0.45rem", padding: "0.5rem 0.7rem", background: "#7f1d1d33", borderRadius: "6px", border: "1px solid #ef444466" }}>
+              <div style={{ fontWeight: 700, marginBottom: "0.2rem" }}>⛔ {totalItems} items likely exceeds Claude's output limit</div>
+              Run this in batches — split into smaller groups (e.g. ≤ {HARD_LIMIT} items per request, or fewer questions × fewer variants × fewer sections) and generate them separately.
+            </div>
+          )}
+          {softOverLimit && (
             <div style={{ fontSize: "0.75rem", color: "#f59e0b", marginTop: "0.45rem", padding: "0.4rem 0.6rem", background: "#451a0322", borderRadius: "6px", border: "1px solid #f59e0b44" }}>
-              ⚠ {numQ * totalVersions} items may exceed Claude's output — consider fewer questions or fewer versions at once.
+              ⚠ {totalItems} items is approaching Claude's typical output ceiling — generation may truncate. Consider running in batches if responses come back incomplete.
             </div>
           )}
         </div>
