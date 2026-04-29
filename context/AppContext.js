@@ -13,7 +13,7 @@ import { COURSES, getCourse } from "../lib/courses/index.js";
 const SCREEN_ROUTES = {
   dashboard: "/app/dashboard", home: "/app/dashboard",
   generate: "/app/generate", review: "/app/review", bank: "/app/bank",
-  versions: "/app/build", build: "/app/build", export: "/app/export",
+  versions: "/app/build", build: "/app/build", variants: "/app/variants", export: "/app/export",
   exams: "/app/exams", saved: "/app/exams", courses: "/app/courses", admin: "/app/admin",
 };
 

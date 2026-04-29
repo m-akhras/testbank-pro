@@ -18,9 +18,10 @@ const NAV_GROUPS = [
   {
     label: "EXAMS",
     items: [
-      { href: "/app/build",  icon: "🏗", label: "Build Exam", badgeKey: "selectedForExam" },
-      { href: "/app/export", icon: "📤", label: "Export" },
-      { href: "/app/exams",  icon: "💾", label: "My Exams" },
+      { href: "/app/build",    icon: "🏗", label: "Build Exam", badgeKey: "selectedForExam" },
+      { href: "/app/variants", icon: "⚡", label: "Variants" },
+      { href: "/app/export",   icon: "📤", label: "Export" },
+      { href: "/app/exams",    icon: "💾", label: "My Exams" },
     ],
   },
   {
