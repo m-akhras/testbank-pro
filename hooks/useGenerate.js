@@ -129,6 +129,23 @@ export function useGenerate({
     };
   };
 
+  // Merge a master question's graphConfig with a variant's API-returned graphConfig.
+  // Master config is the base (guarantees structural fields survive). API config
+  // overlays only non-null/non-undefined values, so Claude's partial or missing
+  // updates can never blank out the master's good values.
+  const mergeVariantGraphConfig = (masterCfg, apiCfg) => {
+    if (!masterCfg && !apiCfg) return null;
+    if (!masterCfg) return apiCfg;
+    if (!apiCfg || typeof apiCfg !== "object") return masterCfg;
+    const overlay = {};
+    for (const [k, v] of Object.entries(apiCfg)) {
+      if (v === null || v === undefined) continue;
+      if (typeof v === "string" && v.trim() === "") continue;
+      overlay[k] = v;
+    }
+    return { ...masterCfg, ...overlay };
+  };
+
   async function handlePaste() {
     setPasteError("");
     console.log("handlePaste pendingMeta.selected", pendingMeta?.selected?.map(q => ({ id: q.id, hasGraph: q.hasGraph })));
@@ -148,7 +165,7 @@ export function useGenerate({
             versionLabel: label, classSection, createdAt: Date.now(),
             ...(selected[i]?.hasGraph ? {
               hasGraph: true,
-              graphConfig: q.graphConfig ? { ...selected[i].graphConfig, ...q.graphConfig } : selected[i].graphConfig,
+              graphConfig: mergeVariantGraphConfig(selected[i].graphConfig, q.graphConfig),
             } : {}),
           }));
           return { label, questions: versioned, classSection };
@@ -184,7 +201,7 @@ export function useGenerate({
               versionLabel: label, classSection: s, createdAt: Date.now(),
               ...(selected[i]?.hasGraph ? {
                 hasGraph: true,
-                graphConfig: q.graphConfig ? { ...selected[i].graphConfig, ...q.graphConfig } : selected[i].graphConfig,
+                graphConfig: mergeVariantGraphConfig(selected[i].graphConfig, q.graphConfig),
               } : {}),
             }));
             return { label, questions: versioned, classSection: s };
@@ -258,7 +275,10 @@ export function useGenerate({
           ...q, id: uid(), originalId: selected[i]?.id,
           course: selected[i]?.course || course,
           versionLabel: label, createdAt: Date.now(),
-          ...(selected[i]?.hasGraph ? { hasGraph: true, graphConfig: q.graphConfig || selected[i].graphConfig } : {}),
+          ...(selected[i]?.hasGraph ? {
+            hasGraph: true,
+            graphConfig: mergeVariantGraphConfig(selected[i].graphConfig, q.graphConfig),
+          } : {}),
         }));
         const updated = [...allVersions, { label, questions: versioned }];
         if (remaining.length > 0) {
