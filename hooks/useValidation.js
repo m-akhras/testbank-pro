@@ -42,8 +42,8 @@ Questions:
       const choices = (q.choices || [])
         .map((c, j) => `   ${String.fromCharCode(65 + j)}) ${c}`)
         .join("\n");
-      const stem = q.question || q.stem || "";
-      return `${i + 1}. [id: ${q.id}] ${stem}
+      const questionText = q.question || "";
+      return `${i + 1}. [id: ${q.id}] ${questionText}
 ${choices}
    Stated answer: ${q.answer ?? ""}`;
     }).join("\n\n");
@@ -166,7 +166,7 @@ ${choices}
             body: JSON.stringify({
               operation: "validate",
               questions: [{
-                question: q.question || q.stem || "",
+                question: q.question || "",
                 choices: q.choices || [],
                 answer: q.answer || "",
                 explanation: q.explanation || "",

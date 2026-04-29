@@ -152,7 +152,6 @@ export function useBank() {
     const searchLower = bankSearch.toLowerCase().trim();
     const matchesSearch = !searchLower || (
       (q.question || "").toLowerCase().includes(searchLower) ||
-      (q.stem || "").toLowerCase().includes(searchLower) ||
       (q.answer || "").toLowerCase().includes(searchLower) ||
       (q.section || "").toLowerCase().includes(searchLower) ||
       (q.choices || []).some(c => c != null && String(c).toLowerCase().includes(searchLower))

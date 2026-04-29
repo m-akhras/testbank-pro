@@ -202,7 +202,7 @@ export default function DashboardScreen({
                     <span style={S.diffTag(q.difficulty||"")}>{q.difficulty}</span>
                   </div>
                   <div style={{fontSize:"0.82rem", color:text1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", fontFamily:"'Georgia',serif"}}>
-                    {q.type==="Branched" ? q.stem : q.question}
+                    {q.question}
                   </div>
                 </div>
               </div>

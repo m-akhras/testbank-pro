@@ -186,7 +186,7 @@ export default function BuildScreen({
                       {(q.section || "").split(" ").slice(0, 2).join(" ")}
                     </span>
                     <span style={{ fontSize: "0.8rem", color: text2, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {q.type === "Branched" ? q.stem : q.question}
+                      {q.question}
                     </span>
                     <button
                       style={{ ...S.smBtn, color: "#f87171", border: "none", padding: "0.1rem 0.3rem" }}
@@ -414,7 +414,7 @@ export default function BuildScreen({
                 onGraphEdit={() => { setGraphEditorQId(editingGraph ? null : q.id); setInlineEditQId(null); }}
                 onDelete={() => removeMasterQuestion(q.id)}
                 onReplace={() => showToast && showToast("Replace from the Bank screen for now", "info")}
-                headerExtra={q.choices && q.type !== "Branched" && (
+                headerExtra={q.choices && (
                   <label style={{ display: "flex", alignItems: "center", gap: "0.3rem", fontSize: "0.68rem", color: text2, cursor: "pointer", border: "1px solid " + border, padding: "0.15rem 0.45rem", borderRadius: "4px" }}>
                     <input
                       type="checkbox"

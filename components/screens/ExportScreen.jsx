@@ -623,55 +623,27 @@ export default function ExportScreen({
 
                 {q.hasGraph && q.graphConfig && <GraphDisplay graphConfig={q.graphConfig} authorMode={false} />}
 
-                {q.type === "Branched" ? (
-                  <>
-                    <div style={{ ...S.qText, color: "#f43f5e99" }}>
-                      Given: <MathText>{q.stem}</MathText>
-                    </div>
-                    {(q.parts || []).map((p, pi) => (
-                      <div key={pi} style={{ marginBottom: "0.6rem", paddingLeft: "0.75rem", borderLeft: "2px solid " + border }}>
-                        <div style={{ fontSize: "0.7rem", color: text3, marginBottom: "0.2rem" }}>({String.fromCharCode(97 + pi)})</div>
-                        <div style={S.qText}>
-                          <MathText>{p.question}</MathText>
-                        </div>
-                        {p.answer && (
-                          <div style={S.ans}>
-                            Answer: <MathText>{p.answer}</MathText>
-                          </div>
-                        )}
-                        {p.explanation && (
-                          <div style={S.expl}>
-                            💡 <MathText>{p.explanation}</MathText>
-                          </div>
-                        )}
-                      </div>
+                <div style={S.qText}>
+                  <MathText>{q.question}</MathText>
+                </div>
+                {q.choices && (
+                  <ul style={S.cList}>
+                    {q.choices.map((c, ci) => (
+                      <li key={ci} style={S.cItem(c === q.answer)}>
+                        {String.fromCharCode(65 + ci)}. <MathText>{c}</MathText>
+                      </li>
                     ))}
-                  </>
-                ) : (
-                  <>
-                    <div style={S.qText}>
-                      <MathText>{q.question}</MathText>
-                    </div>
-                    {q.choices && (
-                      <ul style={S.cList}>
-                        {q.choices.map((c, ci) => (
-                          <li key={ci} style={S.cItem(c === q.answer)}>
-                            {String.fromCharCode(65 + ci)}. <MathText>{c}</MathText>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                    {q.answer && (
-                      <div style={S.ans}>
-                        ✓ <MathText>{q.answer}</MathText>
-                      </div>
-                    )}
-                    {q.explanation && (
-                      <div style={S.expl}>
-                        💡 <MathText>{q.explanation}</MathText>
-                      </div>
-                    )}
-                  </>
+                  </ul>
+                )}
+                {q.answer && (
+                  <div style={S.ans}>
+                    ✓ <MathText>{q.answer}</MathText>
+                  </div>
+                )}
+                {q.explanation && (
+                  <div style={S.expl}>
+                    💡 <MathText>{q.explanation}</MathText>
+                  </div>
                 )}
 
                 {pendingType === "replace" && pendingMeta?.vIdx === activeVersion && pendingMeta?.qIdx === qi && (
@@ -824,45 +796,22 @@ export default function ExportScreen({
                         <span style={S.tag()}>{q.type}</span>
                       </div>
                       {q.hasGraph && q.graphConfig && <GraphDisplay graphConfig={q.graphConfig} authorMode={false} />}
-                      {q.type === "Branched" ? (
-                        <>
-                          <div style={{ ...S.qText, color: vc + "cc" }}>
-                            Given: <MathText>{q.stem}</MathText>
-                          </div>
-                          {(q.parts || []).map((p, pi) => (
-                            <div key={pi} style={{ marginBottom: "0.4rem", paddingLeft: "0.75rem", borderLeft: "2px solid " + border }}>
-                              <div style={{ fontSize: "0.7rem", color: text3 }}>({String.fromCharCode(97 + pi)})</div>
-                              <div style={S.qText}>
-                                <MathText>{p.question}</MathText>
-                              </div>
-                              {p.answer && (
-                                <div style={S.ans}>
-                                  Answer: <MathText>{p.answer}</MathText>
-                                </div>
-                              )}
-                            </div>
+                      <div style={S.qText}>
+                        <MathText>{q.question}</MathText>
+                      </div>
+                      {q.choices && (
+                        <ul style={S.cList}>
+                          {q.choices.map((c, ci) => (
+                            <li key={ci} style={S.cItem(c === q.answer)}>
+                              {String.fromCharCode(65 + ci)}. <MathText>{c}</MathText>
+                            </li>
                           ))}
-                        </>
-                      ) : (
-                        <>
-                          <div style={S.qText}>
-                            <MathText>{q.question}</MathText>
-                          </div>
-                          {q.choices && (
-                            <ul style={S.cList}>
-                              {q.choices.map((c, ci) => (
-                                <li key={ci} style={S.cItem(c === q.answer)}>
-                                  {String.fromCharCode(65 + ci)}. <MathText>{c}</MathText>
-                                </li>
-                              ))}
-                            </ul>
-                          )}
-                          {q.answer && (
-                            <div style={S.ans}>
-                              ✓ <MathText>{q.answer}</MathText>
-                            </div>
-                          )}
-                        </>
+                        </ul>
+                      )}
+                      {q.answer && (
+                        <div style={S.ans}>
+                          ✓ <MathText>{q.answer}</MathText>
+                        </div>
                       )}
                     </div>
                   );

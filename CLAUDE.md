@@ -67,8 +67,8 @@ Each `/app/<feature>/page.js` reads state from `useAppContext()` and renders the
 
 ### Shared UI components
 
-- `components/question/QuestionCard.jsx` — single source of truth for rendering one question (stem, choices, answer reveal, edit affordances). Reused across `BankScreen`, `BuildScreen`, `ExportScreen`, validation screens.
-- `components/question/QuestionEditor.jsx` — inline edit form for stems/choices/explanations
+- `components/question/QuestionCard.jsx` — single source of truth for rendering one question (choices, answer reveal, edit affordances). Reused across `BankScreen`, `BuildScreen`, `ExportScreen`, validation screens.
+- `components/question/QuestionEditor.jsx` — inline edit form for choices/explanations
 - `components/editors/GraphEditor.js` — D3-powered graph editor (functions, piecewise, area, statistical plots)
 - `components/editors/InlineEditor.js` — generic inline-edit primitive
 - `components/display/MathText.js` / `MathTextInline.js` / `PipeTableHTML.js` — KaTeX-based math + markdown pipe-table renderers used wherever question content appears

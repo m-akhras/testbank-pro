@@ -457,7 +457,7 @@ export default function BankScreen({
                   <span style={{...S.diffTag(q.difficulty||""), flexShrink:0, fontSize:"0.58rem", padding:"0.05rem 0.3rem"}}>{(q.difficulty||"?")[0]}</span>
                   <span style={{fontSize:"0.68rem", color:text3, flexShrink:0, minWidth:"80px", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>{(q.section||"").split(" ").slice(0,3).join(" ")}</span>
                   <span style={{flex:1, fontSize:"0.8rem", color:text1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
-                    {q.type==="Branched" ? q.stem : q.question}
+                    {q.question}
                   </span>
                   {used > 0 && <span style={{fontSize:"0.62rem", color:"#06b6d4", flexShrink:0}}>📋×{used}</span>}
                   {issues.length > 0 && <span style={{fontSize:"0.62rem", color:"#f87171", flexShrink:0}}>⚠</span>}
@@ -467,7 +467,7 @@ export default function BankScreen({
                   <button style={{...S.smBtn, flexShrink:0, color:"#7C3AED", border:"1px solid #a78bfa33"}}
                     onClick={() => { setInlineEditQId(inlineEditQId===q.id?null:q.id); setGraphEditorQId(null); }}>✏</button>
                   <button style={{...S.smBtn, flexShrink:0, color:"#f87171", border:"1px solid #f8717133"}}
-                    onClick={() => setConfirmDelete({id:q.id, label:(q.question||q.stem||"").slice(0,60)})}>✕</button>
+                    onClick={() => setConfirmDelete({id:q.id, label:(q.question||"").slice(0,60)})}>✕</button>
                 </div>
               );
             })}
@@ -493,7 +493,7 @@ export default function BankScreen({
                 onSelect={() => setSelectedForExam(p => p.includes(q.id) ? p.filter(id => id !== q.id) : [...p, q.id])}
                 onEdit={() => { setInlineEditQId(inlineEditQId === q.id ? null : q.id); setGraphEditorQId(null); }}
                 onGraphEdit={() => { setGraphEditorQId(graphEditorQId === q.id ? null : q.id); setInlineEditQId(null); }}
-                onDelete={() => setConfirmDelete({id: q.id, label: (q.question||q.stem||"").slice(0,60)})}
+                onDelete={() => setConfirmDelete({id: q.id, label: (q.question||"").slice(0,60)})}
                 onReplace={() => {
                   const prompt = buildReplacePrompt(q, "numbers");
                   setGeneratedPrompt(prompt);
@@ -783,7 +783,7 @@ export default function BankScreen({
                           <div style={{flex:1, minWidth:0}}>
                             <div style={{fontSize:"0.75rem", color:text2, marginBottom:"0.1rem"}}>{q.section}</div>
                             <div style={{fontSize:"0.82rem", color:text1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
-                              {q.type==="Branched" ? q.stem : q.question}
+                              {q.question}
                             </div>
                           </div>
                           <span style={{...S.tag(), flexShrink:0}}>{(q.type||"").split(" ")[0]}</span>
