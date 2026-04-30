@@ -1,5 +1,5 @@
 "use client";
-import { uid } from "../../lib/utils/questions.js";
+import { uid, stripChoiceLabel, isGraphChoice } from "../../lib/utils/questions.js";
 import { mathStepsOnly } from "../../lib/exports/helpers.js";
 import { buildReplacePrompt, buildConvertPrompt, buildGeneratePrompt } from "../../lib/prompts/index.js";
 import MathText from "../display/MathText.js";
@@ -316,7 +316,7 @@ export default function BankScreen({
                   const match = bulkReplacePaste.match(/\[[\s\S]*\]/);
                   if (!match) throw new Error("No JSON array found. Copy the full response.");
                   const parsed = JSON.parse(match[0]);
-                  const sanitize = (q) => ({ ...q, type:q.type||"Multiple Choice", difficulty:q.difficulty||"Medium", question:q.question||"", answer:q.answer||"", choices:(q.choices||[]).map(c=>c??""), explanation:q.explanation||"" });
+                  const sanitize = (q) => ({ ...q, type:q.type||"Multiple Choice", difficulty:q.difficulty||"Medium", question:q.question||"", answer:q.answer||"", choices:(q.choices||[]).map(c=>isGraphChoice(c)?c:stripChoiceLabel(c??"")), explanation:q.explanation||"" });
                   const tagged = parsed.map(q => ({ ...sanitize(q), id:uid(), createdAt:Date.now() }));
                   for (const id of bulkReplaceIds) await deleteQuestion(id);
                   for (const q of tagged) await saveQuestion(q);

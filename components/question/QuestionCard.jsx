@@ -1,109 +1,11 @@
 "use client";
-import { useState } from "react";
+import { useMemo } from "react";
 import MathText from "../display/MathText.js";
 import GraphDisplay from "../display/GraphDisplay.js";
-
-// Visual styling per AI-validation status. Returned shape lines up with the
-// inline badge pill rendered in the question meta row.
-const VALIDATION_BADGE = {
-  ok:      { icon: "✅", label: "Validated OK",  color: "#16a34a", bg: "#dcfce7", border: "#86efac" },
-  warning: { icon: "⚠️", label: "Has warnings", color: "#b45309", bg: "#fef3c7", border: "#fcd34d" },
-  error:   { icon: "❌", label: "Has errors",   color: "#b91c1c", bg: "#fee2e2", border: "#fca5a5" },
-  none:    { icon: "⚪", label: "Not validated", color: "#6b7280", bg: "#f3f4f6", border: "#d1d5db" },
-};
-
-function timeAgo(ts) {
-  if (!ts) return null;
-  const diff = Date.now() - ts;
-  if (diff < 0) return "just now";
-  const min = Math.floor(diff / 60000);
-  if (min < 1) return "just now";
-  if (min < 60) return `${min} minute${min === 1 ? "" : "s"} ago`;
-  const hr = Math.floor(min / 60);
-  if (hr < 24) return `${hr} hour${hr === 1 ? "" : "s"} ago`;
-  const day = Math.floor(hr / 24);
-  if (day < 30) return `${day} day${day === 1 ? "" : "s"} ago`;
-  return new Date(ts).toLocaleDateString();
-}
-
-// ── Inline AI-validation badge ──
-// Shows a status pill (✅/⚠️/❌/⚪) next to the question meta. Clicking toggles
-// a small popover with the issue list and the "Validated X ago" timestamp.
-function ValidationBadge({ status, issues, validatedAt, S }) {
-  const [open, setOpen] = useState(false);
-  const key = status || "none";
-  const cfg = VALIDATION_BADGE[key] || VALIDATION_BADGE.none;
-  const issueList = Array.isArray(issues) ? issues.filter(Boolean) : [];
-
-  return (
-    <span style={{ position: "relative", display: "inline-flex" }}>
-      <button
-        type="button"
-        onClick={(e) => { e.stopPropagation(); setOpen(o => !o); }}
-        title={cfg.label}
-        style={{
-          cursor: "pointer",
-          background: cfg.bg,
-          color: cfg.color,
-          border: `1px solid ${cfg.border}`,
-          fontSize: "0.7rem",
-          fontWeight: 600,
-          padding: "0.12rem 0.45rem",
-          borderRadius: "999px",
-          whiteSpace: "nowrap",
-          lineHeight: 1.2,
-        }}
-      >
-        {cfg.icon} {cfg.label}
-      </button>
-      {open && (
-        <>
-          {/* click-outside catcher */}
-          <div
-            onClick={() => setOpen(false)}
-            style={{ position: "fixed", inset: 0, zIndex: 19, background: "transparent" }}
-          />
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              position: "absolute",
-              top: "calc(100% + 6px)",
-              left: 0,
-              zIndex: 20,
-              minWidth: "240px",
-              maxWidth: "360px",
-              background: "#fff",
-              border: `1px solid ${cfg.border}`,
-              borderRadius: "8px",
-              boxShadow: "0 6px 20px rgba(0,0,0,0.12)",
-              padding: "0.65rem 0.75rem",
-              fontSize: "0.78rem",
-              color: "#1f2937",
-            }}
-          >
-            <div style={{ fontWeight: 700, color: cfg.color, marginBottom: "0.35rem" }}>
-              {cfg.icon} {cfg.label}
-            </div>
-            {issueList.length > 0 ? (
-              <ul style={{ margin: 0, padding: "0 0 0 1.1rem", lineHeight: 1.45 }}>
-                {issueList.map((it, i) => <li key={i} style={{ marginBottom: "0.2rem" }}>{it}</li>)}
-              </ul>
-            ) : (
-              <div style={{ color: "#374151" }}>
-                {status ? "No issues found." : "This question hasn't been validated yet. Run Auto Validate to check."}
-              </div>
-            )}
-            {validatedAt && (
-              <div style={{ marginTop: "0.5rem", fontSize: "0.7rem", color: "#6b7280" }}>
-                Validated {timeAgo(validatedAt)}
-              </div>
-            )}
-          </div>
-        </>
-      )}
-    </span>
-  );
-}
+import GraphChoice from "../display/GraphChoice.jsx";
+import ValidationBadge from "./ValidationBadge.jsx";
+import { stripChoiceLabel, isGraphChoice } from "../../lib/utils/questions.js";
+import { useAppContext } from "../../context/AppContext.js";
 
 export default function QuestionCard({
   q,
@@ -137,6 +39,44 @@ export default function QuestionCard({
   const issuesArr = Array.isArray(issues) ? issues : null;
   const hasAnyAction = onDelete || onReplace || onGraphEdit || onEdit || onSelect;
 
+  // Validation badge inheritance.
+  //
+  // Variants are saved through saveQuestion, which writes the JSONB blob but
+  // not the dedicated validation_status / validation_issues / validated_at
+  // columns. loadBank reads only those top-level columns, so a variant's own
+  // validationStatus is always null on reload — the badge resets to
+  // "Not validated" even when the source question is validated.
+  //
+  // Fix: at render time, if the question has no status of its own but does
+  // carry an originalId, look up the source question in the bank and reuse
+  // its status. Inherited badges are visually distinguished in
+  // <ValidationBadge>. Re-validating the source automatically updates every
+  // variant since they all read through this lookup on the next render.
+  const { bank: bankHook } = useAppContext();
+  const bankArr = bankHook?.bank;
+  const inherited = useMemo(() => {
+    if (q.validationStatus) {
+      return {
+        status: q.validationStatus,
+        issues: q.validationIssues,
+        validatedAt: q.validatedAt,
+        inherited: false,
+      };
+    }
+    if (q.originalId && Array.isArray(bankArr)) {
+      const source = bankArr.find(b => b.id === q.originalId);
+      if (source?.validationStatus) {
+        return {
+          status: source.validationStatus,
+          issues: source.validationIssues,
+          validatedAt: source.validatedAt,
+          inherited: true,
+        };
+      }
+    }
+    return { status: null, issues: [], validatedAt: null, inherited: false };
+  }, [q.validationStatus, q.validationIssues, q.validatedAt, q.originalId, bankArr]);
+
   return (
     <div style={{
       ...S.qCard,
@@ -157,10 +97,10 @@ export default function QuestionCard({
 
         {/* AI-validation status badge — clickable, shows issue popover */}
         <ValidationBadge
-          status={q.validationStatus}
-          issues={q.validationIssues}
-          validatedAt={q.validatedAt}
-          S={S}
+          status={inherited.status}
+          issues={inherited.issues}
+          validatedAt={inherited.validatedAt}
+          inherited={inherited.inherited}
         />
 
         {/* Static-check warning (missing fields, malformed structure) — separate
@@ -229,15 +169,35 @@ export default function QuestionCard({
 
       {/* Question content */}
       <div style={S.qText}><MathText>{q.question}</MathText></div>
-      {q.choices && (
-        <ul style={S.cList}>
-          {q.choices.map((c, ci) => (
-            <li key={ci} style={S.cItem(c === q.answer)}>
-              {String.fromCharCode(65 + ci)}. <MathText>{c}</MathText>
-            </li>
-          ))}
-        </ul>
-      )}
+      {q.choices && (() => {
+        const hasGraphChoices = q.choices.some(isGraphChoice);
+        const ansLetterIdx = hasGraphChoices && /^[A-Ha-h]$/.test(String(q.answer || "").trim())
+          ? String(q.answer).trim().toUpperCase().charCodeAt(0) - 65
+          : -1;
+        return (
+          <ul style={S.cList}>
+            {q.choices.map((c, ci) => {
+              const letter = String.fromCharCode(65 + ci);
+              const isGraph = isGraphChoice(c);
+              const isCorrect = isGraph
+                ? ci === ansLetterIdx
+                : stripChoiceLabel(c) === stripChoiceLabel(q.answer);
+              return (
+                <li key={ci} style={S.cItem(isCorrect)}>
+                  {isGraph ? (
+                    <div style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem" }}>
+                      <span style={{ fontWeight: 600, lineHeight: "1.2" }}>{letter}.</span>
+                      <GraphChoice config={c.graphConfig} />
+                    </div>
+                  ) : (
+                    <>{letter}. <MathText>{stripChoiceLabel(c)}</MathText></>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        );
+      })()}
       {/* Bank-style "None of these" preference toggle (separate from choices array) */}
       {q.type === "Multiple Choice" && onNoneOfAboveChange && (
         <label style={{ fontSize: "0.7rem", color: text2, display: "flex", alignItems: "center", gap: "0.4rem", cursor: "pointer", marginBottom: "0.35rem" }}>
@@ -249,7 +209,13 @@ export default function QuestionCard({
           E. None of these
         </label>
       )}
-      {showAnswer && q.answer && <div style={S.ans}>✓ <MathText>{q.answer}</MathText></div>}
+      {showAnswer && q.answer && (() => {
+        const hasGraphChoices = Array.isArray(q.choices) && q.choices.some(isGraphChoice);
+        if (hasGraphChoices) {
+          return <div style={S.ans}>✓ Choice {String(q.answer).trim().toUpperCase()}</div>;
+        }
+        return <div style={S.ans}>✓ <MathText>{stripChoiceLabel(q.answer)}</MathText></div>;
+      })()}
       {showAnswer && q.explanation && <div style={S.expl}>💡 <MathText>{q.explanation}</MathText></div>}
 
       {/* Slot for editor / replace panel injected by parent */}

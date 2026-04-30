@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { flushSync } from "react-dom";
 import { createBrowserClient } from "@supabase/ssr";
-import { uid, questionSimilarity } from "../lib/utils/questions.js";
+import { uid, questionSimilarity, stripChoiceLabel, isGraphChoice } from "../lib/utils/questions.js";
 import {
   buildGeneratePrompt,
   buildVersionPrompt,
@@ -123,7 +123,7 @@ export function useGenerate({
       difficulty: q.difficulty || "Medium",
       question: q.question || "",
       answer: q.answer || "",
-      choices: (q.choices || []).map(c => c ?? ""),
+      choices: (q.choices || []).map(c => isGraphChoice(c) ? c : stripChoiceLabel(c ?? "")),
       explanation: q.explanation || "",
       ...(graphConfig ? { graphConfig } : {}),
     };

@@ -8,6 +8,8 @@ import PastePanel from "../panels/PastePanel.js";
 import ExportTemplateModal from "../modals/ExportTemplateModal.jsx";
 import { useExportFunctions } from "../../context/ExportFunctionsContext.js";
 import { getCourse } from "../../lib/courses/index.js";
+import { stripChoiceLabel, isGraphChoice } from "../../lib/utils/questions.js";
+import GraphChoice from "../display/GraphChoice.jsx";
 
 export default function ExportScreen({
   // Versions state
@@ -626,20 +628,46 @@ export default function ExportScreen({
                 <div style={S.qText}>
                   <MathText>{q.question}</MathText>
                 </div>
-                {q.choices && (
-                  <ul style={S.cList}>
-                    {q.choices.map((c, ci) => (
-                      <li key={ci} style={S.cItem(c === q.answer)}>
-                        {String.fromCharCode(65 + ci)}. <MathText>{c}</MathText>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                {q.answer && (
-                  <div style={S.ans}>
-                    ✓ <MathText>{q.answer}</MathText>
-                  </div>
-                )}
+                {q.choices && (() => {
+                  const hasGraph = q.choices.some(isGraphChoice);
+                  const ansIdx = hasGraph && /^[A-Ha-h]$/.test(String(q.answer || "").trim())
+                    ? String(q.answer).trim().toUpperCase().charCodeAt(0) - 65
+                    : -1;
+                  return (
+                    <ul style={S.cList}>
+                      {q.choices.map((c, ci) => {
+                        const letter = String.fromCharCode(65 + ci);
+                        const isGraph = isGraphChoice(c);
+                        const isCorrect = isGraph
+                          ? ci === ansIdx
+                          : stripChoiceLabel(c) === stripChoiceLabel(q.answer);
+                        return (
+                          <li key={ci} style={S.cItem(isCorrect)}>
+                            {isGraph ? (
+                              <div style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem" }}>
+                                <span style={{ fontWeight: 600 }}>{letter}.</span>
+                                <GraphChoice config={c.graphConfig} />
+                              </div>
+                            ) : (
+                              <>{letter}. <MathText>{stripChoiceLabel(c)}</MathText></>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  );
+                })()}
+                {q.answer && (() => {
+                  const hasGraph = Array.isArray(q.choices) && q.choices.some(isGraphChoice);
+                  if (hasGraph) {
+                    return <div style={S.ans}>✓ Choice {String(q.answer).trim().toUpperCase()}</div>;
+                  }
+                  return (
+                    <div style={S.ans}>
+                      ✓ <MathText>{stripChoiceLabel(q.answer)}</MathText>
+                    </div>
+                  );
+                })()}
                 {q.explanation && (
                   <div style={S.expl}>
                     💡 <MathText>{q.explanation}</MathText>
@@ -799,20 +827,46 @@ export default function ExportScreen({
                       <div style={S.qText}>
                         <MathText>{q.question}</MathText>
                       </div>
-                      {q.choices && (
-                        <ul style={S.cList}>
-                          {q.choices.map((c, ci) => (
-                            <li key={ci} style={S.cItem(c === q.answer)}>
-                              {String.fromCharCode(65 + ci)}. <MathText>{c}</MathText>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                      {q.answer && (
-                        <div style={S.ans}>
-                          ✓ <MathText>{q.answer}</MathText>
-                        </div>
-                      )}
+                      {q.choices && (() => {
+                        const hasGraph = q.choices.some(isGraphChoice);
+                        const ansIdx = hasGraph && /^[A-Ha-h]$/.test(String(q.answer || "").trim())
+                          ? String(q.answer).trim().toUpperCase().charCodeAt(0) - 65
+                          : -1;
+                        return (
+                          <ul style={S.cList}>
+                            {q.choices.map((c, ci) => {
+                              const letter = String.fromCharCode(65 + ci);
+                              const isGraph = isGraphChoice(c);
+                              const isCorrect = isGraph
+                                ? ci === ansIdx
+                                : stripChoiceLabel(c) === stripChoiceLabel(q.answer);
+                              return (
+                                <li key={ci} style={S.cItem(isCorrect)}>
+                                  {isGraph ? (
+                                    <div style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem" }}>
+                                      <span style={{ fontWeight: 600 }}>{letter}.</span>
+                                      <GraphChoice config={c.graphConfig} />
+                                    </div>
+                                  ) : (
+                                    <>{letter}. <MathText>{stripChoiceLabel(c)}</MathText></>
+                                  )}
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        );
+                      })()}
+                      {q.answer && (() => {
+                        const hasGraph = Array.isArray(q.choices) && q.choices.some(isGraphChoice);
+                        if (hasGraph) {
+                          return <div style={S.ans}>✓ Choice {String(q.answer).trim().toUpperCase()}</div>;
+                        }
+                        return (
+                          <div style={S.ans}>
+                            ✓ <MathText>{stripChoiceLabel(q.answer)}</MathText>
+                          </div>
+                        );
+                      })()}
                     </div>
                   );
                 })}

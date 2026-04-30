@@ -11,8 +11,53 @@ import { buildAllVersionsPrompt, buildAllSectionsPrompt } from "../../lib/prompt
 import { saveExam } from "../../lib/db/exams.js";
 import { logExport } from "../../lib/db/exportHistory.js";
 import { S, bg1, bg2, border, text1, text2, text3 } from "../../styles/theme.js";
+import { stripChoiceLabel, isGraphChoice } from "../../lib/utils/questions.js";
+import GraphChoice from "../display/GraphChoice.jsx";
 
 const VERSIONS = ["A","B","C","D","E","F","G","H"];
+
+// Shared choice list — branches per-choice on string vs graph. Used at all
+// three render sites in this screen so the master review, version edit, and
+// version compare panels all show graph choices the same way.
+function renderChoices(q) {
+  if (!q.choices) return null;
+  const hasGraph = q.choices.some(isGraphChoice);
+  const ansIdx = hasGraph && /^[A-Ha-h]$/.test(String(q.answer || "").trim())
+    ? String(q.answer).trim().toUpperCase().charCodeAt(0) - 65
+    : -1;
+  return (
+    <ul style={S.cList}>
+      {q.choices.map((c, ci) => {
+        const letter = String.fromCharCode(65 + ci);
+        const isGraph = isGraphChoice(c);
+        const isCorrect = isGraph
+          ? ci === ansIdx
+          : stripChoiceLabel(c) === stripChoiceLabel(q.answer);
+        return (
+          <li key={ci} style={S.cItem(isCorrect)}>
+            {isGraph ? (
+              <div style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem" }}>
+                <span style={{ fontWeight: 600 }}>{letter}.</span>
+                <GraphChoice config={c.graphConfig} />
+              </div>
+            ) : (
+              <>{letter}. <MathText>{stripChoiceLabel(c)}</MathText></>
+            )}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+function renderAnswerLine(q) {
+  if (!q.answer) return null;
+  const hasGraph = Array.isArray(q.choices) && q.choices.some(isGraphChoice);
+  if (hasGraph) {
+    return <div style={S.ans}>✓ Choice {String(q.answer).trim().toUpperCase()}</div>;
+  }
+  return <div style={S.ans}>✓ <MathText>{stripChoiceLabel(q.answer)}</MathText></div>;
+}
 
 export default function VersionsScreen({
   versions, setVersions,
@@ -273,8 +318,8 @@ export default function VersionsScreen({
             ) : (
               <>
                 <div style={S.qText}><MathText>{q.question}</MathText></div>
-                {q.choices&&<ul style={S.cList}>{q.choices.map((c,ci)=><li key={ci} style={S.cItem(c===q.answer)}>{String.fromCharCode(65+ci)}. <MathText>{c}</MathText></li>)}</ul>}
-                {q.answer&&<div style={S.ans}>âœ“ <MathText>{q.answer}</MathText></div>}
+                {renderChoices(q)}
+                {renderAnswerLine(q)}
                 {q.explanation&&<div style={S.expl}>ðŸ’¡ <MathText>{q.explanation}</MathText></div>}
               </>
             )}
@@ -798,8 +843,8 @@ export default function VersionsScreen({
                 ) : (
                   <>
                     <div style={S.qText}><MathText>{q.question}</MathText></div>
-                    {q.choices&&<ul style={S.cList}>{q.choices.map((c,ci)=><li key={ci} style={S.cItem(c===q.answer)}>{String.fromCharCode(65+ci)}. <MathText>{c}</MathText></li>)}</ul>}
-                    {q.answer&&<div style={S.ans}>âœ“ <MathText>{q.answer}</MathText></div>}
+                    {renderChoices(q)}
+                    {renderAnswerLine(q)}
                     {q.explanation&&<div style={S.expl}>ðŸ’¡ <MathText>{q.explanation}</MathText></div>}
                   </>
                 )}
@@ -950,8 +995,8 @@ export default function VersionsScreen({
                       ) : (
                         <>
                           <div style={S.qText}><MathText>{q.question}</MathText></div>
-                          {q.choices&&<ul style={S.cList}>{q.choices.map((c,ci)=><li key={ci} style={S.cItem(c===q.answer)}>{String.fromCharCode(65+ci)}. <MathText>{c}</MathText></li>)}</ul>}
-                          {q.answer&&<div style={S.ans}>âœ“ <MathText>{q.answer}</MathText></div>}
+                          {renderChoices(q)}
+                          {renderAnswerLine(q)}
                         </>
                       )}
                     </div>

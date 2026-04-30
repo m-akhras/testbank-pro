@@ -1,5 +1,7 @@
 "use client";
 import { useState } from "react";
+import { stripChoiceLabel, isGraphChoice } from "../../lib/utils/questions.js";
+import GraphChoice from "../display/GraphChoice.jsx";
 
 const bg2    = "#F7F2E9";
 const border = "#D9D0C0";
@@ -7,10 +9,14 @@ const text1  = "#1C1A16";
 const text2  = "#6B6355";
 const text3  = "#A89E8E";
 
+function _normalizeSeed(c) {
+  return isGraphChoice(c) ? c : stripChoiceLabel(c);
+}
+
 export default function QuestionEditor({ q, onSave, onClose }) {
   const [question,    setQuestion]    = useState(q.question    || "");
-  const [choices,     setChoices]     = useState(q.choices     ? [...q.choices] : []);
-  const [answer,      setAnswer]      = useState(q.answer      || "");
+  const [choices,     setChoices]     = useState(q.choices     ? q.choices.map(_normalizeSeed) : []);
+  const [answer,      setAnswer]      = useState(stripChoiceLabel(q.answer || ""));
   const [explanation, setExplanation] = useState(q.explanation || "");
   const [saving,      setSaving]      = useState(false);
 
@@ -38,6 +44,8 @@ export default function QuestionEditor({ q, onSave, onClose }) {
     setSaving(false);
   };
 
+  const isLetterAnswer = /^[A-Ha-h]$/.test(String(answer || "").trim());
+
   return (
     <div style={{ marginTop: "0.75rem", padding: "1rem", background: "#1B4332",
       border: "1px solid " + border, borderRadius: "8px", borderLeft: "3px solid #60a5fa" }}>
@@ -53,27 +61,41 @@ export default function QuestionEditor({ q, onSave, onClose }) {
       {choices.length > 0 && (
         <>
           {lbl("Answer Choices")}
-          {choices.map((c, ci) => (
-            <div key={ci} style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.35rem" }}>
-              <button
-                onClick={() => setAnswer(c)}
-                style={{ flexShrink: 0, width: "24px", height: "24px", borderRadius: "50%", border: "none",
-                  cursor: "pointer", fontSize: "0.7rem", fontWeight: "700",
-                  background: answer === c ? "#10b981" : border,
-                  color: answer === c ? "#fff" : "#4a6fa5" }}>
-                {String.fromCharCode(65 + ci)}
-              </button>
-              <input
-                value={c}
-                onChange={e => {
-                  const nc = [...choices]; nc[ci] = e.target.value; setChoices(nc);
-                  if (answer === c) setAnswer(e.target.value);
-                }}
-                style={{ flex: 1, padding: "0.3rem 0.5rem", background: bg2,
-                  border: "1px solid " + (answer === c ? "#10b981" : border),
-                  color: text1, borderRadius: "5px", fontSize: "0.8rem" }} />
-            </div>
-          ))}
+          {choices.map((c, ci) => {
+            const letter = String.fromCharCode(65 + ci);
+            const isGraph = isGraphChoice(c);
+            const isCorrect = isGraph ? (isLetterAnswer && answer.toUpperCase() === letter) : answer === c;
+            return (
+              <div key={ci} style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.35rem" }}>
+                <button
+                  onClick={() => setAnswer(isGraph ? letter : c)}
+                  style={{ flexShrink: 0, width: "24px", height: "24px", borderRadius: "50%", border: "none",
+                    cursor: "pointer", fontSize: "0.7rem", fontWeight: "700",
+                    background: isCorrect ? "#10b981" : border,
+                    color: isCorrect ? "#fff" : "#4a6fa5" }}>
+                  {letter}
+                </button>
+                {isGraph ? (
+                  <div style={{ flex: 1, display: "flex", alignItems: "center", gap: "0.5rem",
+                      padding: "0.3rem 0.5rem", background: bg2, border: "1px solid " + (isCorrect ? "#10b981" : border),
+                      borderRadius: "5px" }}>
+                    <GraphChoice config={c.graphConfig} width={150} height={140} />
+                    <span style={{ fontSize: "0.65rem", color: text3 }}>graph choice — edit graphConfig in JSON to change</span>
+                  </div>
+                ) : (
+                  <input
+                    value={c}
+                    onChange={e => {
+                      const nc = [...choices]; nc[ci] = e.target.value; setChoices(nc);
+                      if (answer === c) setAnswer(e.target.value);
+                    }}
+                    style={{ flex: 1, padding: "0.3rem 0.5rem", background: bg2,
+                      border: "1px solid " + (isCorrect ? "#10b981" : border),
+                      color: text1, borderRadius: "5px", fontSize: "0.8rem" }} />
+                )}
+              </div>
+            );
+          })}
           <div style={{ fontSize: "0.65rem", color: text3, marginTop: "0.3rem" }}>
             Click a letter to mark as correct answer · Currently: <span style={{ color: "#10b981" }}>{answer || "none selected"}</span>
           </div>

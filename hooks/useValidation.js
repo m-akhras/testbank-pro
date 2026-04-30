@@ -40,7 +40,13 @@ Questions:
 
     const body = questions.map((q, i) => {
       const choices = (q.choices || [])
-        .map((c, j) => `   ${String.fromCharCode(65 + j)}) ${c}`)
+        .map((c, j) => {
+          const isGraph = c && typeof c === "object" && c.graphConfig;
+          const text = isGraph
+            ? `[graph: ${JSON.stringify(c.graphConfig)}]`
+            : c;
+          return `   ${String.fromCharCode(65 + j)}) ${text}`;
+        })
         .join("\n");
       const questionText = q.question || "";
       return `${i + 1}. [id: ${q.id}] ${questionText}

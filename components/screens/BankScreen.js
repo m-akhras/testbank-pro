@@ -8,6 +8,8 @@ import { saveQuestion, deleteQuestion } from "../../lib/db/questions.js";
 import { buildGeneratePrompt, buildReplacePrompt, buildConvertPrompt } from "../../lib/prompts/index.js";
 import { mathStepsOnly } from "../../lib/exports/helpers.js";
 import { S, bg1, bg2, border, text1, text2, text3 } from "../../styles/theme.js";
+import { stripChoiceLabel, isGraphChoice } from "../../lib/utils/questions.js";
+import GraphChoice from "../display/GraphChoice.jsx";
 
 const QTYPES = ["Multiple Choice","Free Response","True/False","Fill in the Blank","Formula","Branched"];
 const DIFFICULTIES = ["Easy","Medium","Hard","Mixed"];
@@ -240,7 +242,7 @@ export default function BankScreen({
                 const match = bulkReplacePaste.match(/\[[\s\S]*\]/);
                 if (!match) throw new Error("No JSON array found. Copy the full response.");
                 const parsed = JSON.parse(match[0]);
-                const sanitize = (q) => ({ ...q, type:q.type||"Multiple Choice", difficulty:q.difficulty||"Medium", question:q.question||"", answer:q.answer||"", choices:(q.choices||[]).map(c=>c??""), explanation:q.explanation||"" });
+                const sanitize = (q) => ({ ...q, type:q.type||"Multiple Choice", difficulty:q.difficulty||"Medium", question:q.question||"", answer:q.answer||"", choices:(q.choices||[]).map(c=>isGraphChoice(c)?c:stripChoiceLabel(c??"")), explanation:q.explanation||"" });
                 const tagged = parsed.map(q => ({ ...sanitize(q), id:uid(), course, createdAt:Date.now() }));
                 // Delete old questions
                 for (const id of bulkReplaceIds) await deleteQuestion(id);
@@ -492,8 +494,33 @@ export default function BankScreen({
           ) : (
             <>
               <div style={S.qText}><MathText>{q.question}</MathText></div>
-              {q.choices && <ul style={S.cList}>{q.choices.map((c,ci) => <li key={ci} style={S.cItem(c===q.answer)}>{String.fromCharCode(65+ci)}. <MathText>{c}</MathText></li>)}</ul>}
-              {q.answer && <div style={S.ans}>✓ <MathText>{q.answer}</MathText></div>}
+              {q.choices && (() => {
+                const hasGraph = q.choices.some(isGraphChoice);
+                const ansIdx = hasGraph && /^[A-Ha-h]$/.test(String(q.answer || "").trim())
+                  ? String(q.answer).trim().toUpperCase().charCodeAt(0) - 65
+                  : -1;
+                return (
+                  <ul style={S.cList}>
+                    {q.choices.map((c,ci) => {
+                      const letter = String.fromCharCode(65+ci);
+                      const isGraph = isGraphChoice(c);
+                      const isCorrect = isGraph ? ci === ansIdx : stripChoiceLabel(c)===stripChoiceLabel(q.answer);
+                      return (
+                        <li key={ci} style={S.cItem(isCorrect)}>
+                          {isGraph
+                            ? <div style={{display:"flex",alignItems:"flex-start",gap:"0.5rem"}}><span style={{fontWeight:600}}>{letter}.</span><GraphChoice config={c.graphConfig} /></div>
+                            : <>{letter}. <MathText>{stripChoiceLabel(c)}</MathText></>}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                );
+              })()}
+              {q.answer && (() => {
+                const hasGraph = Array.isArray(q.choices) && q.choices.some(isGraphChoice);
+                if (hasGraph) return <div style={S.ans}>✓ Choice {String(q.answer).trim().toUpperCase()}</div>;
+                return <div style={S.ans}>✓ <MathText>{stripChoiceLabel(q.answer)}</MathText></div>;
+              })()}
               {q.explanation && <div style={S.expl}>💡 <MathText>{q.explanation}</MathText></div>}
             </>
           )}
