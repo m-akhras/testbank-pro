@@ -38,17 +38,28 @@ function _compileExpression(expr) {
 }
 
 // Public: take a vectorField config and produce a complete SVG document string.
-// Pure black on white. Auto-scales arrows so the longest one is ~0.6 cell-widths
-// long. Tolerates singular cells (mag=0 → dot, NaN → dot).
+// Pure black on white. Auto-scales arrow length so density-heavy panels stay
+// readable: scale = (cellSize * 0.6) / maxMagnitude, with cellSize derived
+// from the panel width and the grid density. Stroke width and arrowhead size
+// also shrink at higher densities so 9×9 grids don't look like ink blots.
+// Tolerates singular cells (mag=0 → dot, NaN → dot).
 export function buildVectorFieldSvg(config, opts = {}) {
   const W = opts.width  || VF_PANEL_W;
   const H = opts.height || VF_PANEL_H;
   const xRange = Array.isArray(config?.xRange) ? config.xRange : [-2, 2];
   const yRange = Array.isArray(config?.yRange) ? config.yRange : [-2, 2];
-  const density = Math.max(3, Math.min(9, Number(config?.gridDensity) || 5));
+  // Default density bumped from 5 → 9: 5×5 panels read as sparse and made
+  // distractors hard to differentiate visually. 9×9 is dense enough to show
+  // rotational/divergent character at a glance. Authors can still pass 3–9.
+  const density = Math.max(3, Math.min(9, Number(config?.gridDensity) || 9));
   const showAxes  = config?.showAxes  !== false;
   const showOrigin = config?.showOrigin !== false;
   const markerId = _nextMarkerId();
+
+  // Density-aware visual tuning. At dense grids, arrows must be thinner and
+  // arrowheads smaller or the panel turns into a black smear.
+  const arrowStrokeWidth = density > 7 ? 0.7 : 0.9;
+  const arrowMarkerSize  = density > 7 ? 4   : 5;
 
   const fxFn = _compileExpression(config?.fx);
   const fyFn = _compileExpression(config?.fy);
@@ -66,9 +77,10 @@ export function buildVectorFieldSvg(config, opts = {}) {
   const xToScreen = x => VF_MARGIN + ((x - xRange[0]) / (xRange[1] - xRange[0])) * innerW;
   const yToScreen = y => VF_MARGIN + ((yRange[1] - y) / (yRange[1] - yRange[0])) * innerH;
 
-  const cellSpaceX = innerW / (density - 1);
-  const cellSpaceY = innerH / (density - 1);
-  const cellSpacing = Math.min(cellSpaceX, cellSpaceY);
+  // cellSize = panelWidth / (gridDensity + 1) — slightly smaller than the
+  // raw between-sample spacing so arrows stay clearly inside their cell with
+  // no overlap into neighbours, regardless of density.
+  const cellSize = W / (density + 1);
 
   const samples = [];
   let maxMag = 0;
@@ -85,7 +97,7 @@ export function buildVectorFieldSvg(config, opts = {}) {
     }
   }
 
-  const targetLen = cellSpacing * 0.6;
+  const targetLen = cellSize * 0.6;
   const scale = maxMag > 1e-9 ? targetLen / maxMag : 1;
 
   let arrows = "";
@@ -98,7 +110,7 @@ export function buildVectorFieldSvg(config, opts = {}) {
     }
     const ex = sx + s.dx * scale;
     const ey = sy - s.dy * scale; // SVG y inverted
-    arrows += `<line x1="${sx.toFixed(2)}" y1="${sy.toFixed(2)}" x2="${ex.toFixed(2)}" y2="${ey.toFixed(2)}" stroke="black" stroke-width="0.9" marker-end="url(#${markerId})"/>`;
+    arrows += `<line x1="${sx.toFixed(2)}" y1="${sy.toFixed(2)}" x2="${ex.toFixed(2)}" y2="${ey.toFixed(2)}" stroke="black" stroke-width="${arrowStrokeWidth}" marker-end="url(#${markerId})"/>`;
   }
 
   let axes = "";
@@ -124,7 +136,7 @@ export function buildVectorFieldSvg(config, opts = {}) {
 
   return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">` +
     `<defs>` +
-      `<marker id="${markerId}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">` +
+      `<marker id="${markerId}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="${arrowMarkerSize}" markerHeight="${arrowMarkerSize}" orient="auto-start-reverse">` +
         `<path d="M0 0 L10 5 L0 10 z" fill="black"/>` +
       `</marker>` +
     `</defs>` +
