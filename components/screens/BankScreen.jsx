@@ -1,5 +1,6 @@
 "use client";
 import { uid, stripChoiceLabel, isGraphChoice } from "../../lib/utils/questions.js";
+import { parseAiJson } from "../../lib/utils/sanitizeJsonPaste.js";
 import { mathStepsOnly } from "../../lib/exports/helpers.js";
 import { buildReplacePrompt, buildConvertPrompt, buildGeneratePrompt } from "../../lib/prompts/index.js";
 import MathText from "../display/MathText.js";
@@ -313,9 +314,8 @@ export default function BankScreen({
               onClick={async () => {
                 setBulkReplaceError("");
                 try {
-                  const match = bulkReplacePaste.match(/\[[\s\S]*\]/);
-                  if (!match) throw new Error("No JSON array found. Copy the full response.");
-                  const parsed = JSON.parse(match[0]);
+                  const parsed = parseAiJson(bulkReplacePaste);
+                  if (!Array.isArray(parsed)) throw new Error("Expected a JSON array.");
                   const sanitize = (q) => ({ ...q, type:q.type||"Multiple Choice", difficulty:q.difficulty||"Medium", question:q.question||"", answer:q.answer||"", choices:(q.choices||[]).map(c=>isGraphChoice(c)?c:stripChoiceLabel(c??"")), explanation:q.explanation||"" });
                   const tagged = parsed.map(q => ({ ...sanitize(q), id:uid(), createdAt:Date.now() }));
                   for (const id of bulkReplaceIds) await deleteQuestion(id);
@@ -612,9 +612,8 @@ export default function BankScreen({
                         setPasteError("");
                         try {
                           const raw = pasteInput.trim();
-                          const match = raw.match(/\[[\s\S]*\]/);
-                          if (!match) throw new Error("No JSON array found.");
-                          const parsed = JSON.parse(match[0]);
+                          const parsed = parseAiJson(raw);
+                          if (!Array.isArray(parsed) || !parsed[0]) throw new Error("Expected a JSON array with at least one question.");
                           const newQ = { ...parsed[0], id: q.id, course: q.course, section: q.section, createdAt: Date.now() };
                           await saveQuestion(newQ);
                           setPendingType(null); setPasteInput(""); setGeneratedPrompt("");

@@ -1,5 +1,6 @@
 "use client";
 import { useState, useRef } from "react";
+import { parseAiJson } from "../../lib/utils/sanitizeJsonPaste.js";
 
 // bg2 is used internally but not passed as a prop by the caller
 const bg2 = "#F7F2E9";
@@ -86,9 +87,10 @@ Reply with ONLY the JSON, no markdown, no explanation.`;
       if (!res.ok) throw new Error("API error " + res.status);
       const data = await res.json();
       const text = data.content?.[0]?.text || "";
-      const match = text.match(/\{[\s\S]*\}/);
-      if (!match) throw new Error("Could not parse AI response");
-      const parsed = JSON.parse(match[0]);
+      const parsed = parseAiJson(text);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        throw new Error("Expected a JSON object describing the course.");
+      }
       setForm(prev => ({
         ...prev,
         name: parsed.name || prev.name,
@@ -135,9 +137,10 @@ Reply with ONLY the JSON, no markdown, no explanation.`;
       if (!res.ok) throw new Error("API error");
       const data = await res.json();
       const text = data.content?.[0]?.text || "";
-      const match = text.match(/\{[\s\S]*\}/);
-      if (!match) throw new Error("Could not parse AI response");
-      const parsed = JSON.parse(match[0]);
+      const parsed = parseAiJson(text);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        throw new Error("Expected a JSON object describing the course.");
+      }
       setForm(prev => ({
         ...prev,
         name: parsed.name || prev.name,

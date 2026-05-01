@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { parseAiJson } from "../../lib/utils/sanitizeJsonPaste.js";
 import MathText from "../display/MathText.js";
 import GraphDisplay from "../display/GraphDisplay.js";
 import InlineEditor from "../editors/InlineEditor.js";
@@ -1031,7 +1032,7 @@ export default function VersionsScreen({
           <button style={S.oBtn(text2)} onClick={() => setShowValidationPaste(false)}>Cancel</button>
           <button style={S.btn("#7c3aed",false)} onClick={() => {
             try {
-              const data = JSON.parse(validationPasteInput.trim());
+              const data = parseAiJson(validationPasteInput);
               const list = data.validated || (Array.isArray(data) ? data : null);
               if (!list) throw new Error('Expected { "validated": [...] } or a top-level array.');
               const results = {};

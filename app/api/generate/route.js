@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { sanitizeJsonPaste } from "../../../lib/utils/sanitizeJsonPaste.js";
 
 // Per-operation hourly buckets. Validation is cheap (Sonnet, ~300 tokens) and
 // users batch-validate whole exams, so it gets its own larger bucket.
@@ -54,8 +55,7 @@ Is this answer mathematically correct?`;
   const data = await res.json();
   const text = data.content?.[0]?.text || "";
   try {
-    const clean = text.replace(/```json|```/g, "").trim();
-    return JSON.parse(clean);
+    return JSON.parse(sanitizeJsonPaste(text));
   } catch {
     return { valid: true, corrected_answer: null, reason: null }; // fail silently
   }

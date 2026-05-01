@@ -1,5 +1,6 @@
 "use client";
 import { useState, useRef } from "react";
+import { parseAiJson } from "../../lib/utils/sanitizeJsonPaste.js";
 
 const DEPARTMENTS = ["Math", "Sciences", "Engineering", "Business", "Other"];
 const COLORS = [
@@ -55,9 +56,9 @@ Reply with ONLY the JSON array, no markdown, no explanation.`,
   if (!res.ok) throw new Error("Chapter parse API error " + res.status);
   const data = await res.json();
   const resp = data.content?.[0]?.text || data.text || "";
-  const match = resp.match(/\[[\s\S]*\]/);
-  if (!match) throw new Error("Could not parse AI response");
-  return JSON.parse(match[0]);
+  const parsed = parseAiJson(resp);
+  if (!Array.isArray(parsed)) throw new Error("Expected a JSON array of chapter sections.");
+  return parsed;
 }
 
 export default function CourseForm({

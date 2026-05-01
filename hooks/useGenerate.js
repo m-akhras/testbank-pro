@@ -3,6 +3,7 @@ import { useState } from "react";
 import { flushSync } from "react-dom";
 import { createBrowserClient } from "@supabase/ssr";
 import { uid, questionSimilarity, stripChoiceLabel, isGraphChoice } from "../lib/utils/questions.js";
+import { parseAiJson } from "../lib/utils/sanitizeJsonPaste.js";
 import {
   buildGeneratePrompt,
   buildVersionPrompt,
@@ -153,9 +154,10 @@ export function useGenerate({
       const raw = pasteInput.trim();
 
       if (pendingType === "version_all") {
-        const objMatch = raw.match(/\{[\s\S]*\}/);
-        if (!objMatch) throw new Error("No JSON object found. Make sure you copied the full response.");
-        const parsed = JSON.parse(objMatch[0]);
+        const parsed = parseAiJson(raw);
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+          throw new Error("Expected a JSON object keyed by version label.");
+        }
         const { selected, labels, classSection } = pendingMeta;
         const allVersions = labels.map(label => {
           const qs = parsed[label] || [];
@@ -186,9 +188,10 @@ export function useGenerate({
       }
 
       if (pendingType === "version_all_sections") {
-        const objMatch = raw.match(/\{[\s\S]*\}/);
-        if (!objMatch) throw new Error("No JSON object found.");
-        const parsed = JSON.parse(objMatch[0]);
+        const parsed = parseAiJson(raw);
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+          throw new Error("Expected a JSON object keyed by section/version label.");
+        }
         const { selected, labels, numClassSections: ncs } = pendingMeta;
         const newSectionVersions = {};
         for (let s = 1; s <= ncs; s++) {
@@ -222,9 +225,7 @@ export function useGenerate({
         return;
       }
 
-      const match = raw.match(/\[[\s\S]*\]/);
-      if (!match) throw new Error("No JSON array found. Make sure you copied the full response.");
-      const parsed = JSON.parse(match[0]);
+      const parsed = parseAiJson(raw);
       if (!Array.isArray(parsed)) throw new Error("Expected a JSON array.");
 
       const sanitized = parsed.map(sanitize);
@@ -317,9 +318,16 @@ export function useGenerate({
         setPendingType(null); setPasteInput(""); setPendingMeta(null);
       }
     } catch (e) {
-      const msg = e instanceof SyntaxError
-        ? "Response was too large or cut off. Try fewer versions at a time (recommended: max 4 versions × 2 sections)."
-        : "Error: " + e.message;
+      // parseAiJson() already classifies truncation vs. real syntax errors
+      // and throws messages with that detail. SyntaxError only reaches here
+      // for non-JSON-paste callers (none currently); keep the cutoff hint
+      // as a last-resort fallback so we don't lose useful guidance.
+      let msg;
+      if (e instanceof SyntaxError) {
+        msg = "Response was too large or cut off. Try fewer versions at a time (recommended: max 4 versions × 2 sections).";
+      } else {
+        msg = e.message || String(e);
+      }
       setPasteError(msg);
     }
   }
