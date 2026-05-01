@@ -1,10 +1,24 @@
 "use client";
 
-// Region-of-integration renderer. Pure SVG, hatch-shaded interior + crisp
-// boundary curves on top + intersection-point dots + axis tick labels.
-// Boundaries arrive in traversal order; each is converted to a polyline of
-// 50 sample points (or 64 along an arc for circles), all concatenated into
-// one closed path that gets the hatch fill.
+// Region-of-integration renderer (15.2 / 15.3). Pure SVG, B&W. The output
+// is one closed hatch-filled path that exactly traces the supplied
+// boundaries, plus a stroked overlay so each curve stays crisp on top of
+// the hatch, plus vertex dots and any labels.
+//
+// Boundary kinds:
+//   "function"   — y = expr(x) sampled from `from` to `to` over x
+//   "function_y" — x = expr(y) sampled from `from` to `to` over y
+//   "line"       — straight segment between `from`/`to` [x,y]; ALWAYS
+//                  stroked as <line>, never auto-arced
+//   "circle"     — arc from arcFrom..arcTo (deg) on circle of given
+//                  center+radius, full circle if both omitted; sampled
+//                  as a polyline so the visible stroke and the closed
+//                  hatch path are byte-identical (no SVG sweep-flag math)
+//
+// Render order is fixed: background → axes → axis tick labels → hatch
+// fill → boundary strokes → vertex dots → vertex labels → boundary
+// labels. Tick labels render ONLY for entries in cfg.axisLabels.x / .y;
+// nothing is auto-generated.
 
 import { compileExpression } from "../../lib/utils/exprCompile.js";
 import { svgToBase64PNG, escXml } from "./svgRasterize.js";
@@ -14,85 +28,140 @@ const PANEL_W = 300;
 const PANEL_H = 280;
 const MARGIN  = 22;
 
+const FN_SAMPLES  = 50;
+const ARC_SAMPLES = 64;
+
 let _hatchCounter = 0;
 function _nextHatchId() { return `rgnHatch${++_hatchCounter}`; }
 
-function _boundaryPoints(b, xToScreen, yToScreen) {
+// Sample one boundary as a polyline of screen-space [x, y] points.
+// The same polyline drives both the closed hatch path and the visible
+// stroke so they cannot disagree.
+function _samplePolyline(b, xToScreen, yToScreen) {
   if (!b) return [];
-  if (b.kind === "function") {
-    const fn = compileExpression(b.expr, ["x"]);
-    if (!fn) return [];
-    const from = Number(b.from), to = Number(b.to);
-    if (!isFinite(from) || !isFinite(to)) return [];
-    const N = 50;
-    const pts = [];
-    for (let i = 0; i <= N; i++) {
-      const x = from + (to - from) * (i / N);
-      let y;
-      try { y = Number(fn(x)); } catch (_e) { continue; }
-      if (!isFinite(y)) continue;
-      pts.push([xToScreen(x), yToScreen(y)]);
+  switch (b.kind) {
+    case "function": {
+      const fn = compileExpression(b.expr, ["x"]);
+      if (!fn) return [];
+      const from = Number(b.from), to = Number(b.to);
+      if (!isFinite(from) || !isFinite(to)) return [];
+      const pts = [];
+      for (let i = 0; i <= FN_SAMPLES; i++) {
+        const x = from + (to - from) * (i / FN_SAMPLES);
+        let y;
+        try { y = Number(fn(x)); } catch { continue; }
+        if (!isFinite(y)) continue;
+        pts.push([xToScreen(x), yToScreen(y)]);
+      }
+      return pts;
     }
-    return pts;
-  }
-  if (b.kind === "function_y") {
-    const fn = compileExpression(b.expr, ["y"]);
-    if (!fn) return [];
-    const from = Number(b.from), to = Number(b.to);
-    if (!isFinite(from) || !isFinite(to)) return [];
-    const N = 50;
-    const pts = [];
-    for (let i = 0; i <= N; i++) {
-      const y = from + (to - from) * (i / N);
-      let x;
-      try { x = Number(fn(y)); } catch (_e) { continue; }
-      if (!isFinite(x)) continue;
-      pts.push([xToScreen(x), yToScreen(y)]);
+    case "function_y": {
+      const fn = compileExpression(b.expr, ["y"]);
+      if (!fn) return [];
+      const from = Number(b.from), to = Number(b.to);
+      if (!isFinite(from) || !isFinite(to)) return [];
+      const pts = [];
+      for (let i = 0; i <= FN_SAMPLES; i++) {
+        const y = from + (to - from) * (i / FN_SAMPLES);
+        let x;
+        try { x = Number(fn(y)); } catch { continue; }
+        if (!isFinite(x)) continue;
+        pts.push([xToScreen(x), yToScreen(y)]);
+      }
+      return pts;
     }
-    return pts;
-  }
-  if (b.kind === "line") {
-    if (!Array.isArray(b.from) || !Array.isArray(b.to) || b.from.length < 2 || b.to.length < 2) {
-      console.warn("RegionGraph: line boundary malformed", b);
+    case "line": {
+      if (!Array.isArray(b.from) || !Array.isArray(b.to) ||
+          b.from.length < 2 || b.to.length < 2) {
+        console.warn("RegionGraph: line boundary missing from/to", b);
+        return [];
+      }
+      const fx = Number(b.from[0]), fy = Number(b.from[1]);
+      const tx = Number(b.to[0]),   ty = Number(b.to[1]);
+      if (!isFinite(fx) || !isFinite(fy) || !isFinite(tx) || !isFinite(ty)) {
+        console.warn("RegionGraph: line boundary has non-finite coords", b);
+        return [];
+      }
+      return [
+        [xToScreen(fx), yToScreen(fy)],
+        [xToScreen(tx), yToScreen(ty)],
+      ];
+    }
+    case "circle": {
+      const c = Array.isArray(b.center) ? b.center : [0, 0];
+      const r = Number(b.radius);
+      if (!(r > 0)) {
+        console.warn("RegionGraph: circle has invalid radius", b);
+        return [];
+      }
+      const a0 = (b.arcFrom == null ? 0   : Number(b.arcFrom)) * Math.PI / 180;
+      const a1 = (b.arcTo   == null ? 360 : Number(b.arcTo))   * Math.PI / 180;
+      const pts = [];
+      for (let i = 0; i <= ARC_SAMPLES; i++) {
+        const a = a0 + (a1 - a0) * (i / ARC_SAMPLES);
+        pts.push([
+          xToScreen(c[0] + r * Math.cos(a)),
+          yToScreen(c[1] + r * Math.sin(a)),
+        ]);
+      }
+      return pts;
+    }
+    default:
+      console.warn("RegionGraph: unknown boundary kind", b.kind);
       return [];
-    }
-    const fx = Number(b.from[0]), fy = Number(b.from[1]);
-    const tx = Number(b.to[0]),   ty = Number(b.to[1]);
-    if (!isFinite(fx) || !isFinite(fy) || !isFinite(tx) || !isFinite(ty)) {
-      console.warn("RegionGraph: line boundary has non-finite coords", b);
-      return [];
-    }
-    return [
-      [xToScreen(fx), yToScreen(fy)],
-      [xToScreen(tx), yToScreen(ty)],
-    ];
   }
-  if (b.kind === "circle") {
-    const c = Array.isArray(b.center) ? b.center : [0, 0];
-    const r = Number(b.radius);
-    if (!(r > 0)) return [];
-    const a0 = (b.arcFrom == null ? 0   : Number(b.arcFrom)) * Math.PI / 180;
-    const a1 = (b.arcTo   == null ? 360 : Number(b.arcTo))   * Math.PI / 180;
-    const N = 64;
-    const pts = [];
-    for (let i = 0; i <= N; i++) {
-      const a = a0 + (a1 - a0) * (i / N);
-      pts.push([xToScreen(c[0] + r * Math.cos(a)), yToScreen(c[1] + r * Math.sin(a))]);
-    }
-    return pts;
-  }
-  return [];
 }
 
-// Default screen-space label offset by boundary kind. Applied only when the
-// caller (AI / instructor) hasn't supplied an explicit offsetX / offsetY.
-// Picked so that labels sit close to the curve in the most common cases:
-//   function (y = f(x))   → 8px above the curve
-//   function_y (x = g(y)) → 8px to the right of the curve
-//   line, vertical        → 8px to the right (e.g. "x = 4")
-//   line, horizontal      → 12px below (e.g. "y = 0", room for descenders)
-//   line, diagonal        → 8px above the line midpoint
-//   circle / arc          → 8px above the arc anchor
+// Where to anchor a boundary's text label. `at` runs 0..1 along the curve.
+function _boundaryLabelAnchor(b, xToScreen, yToScreen) {
+  const rawAt = b?.label?.at;
+  const t = Math.max(0, Math.min(1,
+    Number.isFinite(Number(rawAt)) ? Number(rawAt) : 0.5));
+  switch (b?.kind) {
+    case "function": {
+      const fn = compileExpression(b.expr, ["x"]);
+      if (!fn) return null;
+      const x = Number(b.from) + t * (Number(b.to) - Number(b.from));
+      let y;
+      try { y = Number(fn(x)); } catch { return null; }
+      if (!isFinite(y)) return null;
+      return [xToScreen(x), yToScreen(y)];
+    }
+    case "function_y": {
+      const fn = compileExpression(b.expr, ["y"]);
+      if (!fn) return null;
+      const y = Number(b.from) + t * (Number(b.to) - Number(b.from));
+      let x;
+      try { x = Number(fn(y)); } catch { return null; }
+      if (!isFinite(x)) return null;
+      return [xToScreen(x), yToScreen(y)];
+    }
+    case "line": {
+      if (!Array.isArray(b.from) || !Array.isArray(b.to)) return null;
+      const x = Number(b.from[0]) + t * (Number(b.to[0]) - Number(b.from[0]));
+      const y = Number(b.from[1]) + t * (Number(b.to[1]) - Number(b.from[1]));
+      if (!isFinite(x) || !isFinite(y)) return null;
+      return [xToScreen(x), yToScreen(y)];
+    }
+    case "circle": {
+      const c = Array.isArray(b.center) ? b.center : [0, 0];
+      const r = Number(b.radius);
+      if (!(r > 0)) return null;
+      const a0 = (b.arcFrom == null ? 0   : Number(b.arcFrom)) * Math.PI / 180;
+      const a1 = (b.arcTo   == null ? 360 : Number(b.arcTo))   * Math.PI / 180;
+      const a = a0 + t * (a1 - a0);
+      return [
+        xToScreen(c[0] + r * Math.cos(a)),
+        yToScreen(c[1] + r * Math.sin(a)),
+      ];
+    }
+    default:
+      return null;
+  }
+}
+
+// Sensible default label nudge per boundary kind, used when the caller
+// hasn't supplied an explicit offsetX / offsetY in label.
 function _defaultLabelOffsets(b) {
   if (b?.kind === "function")   return { offsetX: 0, offsetY: -8 };
   if (b?.kind === "function_y") return { offsetX: 8, offsetY: 0 };
@@ -107,179 +176,151 @@ function _defaultLabelOffsets(b) {
   return { offsetX: 0, offsetY: -8 };
 }
 
-// Compute the screen-space anchor point for a boundary's label, sampled at
-// the fraction `at` (0..1) along the curve. Returns null if the boundary or
-// its expression is unparseable.
-function _boundaryLabelAnchor(b, xToScreen, yToScreen) {
-  const rawAt = b?.label?.at;
-  const t = Math.max(0, Math.min(1, Number.isFinite(Number(rawAt)) ? Number(rawAt) : 0.5));
-  if (b.kind === "function") {
-    const fn = compileExpression(b.expr, ["x"]);
-    if (!fn) return null;
-    const x = Number(b.from) + t * (Number(b.to) - Number(b.from));
-    let y;
-    try { y = Number(fn(x)); } catch (_e) { return null; }
-    if (!isFinite(y)) return null;
-    return [xToScreen(x), yToScreen(y)];
-  }
-  if (b.kind === "function_y") {
-    const fn = compileExpression(b.expr, ["y"]);
-    if (!fn) return null;
-    const y = Number(b.from) + t * (Number(b.to) - Number(b.from));
-    let x;
-    try { x = Number(fn(y)); } catch (_e) { return null; }
-    if (!isFinite(x)) return null;
-    return [xToScreen(x), yToScreen(y)];
-  }
-  if (b.kind === "line") {
-    if (!Array.isArray(b.from) || !Array.isArray(b.to)) return null;
-    const x = Number(b.from[0]) + t * (Number(b.to[0]) - Number(b.from[0]));
-    const y = Number(b.from[1]) + t * (Number(b.to[1]) - Number(b.from[1]));
-    if (!isFinite(x) || !isFinite(y)) return null;
-    return [xToScreen(x), yToScreen(y)];
-  }
-  if (b.kind === "circle") {
-    const c = Array.isArray(b.center) ? b.center : [0, 0];
-    const r = Number(b.radius);
-    if (!(r > 0)) return null;
-    const a0 = (b.arcFrom == null ? 0   : Number(b.arcFrom)) * Math.PI / 180;
-    const a1 = (b.arcTo   == null ? 360 : Number(b.arcTo))   * Math.PI / 180;
-    const a = a0 + t * (a1 - a0);
-    return [xToScreen(c[0] + r * Math.cos(a)), yToScreen(c[1] + r * Math.sin(a))];
-  }
-  return null;
-}
-
 export function buildRegionSvg(config, opts = {}) {
   const W = opts.width  || PANEL_W;
   const H = opts.height || PANEL_H;
-  const xRange = Array.isArray(config?.xRange) ? config.xRange : [-1, 5];
-  const yRange = Array.isArray(config?.yRange) ? config.yRange : [-1, 5];
+
+  const xRange     = Array.isArray(config?.xRange) ? config.xRange : [-1, 5];
+  const yRange     = Array.isArray(config?.yRange) ? config.yRange : [-1, 5];
   const boundaries = Array.isArray(config?.boundaries) ? config.boundaries : [];
   const vertices   = Array.isArray(config?.vertices)   ? config.vertices   : [];
-  const shaded     = config?.shaded !== false;
-  const hatchAngle = Number.isFinite(Number(config?.hatchAngle)) ? Number(config.hatchAngle) : 45;
-  const axisLabels = config?.axisLabels || { x: [], y: [] };
+  const shaded     = config?.shaded   !== false;
+  const showAxes   = config?.showAxes !== false;
+  const hatchAngle = Number.isFinite(Number(config?.hatchAngle))
+    ? Number(config.hatchAngle) : 45;
+
+  const axisCfg      = config?.axisLabels || {};
+  const xLabels      = Array.isArray(axisCfg.x) ? axisCfg.x : [];
+  const yLabels      = Array.isArray(axisCfg.y) ? axisCfg.y : [];
+  const axisFontSize = Number.isFinite(Number(axisCfg.fontSize))
+    ? Number(axisCfg.fontSize) : 12;
 
   const innerW = W - 2 * MARGIN;
   const innerH = H - 2 * MARGIN;
   const xToScreen = x => MARGIN + ((x - xRange[0]) / (xRange[1] - xRange[0])) * innerW;
   const yToScreen = y => MARGIN + ((yRange[1] - y) / (yRange[1] - yRange[0])) * innerH;
 
-  const segments = boundaries.map(b => _boundaryPoints(b, xToScreen, yToScreen));
+  // Sample every boundary once.
+  const polylines = boundaries.map(b => _samplePolyline(b, xToScreen, yToScreen));
 
-  // Concatenate all segments into one closed path for the hatch fill.
-  let combinedPath = "";
-  for (const pts of segments) {
+  // Closed region path for the hatch fill: walk the boundaries in order,
+  // M to the first point of the first non-empty boundary, L through every
+  // subsequent point of every subsequent boundary, close with Z. There is
+  // no auto-arcing — gaps between segments are a config bug, not something
+  // the renderer will paper over with a curve.
+  let closedPath = "";
+  for (const pts of polylines) {
     if (!pts.length) continue;
-    if (!combinedPath) {
-      combinedPath = `M ${pts[0][0].toFixed(2)} ${pts[0][1].toFixed(2)} `;
-      for (let i = 1; i < pts.length; i++) combinedPath += `L ${pts[i][0].toFixed(2)} ${pts[i][1].toFixed(2)} `;
+    if (!closedPath) {
+      closedPath = `M ${pts[0][0].toFixed(2)} ${pts[0][1].toFixed(2)} `;
+      for (let i = 1; i < pts.length; i++) {
+        closedPath += `L ${pts[i][0].toFixed(2)} ${pts[i][1].toFixed(2)} `;
+      }
     } else {
-      for (let i = 0; i < pts.length; i++) combinedPath += `L ${pts[i][0].toFixed(2)} ${pts[i][1].toFixed(2)} `;
+      for (let i = 0; i < pts.length; i++) {
+        closedPath += `L ${pts[i][0].toFixed(2)} ${pts[i][1].toFixed(2)} `;
+      }
     }
   }
-  if (combinedPath) combinedPath += "Z";
+  if (closedPath) closedPath += "Z";
 
   const hatchId = _nextHatchId();
   const defs = shaded
     ? `<defs><pattern id="${hatchId}" patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(${hatchAngle})"><line x1="0" y1="0" x2="0" y2="6" stroke="black" stroke-width="0.5"/></pattern></defs>`
     : "";
 
-  const fillXml = (shaded && combinedPath)
-    ? `<path d="${combinedPath}" fill="url(#${hatchId})" stroke="none" fill-rule="evenodd"/>`
+  const fillXml = (shaded && closedPath)
+    ? `<path d="${closedPath}" fill="url(#${hatchId})" stroke="none" fill-rule="evenodd"/>`
     : "";
 
-  // Each boundary re-stroked on top of the hatch so curves stay crisp.
-  // We use native SVG primitives per kind so lines render as <line> and
-  // circles render as <circle> / <path d="A ...">; this avoids any chance
-  // of a 2-point polyline collapsing visually and matches what the printer
-  // expects.
-  const STROKE_ATTRS = `stroke="black" stroke-width="1.2" fill="none" stroke-linejoin="round" stroke-linecap="round"`;
-  // World → screen radius scales (different on x and y axes when the panel
-  // isn't square in world units).
-  const xRadiusScale = innerW / (xRange[1] - xRange[0]);
-  const yRadiusScale = innerH / (yRange[1] - yRange[0]);
-
+  // Visible boundary strokes drawn on top of the hatch. Lines render as
+  // native <line> primitives. Functions / function_y / circle arcs render
+  // as <path d="M ... L ..."> using the same sample polyline that fed the
+  // closed path, so the visible curve and the hatch outline coincide
+  // exactly (this is what fixes half-disks / quarter-circles "not closing
+  // at the bottom" — the line below the arc is now stroked as an actual
+  // line, never an arc, and the arc samples land exactly on the line's
+  // endpoints).
+  const STROKE_ATTRS =
+    `stroke="black" stroke-width="1.2" fill="none" stroke-linejoin="round" stroke-linecap="round"`;
   let strokeXml = "";
-  for (let bi = 0; bi < boundaries.length; bi++) {
-    const b = boundaries[bi];
+  for (let i = 0; i < boundaries.length; i++) {
+    const b = boundaries[i];
     if (!b) continue;
-
     if (b.kind === "line") {
-      if (!Array.isArray(b.from) || !Array.isArray(b.to) || b.from.length < 2 || b.to.length < 2) {
-        console.warn("RegionGraph: line boundary malformed", b);
-        continue;
-      }
+      if (!Array.isArray(b.from) || !Array.isArray(b.to) ||
+          b.from.length < 2 || b.to.length < 2) continue;
       const fx = Number(b.from[0]), fy = Number(b.from[1]);
       const tx = Number(b.to[0]),   ty = Number(b.to[1]);
-      if (!isFinite(fx) || !isFinite(fy) || !isFinite(tx) || !isFinite(ty)) {
-        console.warn("RegionGraph: line boundary has non-finite coords", b);
-        continue;
-      }
-      const x1 = xToScreen(fx).toFixed(2);
-      const y1 = yToScreen(fy).toFixed(2);
-      const x2 = xToScreen(tx).toFixed(2);
-      const y2 = yToScreen(ty).toFixed(2);
-      strokeXml += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" ${STROKE_ATTRS}/>`;
+      if (!isFinite(fx) || !isFinite(fy) || !isFinite(tx) || !isFinite(ty)) continue;
+      strokeXml +=
+        `<line x1="${xToScreen(fx).toFixed(2)}" y1="${yToScreen(fy).toFixed(2)}" ` +
+        `x2="${xToScreen(tx).toFixed(2)}" y2="${yToScreen(ty).toFixed(2)}" ${STROKE_ATTRS}/>`;
       continue;
     }
-
-    if (b.kind === "circle") {
-      const c = Array.isArray(b.center) ? b.center : [0, 0];
-      const r = Number(b.radius);
-      if (!(r > 0)) { console.warn("RegionGraph: circle has invalid radius", b); continue; }
-      const cx = xToScreen(Number(c[0]));
-      const cy = yToScreen(Number(c[1]));
-      const rx = r * xRadiusScale;
-      const ry = r * yRadiusScale;
-      const isFullCircle = b.arcFrom == null && b.arcTo == null;
-      if (isFullCircle) {
-        // Native ellipse handles non-square world ranges cleanly.
-        strokeXml += `<ellipse cx="${cx.toFixed(2)}" cy="${cy.toFixed(2)}" rx="${rx.toFixed(2)}" ry="${ry.toFixed(2)}" ${STROKE_ATTRS}/>`;
-      } else {
-        const aFrom = Number(b.arcFrom);
-        const aTo   = Number(b.arcTo);
-        if (!isFinite(aFrom) || !isFinite(aTo)) {
-          console.warn("RegionGraph: circle arc bounds non-finite", b);
-          continue;
-        }
-        const a0 = aFrom * Math.PI / 180;
-        const a1 = aTo   * Math.PI / 180;
-        const sx = xToScreen(c[0] + r * Math.cos(a0));
-        const sy = yToScreen(c[1] + r * Math.sin(a0));
-        const ex = xToScreen(c[0] + r * Math.cos(a1));
-        const ey = yToScreen(c[1] + r * Math.sin(a1));
-        const largeArc = Math.abs(aTo - aFrom) > 180 ? 1 : 0;
-        // World y points up, screen y points down — a CCW arc in world
-        // (aTo > aFrom) traces clockwise in screen space, which is SVG
-        // sweep flag 1.
-        const sweep = aTo > aFrom ? 1 : 0;
-        const d = `M ${sx.toFixed(2)} ${sy.toFixed(2)} A ${rx.toFixed(2)} ${ry.toFixed(2)} 0 ${largeArc} ${sweep} ${ex.toFixed(2)} ${ey.toFixed(2)}`;
-        strokeXml += `<path d="${d}" ${STROKE_ATTRS}/>`;
-      }
-      continue;
-    }
-
-    // function / function_y → polyline approximation from sample grid.
-    const pts = segments[bi];
+    const pts = polylines[i];
     if (!Array.isArray(pts) || pts.length < 2) continue;
-    const d = `M ${pts[0][0].toFixed(2)} ${pts[0][1].toFixed(2)} ` +
-      pts.slice(1).map(p => `L ${p[0].toFixed(2)} ${p[1].toFixed(2)}`).join(" ");
+    let d = `M ${pts[0][0].toFixed(2)} ${pts[0][1].toFixed(2)}`;
+    for (let j = 1; j < pts.length; j++) {
+      d += ` L ${pts[j][0].toFixed(2)} ${pts[j][1].toFixed(2)}`;
+    }
     strokeXml += `<path d="${d}" ${STROKE_ATTRS}/>`;
   }
 
-  // Vertices accept either [x, y] (just a dot) or
-  // { at: [x, y], label, offsetX, offsetY, align, fontSize } (dot + label).
-  let dotsXml = "";
+  // Axes — thin black lines through the origin, only drawn if the origin
+  // sits inside the visible panel.
+  const axisYFromOrigin = yToScreen(0); // screen y where world y=0 lands
+  const axisXFromOrigin = xToScreen(0); // screen x where world x=0 lands
+  let axesXml = "";
+  if (showAxes) {
+    if (axisYFromOrigin >= MARGIN && axisYFromOrigin <= H - MARGIN) {
+      axesXml +=
+        `<line x1="${MARGIN}" y1="${axisYFromOrigin.toFixed(2)}" ` +
+        `x2="${W - MARGIN}" y2="${axisYFromOrigin.toFixed(2)}" stroke="black" stroke-width="0.4"/>`;
+    }
+    if (axisXFromOrigin >= MARGIN && axisXFromOrigin <= W - MARGIN) {
+      axesXml +=
+        `<line x1="${axisXFromOrigin.toFixed(2)}" y1="${MARGIN}" ` +
+        `x2="${axisXFromOrigin.toFixed(2)}" y2="${H - MARGIN}" stroke="black" stroke-width="0.4"/>`;
+    }
+  }
+
+  // Axis tick labels. Render ONLY values present in cfg.axisLabels.x / .y.
+  // Never auto-generate — that's how phantom "y = 0" / "x = 0" labels used
+  // to leak in. If both arrays are empty the panel shows axis lines only.
+  let axisLabelXml = "";
+  for (const lbl of xLabels) {
+    const v = Number(lbl);
+    if (!Number.isFinite(v)) continue;
+    const sx = xToScreen(v);
+    const sy = axisYFromOrigin + axisFontSize + 2;
+    axisLabelXml +=
+      `<text x="${sx.toFixed(2)}" y="${sy.toFixed(2)}" text-anchor="middle" ` +
+      `font-family="serif" font-size="${axisFontSize}" fill="black">${escXml(String(lbl))}</text>`;
+  }
+  for (const lbl of yLabels) {
+    const v = Number(lbl);
+    if (!Number.isFinite(v)) continue;
+    const sy = yToScreen(v);
+    const sx = axisXFromOrigin - 6;
+    axisLabelXml +=
+      `<text x="${sx.toFixed(2)}" y="${(sy + axisFontSize / 3).toFixed(2)}" text-anchor="end" ` +
+      `font-family="serif" font-size="${axisFontSize}" fill="black">${escXml(String(lbl))}</text>`;
+  }
+
+  // Vertices accept either [x, y] (plain dot) or
+  // { at:[x,y], label, offsetX, offsetY, align, fontSize } (dot + halo'd label).
+  let vertexDotXml   = "";
   let vertexLabelXml = "";
   for (const v of vertices) {
-    const point = Array.isArray(v) ? v : (v && Array.isArray(v.at) ? v.at : null);
+    const point = Array.isArray(v)
+      ? v
+      : (v && Array.isArray(v.at) ? v.at : null);
     if (!point || point.length < 2) continue;
     const sx = xToScreen(Number(point[0]));
     const sy = yToScreen(Number(point[1]));
     if (!isFinite(sx) || !isFinite(sy)) continue;
-    dotsXml += `<circle cx="${sx.toFixed(2)}" cy="${sy.toFixed(2)}" r="2.4" fill="black"/>`;
+    vertexDotXml += `<circle cx="${sx.toFixed(2)}" cy="${sy.toFixed(2)}" r="2.4" fill="black"/>`;
     if (!Array.isArray(v) && v && v.label && String(v.label).trim()) {
       const offsetX = Number.isFinite(Number(v.offsetX)) ? Number(v.offsetX) : 0;
       const offsetY = Number.isFinite(Number(v.offsetY)) ? Number(v.offsetY) : 14;
@@ -287,25 +328,16 @@ export function buildRegionSvg(config, opts = {}) {
       const align = v.align === "left"  ? "start"
                   : v.align === "right" ? "end"
                                         : "middle";
-      const lx = sx + offsetX;
-      const ly = sy + offsetY;
       const inner = mathToSvgTspans(String(v.label));
-      vertexLabelXml += `<text x="${lx.toFixed(2)}" y="${ly.toFixed(2)}" text-anchor="${align}" fill="black" font-family="serif" font-size="${fontSize}" font-style="italic" paint-order="stroke fill" stroke="white" stroke-width="3" stroke-linejoin="round">${inner}</text>`;
+      vertexLabelXml +=
+        `<text x="${(sx + offsetX).toFixed(2)}" y="${(sy + offsetY).toFixed(2)}" ` +
+        `text-anchor="${align}" font-family="serif" font-size="${fontSize}" font-style="italic" ` +
+        `fill="black" paint-order="stroke fill" stroke="white" stroke-width="3" stroke-linejoin="round">${inner}</text>`;
     }
   }
 
-  let axesXml = "";
-  const axisXScreen = yToScreen(0);
-  const axisYScreen = xToScreen(0);
-  if (axisXScreen >= MARGIN && axisXScreen <= H - MARGIN) {
-    axesXml += `<line x1="${MARGIN}" y1="${axisXScreen.toFixed(2)}" x2="${W - MARGIN}" y2="${axisXScreen.toFixed(2)}" stroke="black" stroke-width="0.4"/>`;
-  }
-  if (axisYScreen >= MARGIN && axisYScreen <= W - MARGIN) {
-    axesXml += `<line x1="${axisYScreen.toFixed(2)}" y1="${MARGIN}" x2="${axisYScreen.toFixed(2)}" y2="${H - MARGIN}" stroke="black" stroke-width="0.4"/>`;
-  }
-
-  // Per-boundary labels — drawn on top of everything else so the white halo
-  // (paint-order: stroke fill) cleanly punches through the hatch pattern.
+  // Boundary text labels — drawn last so the white halo cleanly punches
+  // through the hatch / strokes / axis labels underneath.
   let boundaryLabelXml = "";
   for (const b of boundaries) {
     if (!b?.label || typeof b.label !== "object") continue;
@@ -313,51 +345,35 @@ export function buildRegionSvg(config, opts = {}) {
     if (!text.trim()) continue;
     const anchor = _boundaryLabelAnchor(b, xToScreen, yToScreen);
     if (!anchor || !isFinite(anchor[0]) || !isFinite(anchor[1])) continue;
-    const defaults = _defaultLabelOffsets(b);
-    const offsetX = Number.isFinite(Number(b.label.offsetX)) ? Number(b.label.offsetX) : defaults.offsetX;
-    const offsetY = Number.isFinite(Number(b.label.offsetY)) ? Number(b.label.offsetY) : defaults.offsetY;
-    const fontSize = Number.isFinite(Number(b.label.fontSize)) ? Number(b.label.fontSize) : 14;
+    const def = _defaultLabelOffsets(b);
+    const offsetX = Number.isFinite(Number(b.label.offsetX))
+      ? Number(b.label.offsetX) : def.offsetX;
+    const offsetY = Number.isFinite(Number(b.label.offsetY))
+      ? Number(b.label.offsetY) : def.offsetY;
+    const fontSize = Number.isFinite(Number(b.label.fontSize))
+      ? Number(b.label.fontSize) : 14;
     const align = b.label.align === "left"  ? "start"
                 : b.label.align === "right" ? "end"
                                             : "middle";
-    const lx = anchor[0] + offsetX;
-    const ly = anchor[1] + offsetY;
     const inner = mathToSvgTspans(text);
-    boundaryLabelXml += `<text x="${lx.toFixed(2)}" y="${ly.toFixed(2)}" text-anchor="${align}" fill="black" font-family="serif" font-size="${fontSize}" font-style="italic" paint-order="stroke fill" stroke="white" stroke-width="3" stroke-linejoin="round">${inner}</text>`;
+    boundaryLabelXml +=
+      `<text x="${(anchor[0] + offsetX).toFixed(2)}" y="${(anchor[1] + offsetY).toFixed(2)}" ` +
+      `text-anchor="${align}" font-family="serif" font-size="${fontSize}" font-style="italic" ` +
+      `fill="black" paint-order="stroke fill" stroke="white" stroke-width="3" stroke-linejoin="round">${inner}</text>`;
   }
 
-  let labelXml = "";
-  if (axisLabels?.x && Array.isArray(axisLabels.x)) {
-    const axisFontSize = Number.isFinite(Number(axisLabels.fontSize)) ? Number(axisLabels.fontSize) : 12;
-    for (const lbl of axisLabels.x) {
-      const v = Number(lbl);
-      if (!Number.isFinite(v)) continue;
-      const sx = xToScreen(v);
-      const sy = axisXScreen + axisFontSize + 2;
-      labelXml += `<text x="${sx.toFixed(2)}" y="${sy.toFixed(2)}" text-anchor="middle" font-size="${axisFontSize}" fill="black">${escXml(lbl)}</text>`;
-    }
-  }
-  if (axisLabels?.y && Array.isArray(axisLabels.y)) {
-    const axisFontSize = Number.isFinite(Number(axisLabels.fontSize)) ? Number(axisLabels.fontSize) : 12;
-    for (const lbl of axisLabels.y) {
-      const v = Number(lbl);
-      if (!Number.isFinite(v)) continue;
-      const sy = yToScreen(v);
-      const sx = axisYScreen - 6;
-      labelXml += `<text x="${sx.toFixed(2)}" y="${(sy + axisFontSize / 3).toFixed(2)}" text-anchor="end" font-size="${axisFontSize}" fill="black">${escXml(lbl)}</text>`;
-    }
-  }
-
+  // Render order: background, axes, axis tick labels, hatch fill,
+  // boundary strokes, vertex dots, vertex labels, boundary labels.
   return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">` +
     defs +
     `<rect x="0.5" y="0.5" width="${W-1}" height="${H-1}" fill="white" stroke="black" stroke-width="0.5" rx="4"/>` +
     axesXml +
+    axisLabelXml +
     fillXml +
     strokeXml +
-    dotsXml +
-    labelXml +
-    boundaryLabelXml +
+    vertexDotXml +
     vertexLabelXml +
+    boundaryLabelXml +
     `</svg>`;
 }
 
