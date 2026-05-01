@@ -56,10 +56,14 @@ export function buildVectorFieldSvg(config, opts = {}) {
   const showOrigin = config?.showOrigin !== false;
   const markerId = _nextMarkerId();
 
-  // Density-aware visual tuning. At dense grids, arrows must be thinner and
-  // arrowheads smaller or the panel turns into a black smear.
-  const arrowStrokeWidth = density > 7 ? 0.7 : 0.9;
-  const arrowMarkerSize  = density > 7 ? 4   : 5;
+  // Heavier strokes / larger arrowheads for print legibility. The previous
+  // density-based reduction made 9×9 panels nearly invisible on paper.
+  const arrowStrokeWidth = 1.0;
+  const arrowMarkerSize  = 6;
+  // Minimum on-screen arrow length so short-magnitude samples near the
+  // origin / zeros of the field still render visibly instead of
+  // disappearing under the arrowhead.
+  const MIN_ARROW_PX = 6;
 
   const fxFn = _compileExpression(config?.fx);
   const fyFn = _compileExpression(config?.fy);
@@ -108,8 +112,16 @@ export function buildVectorFieldSvg(config, opts = {}) {
       arrows += `<circle cx="${sx.toFixed(2)}" cy="${sy.toFixed(2)}" r="1.2" fill="black"/>`;
       continue;
     }
-    const ex = sx + s.dx * scale;
-    const ey = sy - s.dy * scale; // SVG y inverted
+    let dxPx = s.dx * scale;
+    let dyPx = -s.dy * scale; // SVG y inverted
+    const lenPx = Math.hypot(dxPx, dyPx);
+    if (lenPx > 0 && lenPx < MIN_ARROW_PX) {
+      const k = MIN_ARROW_PX / lenPx;
+      dxPx *= k;
+      dyPx *= k;
+    }
+    const ex = sx + dxPx;
+    const ey = sy + dyPx;
     arrows += `<line x1="${sx.toFixed(2)}" y1="${sy.toFixed(2)}" x2="${ex.toFixed(2)}" y2="${ey.toFixed(2)}" stroke="black" stroke-width="${arrowStrokeWidth}" marker-end="url(#${markerId})"/>`;
   }
 
