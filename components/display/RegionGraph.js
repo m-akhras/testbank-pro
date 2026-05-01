@@ -269,13 +269,29 @@ export function buildRegionSvg(config, opts = {}) {
     strokeXml += `<path d="${d}" ${STROKE_ATTRS}/>`;
   }
 
+  // Vertices accept either [x, y] (just a dot) or
+  // { at: [x, y], label, offsetX, offsetY, align, fontSize } (dot + label).
   let dotsXml = "";
+  let vertexLabelXml = "";
   for (const v of vertices) {
-    if (!Array.isArray(v) || v.length < 2) continue;
-    const sx = xToScreen(Number(v[0]));
-    const sy = yToScreen(Number(v[1]));
+    const point = Array.isArray(v) ? v : (v && Array.isArray(v.at) ? v.at : null);
+    if (!point || point.length < 2) continue;
+    const sx = xToScreen(Number(point[0]));
+    const sy = yToScreen(Number(point[1]));
     if (!isFinite(sx) || !isFinite(sy)) continue;
-    dotsXml += `<circle cx="${sx.toFixed(2)}" cy="${sy.toFixed(2)}" r="2" fill="black"/>`;
+    dotsXml += `<circle cx="${sx.toFixed(2)}" cy="${sy.toFixed(2)}" r="2.4" fill="black"/>`;
+    if (!Array.isArray(v) && v && v.label && String(v.label).trim()) {
+      const offsetX = Number.isFinite(Number(v.offsetX)) ? Number(v.offsetX) : 0;
+      const offsetY = Number.isFinite(Number(v.offsetY)) ? Number(v.offsetY) : 14;
+      const fontSize = Number.isFinite(Number(v.fontSize)) ? Number(v.fontSize) : 13;
+      const align = v.align === "left"  ? "start"
+                  : v.align === "right" ? "end"
+                                        : "middle";
+      const lx = sx + offsetX;
+      const ly = sy + offsetY;
+      const inner = mathToSvgTspans(String(v.label));
+      vertexLabelXml += `<text x="${lx.toFixed(2)}" y="${ly.toFixed(2)}" text-anchor="${align}" fill="black" font-family="serif" font-size="${fontSize}" font-style="italic" paint-order="stroke fill" stroke="white" stroke-width="3" stroke-linejoin="round">${inner}</text>`;
+    }
   }
 
   let axesXml = "";
@@ -312,21 +328,23 @@ export function buildRegionSvg(config, opts = {}) {
 
   let labelXml = "";
   if (axisLabels?.x && Array.isArray(axisLabels.x)) {
+    const axisFontSize = Number.isFinite(Number(axisLabels.fontSize)) ? Number(axisLabels.fontSize) : 12;
     for (const lbl of axisLabels.x) {
       const v = Number(lbl);
       if (!Number.isFinite(v)) continue;
       const sx = xToScreen(v);
-      const sy = axisXScreen + 12;
-      labelXml += `<text x="${sx.toFixed(2)}" y="${sy.toFixed(2)}" text-anchor="middle" font-size="9" fill="black">${escXml(lbl)}</text>`;
+      const sy = axisXScreen + axisFontSize + 2;
+      labelXml += `<text x="${sx.toFixed(2)}" y="${sy.toFixed(2)}" text-anchor="middle" font-size="${axisFontSize}" fill="black">${escXml(lbl)}</text>`;
     }
   }
   if (axisLabels?.y && Array.isArray(axisLabels.y)) {
+    const axisFontSize = Number.isFinite(Number(axisLabels.fontSize)) ? Number(axisLabels.fontSize) : 12;
     for (const lbl of axisLabels.y) {
       const v = Number(lbl);
       if (!Number.isFinite(v)) continue;
       const sy = yToScreen(v);
       const sx = axisYScreen - 6;
-      labelXml += `<text x="${sx.toFixed(2)}" y="${(sy + 3).toFixed(2)}" text-anchor="end" font-size="9" fill="black">${escXml(lbl)}</text>`;
+      labelXml += `<text x="${sx.toFixed(2)}" y="${(sy + axisFontSize / 3).toFixed(2)}" text-anchor="end" font-size="${axisFontSize}" fill="black">${escXml(lbl)}</text>`;
     }
   }
 
@@ -339,6 +357,7 @@ export function buildRegionSvg(config, opts = {}) {
     dotsXml +
     labelXml +
     boundaryLabelXml +
+    vertexLabelXml +
     `</svg>`;
 }
 

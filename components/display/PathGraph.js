@@ -213,13 +213,14 @@ export function buildPathSvg(config, opts = {}) {
   let axisTickXml = "";
   const axisXScreen = yToScreen(0);
   const axisYScreen = xToScreen(0);
+  const axisFontSize = Number.isFinite(Number(axisLabels?.fontSize)) ? Number(axisLabels.fontSize) : 12;
   if (axisLabels?.x && Array.isArray(axisLabels.x)) {
     for (const lbl of axisLabels.x) {
       const v = Number(lbl);
       if (!Number.isFinite(v)) continue;
       const sx = xToScreen(v);
-      const sy = axisXScreen + 12;
-      axisTickXml += `<text x="${sx.toFixed(2)}" y="${sy.toFixed(2)}" text-anchor="middle" font-size="9" fill="black">${escXml(lbl)}</text>`;
+      const sy = axisXScreen + axisFontSize + 2;
+      axisTickXml += `<text x="${sx.toFixed(2)}" y="${sy.toFixed(2)}" text-anchor="middle" font-size="${axisFontSize}" fill="black">${escXml(lbl)}</text>`;
     }
   }
   if (axisLabels?.y && Array.isArray(axisLabels.y)) {
@@ -228,7 +229,7 @@ export function buildPathSvg(config, opts = {}) {
       if (!Number.isFinite(v)) continue;
       const sy = yToScreen(v);
       const sx = axisYScreen - 6;
-      axisTickXml += `<text x="${sx.toFixed(2)}" y="${(sy + 3).toFixed(2)}" text-anchor="end" font-size="9" fill="black">${escXml(lbl)}</text>`;
+      axisTickXml += `<text x="${sx.toFixed(2)}" y="${(sy + axisFontSize / 3).toFixed(2)}" text-anchor="end" font-size="${axisFontSize}" fill="black">${escXml(lbl)}</text>`;
     }
   }
 
