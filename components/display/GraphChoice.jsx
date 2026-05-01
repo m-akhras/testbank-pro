@@ -10,6 +10,7 @@ import ContourGraph     from "./ContourGraph.js";
 import RegionGraph      from "./RegionGraph.js";
 import ParametricGraph  from "./ParametricGraph.js";
 import SurfaceGraph     from "./SurfaceGraph.js";
+import PathGraph        from "./PathGraph.js";
 
 const _FALLBACK_STYLE = {
   border: "1px solid #d9d0c0",
@@ -31,6 +32,7 @@ export default function GraphChoice({ config, width, height, style }) {
     case "region":      return <RegionGraph      config={config} width={width} height={height} style={style} />;
     case "parametric":  return <ParametricGraph  config={config} width={width} height={height} style={style} />;
     case "surface":     return <SurfaceGraph     config={config} width={width} height={height} style={style} />;
+    case "path":        return <PathGraph        config={config} width={width} height={height} style={style} />;
     default:
       return (
         <div style={{ width: width || 300, height: height || 280, ..._FALLBACK_STYLE, ...(style || {}) }}>

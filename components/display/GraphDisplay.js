@@ -5,8 +5,9 @@ import { buildContourSvg }     from "./ContourGraph.js";
 import { buildRegionSvg }      from "./RegionGraph.js";
 import { buildParametricSvg }  from "./ParametricGraph.js";
 import { buildSurfaceSvg }     from "./SurfaceGraph.js";
+import { buildPathSvg }        from "./PathGraph.js";
 
-const NEW_GRAPH_TYPES = ["vectorField", "contour", "region", "parametric", "surface"];
+const NEW_GRAPH_TYPES = ["vectorField", "contour", "region", "parametric", "surface", "path"];
 
 function _newGraphSvg(cfg, w, h) {
   switch (cfg?.graphType) {
@@ -15,6 +16,7 @@ function _newGraphSvg(cfg, w, h) {
     case "region":      return buildRegionSvg     (cfg, { width: w, height: h });
     case "parametric":  return buildParametricSvg (cfg, { width: w, height: h });
     case "surface":     return buildSurfaceSvg    (cfg, { width: w, height: h });
+    case "path":        return buildPathSvg       (cfg, { width: w, height: h });
     default: return null;
   }
 }
