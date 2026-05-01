@@ -84,6 +84,29 @@ function _boundaryPoints(b, xToScreen, yToScreen) {
   return [];
 }
 
+// Default screen-space label offset by boundary kind. Applied only when the
+// caller (AI / instructor) hasn't supplied an explicit offsetX / offsetY.
+// Picked so that labels sit close to the curve in the most common cases:
+//   function (y = f(x))   → 8px above the curve
+//   function_y (x = g(y)) → 8px to the right of the curve
+//   line, vertical        → 8px to the right (e.g. "x = 4")
+//   line, horizontal      → 12px below (e.g. "y = 0", room for descenders)
+//   line, diagonal        → 8px above the line midpoint
+//   circle / arc          → 8px above the arc anchor
+function _defaultLabelOffsets(b) {
+  if (b?.kind === "function")   return { offsetX: 0, offsetY: -8 };
+  if (b?.kind === "function_y") return { offsetX: 8, offsetY: 0 };
+  if (b?.kind === "circle")     return { offsetX: 0, offsetY: -8 };
+  if (b?.kind === "line" && Array.isArray(b.from) && Array.isArray(b.to)) {
+    const dx = Number(b.to[0]) - Number(b.from[0]);
+    const dy = Number(b.to[1]) - Number(b.from[1]);
+    const adx = Math.abs(dx), ady = Math.abs(dy);
+    if (adx < 1e-9 && ady > 1e-9) return { offsetX: 8, offsetY: 0 };  // vertical
+    if (ady < 1e-9 && adx > 1e-9) return { offsetX: 0, offsetY: 12 }; // horizontal
+  }
+  return { offsetX: 0, offsetY: -8 };
+}
+
 // Compute the screen-space anchor point for a boundary's label, sampled at
 // the fraction `at` (0..1) along the curve. Returns null if the boundary or
 // its expression is unparseable.
@@ -168,25 +191,82 @@ export function buildRegionSvg(config, opts = {}) {
     : "";
 
   // Each boundary re-stroked on top of the hatch so curves stay crisp.
-  // We iterate through ALL boundaries (paired with their sampled points) so
-  // every kind — function, function_y, line, circle — gets its own black
-  // stroke regardless of how it joined the closed-region path above. A line
-  // with exactly 2 sample points still produces a valid "M x1 y1 L x2 y2"
-  // path, but we build it explicitly here to make the line case obvious.
+  // We use native SVG primitives per kind so lines render as <line> and
+  // circles render as <circle> / <path d="A ...">; this avoids any chance
+  // of a 2-point polyline collapsing visually and matches what the printer
+  // expects.
+  const STROKE_ATTRS = `stroke="black" stroke-width="1.2" fill="none" stroke-linejoin="round" stroke-linecap="round"`;
+  // World → screen radius scales (different on x and y axes when the panel
+  // isn't square in world units).
+  const xRadiusScale = innerW / (xRange[1] - xRange[0]);
+  const yRadiusScale = innerH / (yRange[1] - yRange[0]);
+
   let strokeXml = "";
   for (let bi = 0; bi < boundaries.length; bi++) {
     const b = boundaries[bi];
+    if (!b) continue;
+
+    if (b.kind === "line") {
+      if (!Array.isArray(b.from) || !Array.isArray(b.to) || b.from.length < 2 || b.to.length < 2) {
+        console.warn("RegionGraph: line boundary malformed", b);
+        continue;
+      }
+      const fx = Number(b.from[0]), fy = Number(b.from[1]);
+      const tx = Number(b.to[0]),   ty = Number(b.to[1]);
+      if (!isFinite(fx) || !isFinite(fy) || !isFinite(tx) || !isFinite(ty)) {
+        console.warn("RegionGraph: line boundary has non-finite coords", b);
+        continue;
+      }
+      const x1 = xToScreen(fx).toFixed(2);
+      const y1 = yToScreen(fy).toFixed(2);
+      const x2 = xToScreen(tx).toFixed(2);
+      const y2 = yToScreen(ty).toFixed(2);
+      strokeXml += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" ${STROKE_ATTRS}/>`;
+      continue;
+    }
+
+    if (b.kind === "circle") {
+      const c = Array.isArray(b.center) ? b.center : [0, 0];
+      const r = Number(b.radius);
+      if (!(r > 0)) { console.warn("RegionGraph: circle has invalid radius", b); continue; }
+      const cx = xToScreen(Number(c[0]));
+      const cy = yToScreen(Number(c[1]));
+      const rx = r * xRadiusScale;
+      const ry = r * yRadiusScale;
+      const isFullCircle = b.arcFrom == null && b.arcTo == null;
+      if (isFullCircle) {
+        // Native ellipse handles non-square world ranges cleanly.
+        strokeXml += `<ellipse cx="${cx.toFixed(2)}" cy="${cy.toFixed(2)}" rx="${rx.toFixed(2)}" ry="${ry.toFixed(2)}" ${STROKE_ATTRS}/>`;
+      } else {
+        const aFrom = Number(b.arcFrom);
+        const aTo   = Number(b.arcTo);
+        if (!isFinite(aFrom) || !isFinite(aTo)) {
+          console.warn("RegionGraph: circle arc bounds non-finite", b);
+          continue;
+        }
+        const a0 = aFrom * Math.PI / 180;
+        const a1 = aTo   * Math.PI / 180;
+        const sx = xToScreen(c[0] + r * Math.cos(a0));
+        const sy = yToScreen(c[1] + r * Math.sin(a0));
+        const ex = xToScreen(c[0] + r * Math.cos(a1));
+        const ey = yToScreen(c[1] + r * Math.sin(a1));
+        const largeArc = Math.abs(aTo - aFrom) > 180 ? 1 : 0;
+        // World y points up, screen y points down — a CCW arc in world
+        // (aTo > aFrom) traces clockwise in screen space, which is SVG
+        // sweep flag 1.
+        const sweep = aTo > aFrom ? 1 : 0;
+        const d = `M ${sx.toFixed(2)} ${sy.toFixed(2)} A ${rx.toFixed(2)} ${ry.toFixed(2)} 0 ${largeArc} ${sweep} ${ex.toFixed(2)} ${ey.toFixed(2)}`;
+        strokeXml += `<path d="${d}" ${STROKE_ATTRS}/>`;
+      }
+      continue;
+    }
+
+    // function / function_y → polyline approximation from sample grid.
     const pts = segments[bi];
     if (!Array.isArray(pts) || pts.length < 2) continue;
-    let d;
-    if (b.kind === "line") {
-      // Always exactly 2 points; emit a single L command for clarity.
-      d = `M ${pts[0][0].toFixed(2)} ${pts[0][1].toFixed(2)} L ${pts[1][0].toFixed(2)} ${pts[1][1].toFixed(2)}`;
-    } else {
-      d = `M ${pts[0][0].toFixed(2)} ${pts[0][1].toFixed(2)} ` +
-        pts.slice(1).map(p => `L ${p[0].toFixed(2)} ${p[1].toFixed(2)}`).join(" ");
-    }
-    strokeXml += `<path d="${d}" stroke="black" stroke-width="1.2" fill="none" stroke-linejoin="round" stroke-linecap="round"/>`;
+    const d = `M ${pts[0][0].toFixed(2)} ${pts[0][1].toFixed(2)} ` +
+      pts.slice(1).map(p => `L ${p[0].toFixed(2)} ${p[1].toFixed(2)}`).join(" ");
+    strokeXml += `<path d="${d}" ${STROKE_ATTRS}/>`;
   }
 
   let dotsXml = "";
@@ -217,8 +297,9 @@ export function buildRegionSvg(config, opts = {}) {
     if (!text.trim()) continue;
     const anchor = _boundaryLabelAnchor(b, xToScreen, yToScreen);
     if (!anchor || !isFinite(anchor[0]) || !isFinite(anchor[1])) continue;
-    const offsetX = Number.isFinite(Number(b.label.offsetX)) ? Number(b.label.offsetX) : 0;
-    const offsetY = Number.isFinite(Number(b.label.offsetY)) ? Number(b.label.offsetY) : -10;
+    const defaults = _defaultLabelOffsets(b);
+    const offsetX = Number.isFinite(Number(b.label.offsetX)) ? Number(b.label.offsetX) : defaults.offsetX;
+    const offsetY = Number.isFinite(Number(b.label.offsetY)) ? Number(b.label.offsetY) : defaults.offsetY;
     const fontSize = Number.isFinite(Number(b.label.fontSize)) ? Number(b.label.fontSize) : 14;
     const align = b.label.align === "left"  ? "start"
                 : b.label.align === "right" ? "end"
