@@ -52,10 +52,19 @@ function _boundaryPoints(b, xToScreen, yToScreen) {
     return pts;
   }
   if (b.kind === "line") {
-    if (!Array.isArray(b.from) || !Array.isArray(b.to)) return [];
+    if (!Array.isArray(b.from) || !Array.isArray(b.to) || b.from.length < 2 || b.to.length < 2) {
+      console.warn("RegionGraph: line boundary malformed", b);
+      return [];
+    }
+    const fx = Number(b.from[0]), fy = Number(b.from[1]);
+    const tx = Number(b.to[0]),   ty = Number(b.to[1]);
+    if (!isFinite(fx) || !isFinite(fy) || !isFinite(tx) || !isFinite(ty)) {
+      console.warn("RegionGraph: line boundary has non-finite coords", b);
+      return [];
+    }
     return [
-      [xToScreen(b.from[0]), yToScreen(b.from[1])],
-      [xToScreen(b.to[0]),   yToScreen(b.to[1])],
+      [xToScreen(fx), yToScreen(fy)],
+      [xToScreen(tx), yToScreen(ty)],
     ];
   }
   if (b.kind === "circle") {
@@ -159,12 +168,25 @@ export function buildRegionSvg(config, opts = {}) {
     : "";
 
   // Each boundary re-stroked on top of the hatch so curves stay crisp.
+  // We iterate through ALL boundaries (paired with their sampled points) so
+  // every kind — function, function_y, line, circle — gets its own black
+  // stroke regardless of how it joined the closed-region path above. A line
+  // with exactly 2 sample points still produces a valid "M x1 y1 L x2 y2"
+  // path, but we build it explicitly here to make the line case obvious.
   let strokeXml = "";
-  for (const pts of segments) {
-    if (pts.length < 2) continue;
-    const d = `M ${pts[0][0].toFixed(2)} ${pts[0][1].toFixed(2)} ` +
-      pts.slice(1).map(p => `L ${p[0].toFixed(2)} ${p[1].toFixed(2)}`).join(" ");
-    strokeXml += `<path d="${d}" stroke="black" stroke-width="1" fill="none" stroke-linejoin="round" stroke-linecap="round"/>`;
+  for (let bi = 0; bi < boundaries.length; bi++) {
+    const b = boundaries[bi];
+    const pts = segments[bi];
+    if (!Array.isArray(pts) || pts.length < 2) continue;
+    let d;
+    if (b.kind === "line") {
+      // Always exactly 2 points; emit a single L command for clarity.
+      d = `M ${pts[0][0].toFixed(2)} ${pts[0][1].toFixed(2)} L ${pts[1][0].toFixed(2)} ${pts[1][1].toFixed(2)}`;
+    } else {
+      d = `M ${pts[0][0].toFixed(2)} ${pts[0][1].toFixed(2)} ` +
+        pts.slice(1).map(p => `L ${p[0].toFixed(2)} ${p[1].toFixed(2)}`).join(" ");
+    }
+    strokeXml += `<path d="${d}" stroke="black" stroke-width="1.2" fill="none" stroke-linejoin="round" stroke-linecap="round"/>`;
   }
 
   let dotsXml = "";
@@ -197,13 +219,14 @@ export function buildRegionSvg(config, opts = {}) {
     if (!anchor || !isFinite(anchor[0]) || !isFinite(anchor[1])) continue;
     const offsetX = Number.isFinite(Number(b.label.offsetX)) ? Number(b.label.offsetX) : 0;
     const offsetY = Number.isFinite(Number(b.label.offsetY)) ? Number(b.label.offsetY) : -10;
+    const fontSize = Number.isFinite(Number(b.label.fontSize)) ? Number(b.label.fontSize) : 14;
     const align = b.label.align === "left"  ? "start"
                 : b.label.align === "right" ? "end"
                                             : "middle";
     const lx = anchor[0] + offsetX;
     const ly = anchor[1] + offsetY;
     const inner = mathToSvgTspans(text);
-    boundaryLabelXml += `<text x="${lx.toFixed(2)}" y="${ly.toFixed(2)}" text-anchor="${align}" fill="black" font-family="serif" font-size="11" font-style="italic" paint-order="stroke fill" stroke="white" stroke-width="3" stroke-linejoin="round">${inner}</text>`;
+    boundaryLabelXml += `<text x="${lx.toFixed(2)}" y="${ly.toFixed(2)}" text-anchor="${align}" fill="black" font-family="serif" font-size="${fontSize}" font-style="italic" paint-order="stroke fill" stroke="white" stroke-width="3" stroke-linejoin="round">${inner}</text>`;
   }
 
   let labelXml = "";

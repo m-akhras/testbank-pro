@@ -49,7 +49,79 @@ function inferGraphType(cfg) {
 
 // ── Component ────────────────────────────────────────────────────────────────
 
+const NEW_GRAPH_TYPES = ["vectorField", "contour", "region", "parametric", "surface", "path"];
+
+// JSON-textarea fallback for new-system graphTypes. The form-based editor
+// below only knows the old D3 schemas (single/area/domain + stat charts),
+// so feeding it a vectorField/region/path config would crash. Until per-type
+// editors land we let power users edit the JSON directly.
+function NewGraphJsonEditor({ initialConfig, onSave, onRemove, onClose }) {
+  const taRef = useRef(null);
+  const [error, setError] = useState("");
+  return (
+    <div style={{ background: bg1, border: `1px solid ${border}`, borderRadius: 8, padding: 14 }}>
+      <div style={{ fontSize: 11, color: text2, marginBottom: 8 }}>
+        Editing graphType: <strong>{initialConfig?.graphType}</strong> (advanced — JSON only for now)
+      </div>
+      <textarea
+        ref={taRef}
+        defaultValue={JSON.stringify(initialConfig, null, 2)}
+        spellCheck={false}
+        style={{
+          width: "100%", height: 320, fontFamily: "monospace", fontSize: 11,
+          padding: 10, border: `1px solid ${border}`, borderRadius: 6,
+          background: "#fff", color: text1, resize: "vertical",
+        }}
+      />
+      {error && (
+        <div style={{ marginTop: 6, fontSize: 11, color: "#900" }}>{error}</div>
+      )}
+      <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
+        <button
+          onClick={() => {
+            try {
+              const parsed = JSON.parse(taRef.current.value);
+              setError("");
+              onSave(parsed);
+            } catch (e) {
+              setError("Invalid JSON: " + e.message);
+            }
+          }}
+          style={{ padding: "6px 14px", background: text1, color: bg1, border: "none", borderRadius: 4, cursor: "pointer" }}
+        >
+          Save
+        </button>
+        <button
+          onClick={onClose}
+          style={{ padding: "6px 14px", background: bg2, color: text1, border: `1px solid ${border}`, borderRadius: 4, cursor: "pointer" }}
+        >
+          Cancel
+        </button>
+        {onRemove && (
+          <button
+            onClick={onRemove}
+            style={{ padding: "6px 14px", background: bg2, color: "#900", border: `1px solid ${border}`, borderRadius: 4, cursor: "pointer", marginLeft: "auto" }}
+          >
+            Remove graph
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function GraphEditor({ initialConfig, onSave, onRemove, onClose }) {
+  if (initialConfig && NEW_GRAPH_TYPES.includes(initialConfig.graphType)) {
+    return (
+      <NewGraphJsonEditor
+        initialConfig={initialConfig}
+        onSave={onSave}
+        onRemove={onRemove}
+        onClose={onClose}
+      />
+    );
+  }
+
   const type = inferGraphType(initialConfig);
   const [fn,          setFn]          = useState(initialConfig?.fn          || "x^2 - 3");
   const [fnTop,       setFnTop]       = useState(initialConfig?.fnTop       || "x + 2");

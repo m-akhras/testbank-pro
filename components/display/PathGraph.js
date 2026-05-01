@@ -164,13 +164,14 @@ export function buildPathSvg(config, opts = {}) {
     if (ep.label && String(ep.label).trim()) {
       const offsetX = Number.isFinite(Number(ep.offsetX)) ? Number(ep.offsetX) : 0;
       const offsetY = Number.isFinite(Number(ep.offsetY)) ? Number(ep.offsetY) : 14;
+      const fontSize = Number.isFinite(Number(ep.fontSize)) ? Number(ep.fontSize) : 13;
       const align = ep.align === "left"  ? "start"
                   : ep.align === "right" ? "end"
                                          : "middle";
       const lx = sx + offsetX;
       const ly = sy + offsetY;
       const inner = mathToSvgTspans(String(ep.label));
-      endpointLabelXml += `<text x="${lx.toFixed(2)}" y="${ly.toFixed(2)}" text-anchor="${align}" fill="black" font-family="serif" font-size="11" paint-order="stroke fill" stroke="white" stroke-width="3" stroke-linejoin="round">${inner}</text>`;
+      endpointLabelXml += `<text x="${lx.toFixed(2)}" y="${ly.toFixed(2)}" text-anchor="${align}" fill="black" font-family="serif" font-size="${fontSize}" paint-order="stroke fill" stroke="white" stroke-width="3" stroke-linejoin="round">${inner}</text>`;
     }
   }
 
@@ -186,13 +187,14 @@ export function buildPathSvg(config, opts = {}) {
     if (!anchor || !isFinite(anchor[0]) || !isFinite(anchor[1])) continue;
     const offsetX = Number.isFinite(Number(seg.label.offsetX)) ? Number(seg.label.offsetX) : 0;
     const offsetY = Number.isFinite(Number(seg.label.offsetY)) ? Number(seg.label.offsetY) : -10;
+    const fontSize = Number.isFinite(Number(seg.label.fontSize)) ? Number(seg.label.fontSize) : 14;
     const align = seg.label.align === "left"  ? "start"
                 : seg.label.align === "right" ? "end"
                                               : "middle";
     const lx = anchor[0] + offsetX;
     const ly = anchor[1] + offsetY;
     const inner = mathToSvgTspans(text);
-    segmentLabelXml += `<text x="${lx.toFixed(2)}" y="${ly.toFixed(2)}" text-anchor="${align}" fill="black" font-family="serif" font-size="11" font-style="italic" paint-order="stroke fill" stroke="white" stroke-width="3" stroke-linejoin="round">${inner}</text>`;
+    segmentLabelXml += `<text x="${lx.toFixed(2)}" y="${ly.toFixed(2)}" text-anchor="${align}" fill="black" font-family="serif" font-size="${fontSize}" font-style="italic" paint-order="stroke fill" stroke="white" stroke-width="3" stroke-linejoin="round">${inner}</text>`;
   }
 
   // Axes (thin black lines) + optional axis tick labels in world coordinates.
