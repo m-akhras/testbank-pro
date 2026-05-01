@@ -8,6 +8,7 @@
 
 import { compileExpression } from "../../lib/utils/exprCompile.js";
 import { svgToBase64PNG, escXml } from "./svgRasterize.js";
+import { mathToSvgTspans } from "../../lib/utils/svgMath.js";
 
 const PANEL_W = 300;
 const PANEL_H = 280;
@@ -72,6 +73,49 @@ function _boundaryPoints(b, xToScreen, yToScreen) {
     return pts;
   }
   return [];
+}
+
+// Compute the screen-space anchor point for a boundary's label, sampled at
+// the fraction `at` (0..1) along the curve. Returns null if the boundary or
+// its expression is unparseable.
+function _boundaryLabelAnchor(b, xToScreen, yToScreen) {
+  const rawAt = b?.label?.at;
+  const t = Math.max(0, Math.min(1, Number.isFinite(Number(rawAt)) ? Number(rawAt) : 0.5));
+  if (b.kind === "function") {
+    const fn = compileExpression(b.expr, ["x"]);
+    if (!fn) return null;
+    const x = Number(b.from) + t * (Number(b.to) - Number(b.from));
+    let y;
+    try { y = Number(fn(x)); } catch (_e) { return null; }
+    if (!isFinite(y)) return null;
+    return [xToScreen(x), yToScreen(y)];
+  }
+  if (b.kind === "function_y") {
+    const fn = compileExpression(b.expr, ["y"]);
+    if (!fn) return null;
+    const y = Number(b.from) + t * (Number(b.to) - Number(b.from));
+    let x;
+    try { x = Number(fn(y)); } catch (_e) { return null; }
+    if (!isFinite(x)) return null;
+    return [xToScreen(x), yToScreen(y)];
+  }
+  if (b.kind === "line") {
+    if (!Array.isArray(b.from) || !Array.isArray(b.to)) return null;
+    const x = Number(b.from[0]) + t * (Number(b.to[0]) - Number(b.from[0]));
+    const y = Number(b.from[1]) + t * (Number(b.to[1]) - Number(b.from[1]));
+    if (!isFinite(x) || !isFinite(y)) return null;
+    return [xToScreen(x), yToScreen(y)];
+  }
+  if (b.kind === "circle") {
+    const c = Array.isArray(b.center) ? b.center : [0, 0];
+    const r = Number(b.radius);
+    if (!(r > 0)) return null;
+    const a0 = (b.arcFrom == null ? 0   : Number(b.arcFrom)) * Math.PI / 180;
+    const a1 = (b.arcTo   == null ? 360 : Number(b.arcTo))   * Math.PI / 180;
+    const a = a0 + t * (a1 - a0);
+    return [xToScreen(c[0] + r * Math.cos(a)), yToScreen(c[1] + r * Math.sin(a))];
+  }
+  return null;
 }
 
 export function buildRegionSvg(config, opts = {}) {
@@ -142,6 +186,26 @@ export function buildRegionSvg(config, opts = {}) {
     axesXml += `<line x1="${axisYScreen.toFixed(2)}" y1="${MARGIN}" x2="${axisYScreen.toFixed(2)}" y2="${H - MARGIN}" stroke="black" stroke-width="0.4"/>`;
   }
 
+  // Per-boundary labels — drawn on top of everything else so the white halo
+  // (paint-order: stroke fill) cleanly punches through the hatch pattern.
+  let boundaryLabelXml = "";
+  for (const b of boundaries) {
+    if (!b?.label || typeof b.label !== "object") continue;
+    const text = String(b.label.text ?? "");
+    if (!text.trim()) continue;
+    const anchor = _boundaryLabelAnchor(b, xToScreen, yToScreen);
+    if (!anchor || !isFinite(anchor[0]) || !isFinite(anchor[1])) continue;
+    const offsetX = Number.isFinite(Number(b.label.offsetX)) ? Number(b.label.offsetX) : 0;
+    const offsetY = Number.isFinite(Number(b.label.offsetY)) ? Number(b.label.offsetY) : -10;
+    const align = b.label.align === "left"  ? "start"
+                : b.label.align === "right" ? "end"
+                                            : "middle";
+    const lx = anchor[0] + offsetX;
+    const ly = anchor[1] + offsetY;
+    const inner = mathToSvgTspans(text);
+    boundaryLabelXml += `<text x="${lx.toFixed(2)}" y="${ly.toFixed(2)}" text-anchor="${align}" fill="black" font-family="serif" font-size="11" font-style="italic" paint-order="stroke fill" stroke="white" stroke-width="3" stroke-linejoin="round">${inner}</text>`;
+  }
+
   let labelXml = "";
   if (axisLabels?.x && Array.isArray(axisLabels.x)) {
     for (const lbl of axisLabels.x) {
@@ -170,6 +234,7 @@ export function buildRegionSvg(config, opts = {}) {
     strokeXml +
     dotsXml +
     labelXml +
+    boundaryLabelXml +
     `</svg>`;
 }
 
