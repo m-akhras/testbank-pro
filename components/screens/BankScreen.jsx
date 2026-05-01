@@ -1,4 +1,5 @@
 "use client";
+import { createPortal } from "react-dom";
 import { uid, stripChoiceLabel, isGraphChoice } from "../../lib/utils/questions.js";
 import { parseAiJson } from "../../lib/utils/sanitizeJsonPaste.js";
 import { mathStepsOnly } from "../../lib/exports/helpers.js";
@@ -9,6 +10,7 @@ import GraphEditor from "../editors/GraphEditor.js";
 import InlineEditor from "../editors/InlineEditor.js";
 import PastePanel from "../panels/PastePanel.js";
 import QuestionCard from "../question/QuestionCard.jsx";
+import ConfirmModal from "../layout/ConfirmModal.jsx";
 
 export default function BankScreen({
   // Bank state
@@ -796,6 +798,23 @@ export default function BankScreen({
           </div>
         );
       })()}
+
+      {/* Delete-confirmation modal — portaled to <body> so it escapes any
+          transformed / filtered ancestor stacking context. The X buttons on
+          each question card set confirmDelete; this is the only consumer. */}
+      {confirmDelete && typeof document !== "undefined" && createPortal(
+        <ConfirmModal
+          confirmDelete={confirmDelete}
+          onConfirm={async () => {
+            const id = confirmDelete.id;
+            setConfirmDelete(null);
+            try { await deleteQuestion(id); }
+            catch (e) { console.error("delete failed", e); }
+          }}
+          onCancel={() => setConfirmDelete(null)}
+        />,
+        document.body
+      )}
     </div>
   );
 }
