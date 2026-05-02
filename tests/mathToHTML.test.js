@@ -1,4 +1,4 @@
-const { mathToHTML, mathToCanvasHTML } = require("../lib/exports/helpers");
+const { mathToHTML, mathToCanvasHTML } = require("../lib/math/html");
 
 describe("mathToHTML — KaTeX-style \\(...\\) output (unchanged)", () => {
   test("sqrt wraps in \\(\\sqrt{...}\\)", () => {
@@ -137,7 +137,7 @@ describe("Bug fixes", () => {
 
 describe("DEBUG — real failing inputs", () => {
   test("DEBUG: double integral over D of sin(x) dA", () => {
-    const { mathToCanvasHTML } = require("../lib/exports/helpers");
+    const { mathToCanvasHTML } = require("../lib/math/html");
     const input = "Let D be the region bounded by y=x^2. Evaluate the double integral over D of sin(x) dA.";
     const output = mathToCanvasHTML(input);
     console.log("INPUT:", input);
@@ -145,7 +145,7 @@ describe("DEBUG — real failing inputs", () => {
   });
 
   test("DEBUG: nested integral answer choice", () => {
-    const { mathToCanvasHTML } = require("../lib/exports/helpers");
+    const { mathToCanvasHTML } = require("../lib/math/html");
     const input = "integral from 0 to 4 of integral from y/2 to sqrt(y) of arctan(x) dx dy";
     const output = mathToCanvasHTML(input);
     console.log("INPUT:", input);
@@ -153,7 +153,7 @@ describe("DEBUG — real failing inputs", () => {
   });
 
   test("DEBUG: fraction with ln", () => {
-    const { mathToCanvasHTML } = require("../lib/exports/helpers");
+    const { mathToCanvasHTML } = require("../lib/math/html");
     const input = "19/36 + (2ln(2))/(3)";
     const output = mathToCanvasHTML(input);
     console.log("INPUT:", input);
