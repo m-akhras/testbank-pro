@@ -1,11 +1,102 @@
 "use client";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import MathText from "../display/MathText.js";
 import GraphDisplay from "../display/GraphDisplay.js";
 import GraphChoice from "../display/GraphChoice.jsx";
 import ValidationBadge from "./ValidationBadge.jsx";
 import { stripChoiceLabel, isGraphChoice } from "../../lib/utils/questions.js";
 import { useAppContext } from "../../context/AppContext.js";
+
+// Branched MCQ body — shared stem (rendered above by parent) + per-part list.
+// Each part shows its own MCQ choices (with the correct one highlighted in
+// answer-key mode), the answer/explanation, and a small editable marks input
+// (blank by default — author fills in manually).
+function BranchedMCQBody({ q, showAnswer, S, text2, text3, border }) {
+  const { bank: bankHook } = useAppContext();
+  const saveQuestion = bankHook?.saveQuestion;
+  const [marksDraft, setMarksDraft] = useState(() =>
+    (q.parts || []).map(p => (p?.marks == null ? "" : String(p.marks)))
+  );
+
+  function commitMarks(idx, val) {
+    if (!saveQuestion) return;
+    const newParts = (q.parts || []).map((p, i) => {
+      if (i !== idx) return p;
+      const trimmed = String(val).trim();
+      const next = { ...p };
+      if (trimmed === "") delete next.marks; else next.marks = trimmed;
+      return next;
+    });
+    saveQuestion({ ...q, parts: newParts });
+  }
+
+  return (
+    <>
+      {q.stem && (
+        <div style={S.qText}><MathText>{q.stem}</MathText></div>
+      )}
+      {(q.parts || []).map((p, pi) => {
+        const label = String.fromCharCode(97 + pi); // a, b, c, d
+        const choices = Array.isArray(p?.choices) ? p.choices : [];
+        const correctNorm = stripChoiceLabel(p?.answer || "");
+        return (
+          <div key={pi} style={{
+            marginTop: "0.85rem",
+            paddingTop: "0.6rem",
+            borderTop: pi === 0 ? "none" : `1px dashed ${border}`,
+          }}>
+            <div style={{ display: "flex", alignItems: "baseline", gap: "0.5rem", marginBottom: "0.35rem" }}>
+              <div style={{ ...S.qText, flex: 1, marginBottom: 0 }}>
+                <strong>({label})</strong>{" "}
+                <MathText>{p?.question || ""}</MathText>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.3rem", flexShrink: 0 }}>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="—"
+                  value={marksDraft[pi] ?? ""}
+                  onChange={e => {
+                    const next = [...marksDraft];
+                    next[pi] = e.target.value;
+                    setMarksDraft(next);
+                  }}
+                  onBlur={e => commitMarks(pi, e.target.value)}
+                  title="Marks for this part (manual)"
+                  style={{
+                    width: "44px", padding: "0.15rem 0.35rem", fontSize: "0.7rem",
+                    border: `1px solid ${border}`, borderRadius: "4px",
+                    background: "#fff", color: "#1C1A16", textAlign: "center",
+                  }}
+                />
+                <span style={{ fontSize: "0.65rem", color: text3 }}>marks</span>
+              </div>
+            </div>
+            {choices.length > 0 && (
+              <ul style={S.cList}>
+                {choices.map((c, ci) => {
+                  const letter = String.fromCharCode(65 + ci);
+                  const isCorrect = stripChoiceLabel(c) === correctNorm;
+                  return (
+                    <li key={ci} style={S.cItem(isCorrect)}>
+                      {letter}. <MathText>{stripChoiceLabel(c)}</MathText>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+            {showAnswer && p?.answer && (
+              <div style={S.ans}>✓ <MathText>{stripChoiceLabel(p.answer)}</MathText></div>
+            )}
+            {showAnswer && p?.explanation && (
+              <div style={S.expl}>💡 <MathText>{p.explanation}</MathText></div>
+            )}
+          </div>
+        );
+      })}
+    </>
+  );
+}
 
 export default function QuestionCard({
   q,
@@ -167,9 +258,20 @@ export default function QuestionCard({
         <GraphDisplay graphConfig={q.graphConfig} authorMode={authorMode} />
       )}
 
-      {/* Question content */}
-      <div style={S.qText}><MathText>{q.question}</MathText></div>
-      {q.choices && (() => {
+      {/* Branched MCQ — shared stem + per-part choices */}
+      {q.type === "Branched MCQ" && Array.isArray(q.parts) ? (
+        <BranchedMCQBody
+          q={q}
+          showAnswer={showAnswer}
+          S={S}
+          text2={text2}
+          text3={text3}
+          border={border}
+        />
+      ) : (
+        <div style={S.qText}><MathText>{q.question}</MathText></div>
+      )}
+      {q.type !== "Branched MCQ" && q.choices && (() => {
         const hasGraphChoices = q.choices.some(isGraphChoice);
         const ansLetterIdx = hasGraphChoices && /^[A-Ha-h]$/.test(String(q.answer || "").trim())
           ? String(q.answer).trim().toUpperCase().charCodeAt(0) - 65
@@ -209,14 +311,14 @@ export default function QuestionCard({
           E. None of these
         </label>
       )}
-      {showAnswer && q.answer && (() => {
+      {q.type !== "Branched MCQ" && showAnswer && q.answer && (() => {
         const hasGraphChoices = Array.isArray(q.choices) && q.choices.some(isGraphChoice);
         if (hasGraphChoices) {
           return <div style={S.ans}>✓ Choice {String(q.answer).trim().toUpperCase()}</div>;
         }
         return <div style={S.ans}>✓ <MathText>{stripChoiceLabel(q.answer)}</MathText></div>;
       })()}
-      {showAnswer && q.explanation && <div style={S.expl}>💡 <MathText>{q.explanation}</MathText></div>}
+      {q.type !== "Branched MCQ" && showAnswer && q.explanation && <div style={S.expl}>💡 <MathText>{q.explanation}</MathText></div>}
 
       {/* Slot for editor / replace panel injected by parent */}
       {children}

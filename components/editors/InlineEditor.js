@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { stripChoiceLabel, isGraphChoice } from "../../lib/utils/questions.js";
 import GraphChoice from "../display/GraphChoice.jsx";
+import { BranchedMCQEditor } from "../question/QuestionEditor.jsx";
 
 const bg2    = "#F7F2E9";
 const border = "#D9D0C0";
@@ -16,6 +17,10 @@ function _normalizeSeed(c) {
 }
 
 export default function InlineEditor({ q, onSave, onSaveAll, onClose }) {
+  if (q?.type === "Branched MCQ") {
+    return <BranchedMCQEditor q={q} onSave={onSave} onClose={onClose} />;
+  }
+
   const [question,  setQuestion]  = useState(q.question  || "");
   const [choices,   setChoices]   = useState(q.choices   ? q.choices.map(_normalizeSeed) : []);
   const [answer,    setAnswer]    = useState(stripChoiceLabel(q.answer || ""));
