@@ -173,6 +173,22 @@ export default function GraphEditor({ initialConfig, onSave, onRemove, onClose }
     Array.isArray(initialConfig?.arrows)
       ? initialConfig.arrows.map(p => p.join(",")).join("\n") : ""
   );
+  const [functionLabel, setFunctionLabel] = useState(initialConfig?.functionLabel || "");
+  // composition (second mapping) — used for §7.3 f∘g diagrams
+  const [hasSecond, setHasSecond] = useState(!!initialConfig?.second);
+  const [secondDomainText,    setSecondDomainText]    = useState(
+    Array.isArray(initialConfig?.second?.domain) ? initialConfig.second.domain.join(", ") : ""
+  );
+  const [secondCodomainText,  setSecondCodomainText]  = useState(
+    Array.isArray(initialConfig?.second?.codomain) ? initialConfig.second.codomain.join(", ") : ""
+  );
+  const [secondDomainLabel,   setSecondDomainLabel]   = useState(initialConfig?.second?.domainLabel   || "");
+  const [secondCodomainLabel, setSecondCodomainLabel] = useState(initialConfig?.second?.codomainLabel || "");
+  const [secondArrowsText,    setSecondArrowsText]    = useState(
+    Array.isArray(initialConfig?.second?.arrows)
+      ? initialConfig.second.arrows.map(p => p.join(",")).join("\n") : ""
+  );
+  const [secondFunctionLabel, setSecondFunctionLabel] = useState(initialConfig?.second?.functionLabel || "");
   const [nodesText,     setNodesText]     = useState(
     Array.isArray(initialConfig?.nodes) ? initialConfig.nodes.join(", ") : ""
   );
@@ -222,10 +238,28 @@ export default function GraphEditor({ initialConfig, onSave, onRemove, onClose }
         const parts = line.split(",").map(s => parseInt(s.trim(), 10));
         return (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) ? parts : null;
       }).filter(Boolean);
-      return { type:"mapping", domain, codomain, arrows,
+      const out = { type:"mapping", domain, codomain, arrows,
         domainLabel:   domainLabel   || undefined,
         codomainLabel: codomainLabel || undefined,
+        functionLabel: functionLabel || undefined,
         hasGraph: true };
+      if (hasSecond) {
+        const sDomain   = secondDomainText.split(",").map(s => s.trim()).filter(Boolean);
+        const sCodomain = secondCodomainText.split(",").map(s => s.trim()).filter(Boolean);
+        const sArrows   = secondArrowsText.split("\n").map(line => {
+          const parts = line.split(",").map(s => parseInt(s.trim(), 10));
+          return (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) ? parts : null;
+        }).filter(Boolean);
+        const anyFilled = sDomain.length || sCodomain.length || sArrows.length ||
+                          secondDomainLabel || secondCodomainLabel || secondFunctionLabel;
+        if (anyFilled) {
+          out.second = { domain: sDomain, codomain: sCodomain, arrows: sArrows,
+            domainLabel:   secondDomainLabel   || undefined,
+            codomainLabel: secondCodomainLabel || undefined,
+            functionLabel: secondFunctionLabel || undefined };
+        }
+      }
+      return out;
     }
     if (type === "relation_digraph") {
       const nodes = nodesText.split(",").map(s => s.trim()).filter(Boolean);
@@ -416,6 +450,8 @@ export default function GraphEditor({ initialConfig, onSave, onRemove, onClose }
           {inp(domainLabel, setDomainLabel, "A", "60px")}
           {lbl("Codomain label:")}
           {inp(codomainLabel, setCodomainLabel, "B", "60px")}
+          {lbl("Function label:")}
+          {inp(functionLabel, setFunctionLabel, "f", "60px")}
         </>)}
         {row(<>
           {lbl("Arrows (one per line, e.g. 0,1):")}
@@ -424,6 +460,37 @@ export default function GraphEditor({ initialConfig, onSave, onRemove, onClose }
             style={{width:"200px",padding:"0.3rem 0.4rem",background:bg2,border:"1px solid "+border,
               color:text1,borderRadius:"4px",fontSize:"0.78rem",fontFamily:"monospace"}} />
         </>)}
+        {row(<>
+          <label style={{display:"flex",alignItems:"center",gap:"6px",fontSize:"0.72rem",color:text2,cursor:"pointer"}}>
+            <input type="checkbox" checked={hasSecond} onChange={e=>setHasSecond(e.target.checked)} />
+            + Add second mapping (composition, e.g. g∘f)
+          </label>
+        </>)}
+        {hasSecond && <>
+          {row(<>
+            {lbl("2nd Domain:")}
+            {inp(secondDomainText, setSecondDomainText, "1, 2, 3", "220px")}
+          </>)}
+          {row(<>
+            {lbl("2nd Codomain:")}
+            {inp(secondCodomainText, setSecondCodomainText, "x, y, z", "220px")}
+          </>)}
+          {row(<>
+            {lbl("2nd Domain label:")}
+            {inp(secondDomainLabel, setSecondDomainLabel, "B", "60px")}
+            {lbl("2nd Codomain label:")}
+            {inp(secondCodomainLabel, setSecondCodomainLabel, "C", "60px")}
+            {lbl("2nd Function label:")}
+            {inp(secondFunctionLabel, setSecondFunctionLabel, "g", "60px")}
+          </>)}
+          {row(<>
+            {lbl("2nd Arrows (one per line, e.g. 0,1):")}
+            <textarea value={secondArrowsText} onChange={e=>setSecondArrowsText(e.target.value)}
+              placeholder={"0,2\n1,0\n2,1"} rows={4}
+              style={{width:"200px",padding:"0.3rem 0.4rem",background:bg2,border:"1px solid "+border,
+                color:text1,borderRadius:"4px",fontSize:"0.78rem",fontFamily:"monospace"}} />
+          </>)}
+        </>}
       </>}
 
       {/* Relation digraph */}
