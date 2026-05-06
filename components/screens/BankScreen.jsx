@@ -1,5 +1,6 @@
 "use client";
 import { createPortal } from "react-dom";
+import { createBrowserClient } from "@supabase/ssr";
 import { uid, stripChoiceLabel, isGraphChoice } from "../../lib/utils/questions.js";
 import { parseAiJson } from "../../lib/utils/sanitizeJsonPaste.js";
 import { mathStepsOnly } from "../../lib/exports/helpers.js";
@@ -238,7 +239,7 @@ export default function BankScreen({
                 for (const id of bankSelected) await deleteQuestion(id);
                 setBankSelected(new Set()); setBankSelectMode(false);
               }}>🗑 Delete {bankSelected.size} questions</button>
-              <button style={S.ghostBtn("#10b981")} onClick={() => {
+              <button style={S.ghostBtn("#10b981")} onClick={async () => {
                 const selectedQs = bank.filter(q => bankSelected.has(q.id));
                 if (!selectedQs.length) return;
                 const secCfg = {};
@@ -251,7 +252,8 @@ export default function BankScreen({
                 });
                 const sections = Object.keys(secCfg);
                 const qType = selectedQs[0].type || "Multiple Choice";
-                const prompt = buildGeneratePrompt(null, sections, {}, qType, null, secCfg);
+                const supabase = createBrowserClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+                const prompt = await buildGeneratePrompt(null, sections, {}, qType, null, secCfg, null, supabase);
                 setBulkReplacePrompt(prompt);
                 setBulkReplaceIds(new Set(bankSelected));
                 setBulkReplacePaste(""); setBulkReplaceError("");

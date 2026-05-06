@@ -94,8 +94,8 @@ export function useGenerate({
     }
   }
 
-  function triggerGenerate() {
-    const prompt = buildGeneratePrompt(course, selectedSections, sectionCounts, qType, diff, sectionConfig, courseObject);
+  async function triggerGenerate() {
+    const prompt = await buildGeneratePrompt(course, selectedSections, sectionCounts, qType, diff, sectionConfig, courseObject, getSupabase());
     setGeneratedPrompt(prompt);
     setPendingType("generate");
     setPendingMeta({ course });

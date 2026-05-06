@@ -1,4 +1,5 @@
 "use client";
+import { createBrowserClient } from "@supabase/ssr";
 import PastePanel from "../panels/PastePanel.js";
 
 export default function GenerateScreen({
@@ -208,7 +209,8 @@ export default function GenerateScreen({
               setGenerateConfirm(false);
               triggerGenerate();
               const { buildGeneratePrompt } = await import("../../lib/prompts/index.js");
-              const prompt = buildGeneratePrompt(course, selectedSections, sectionCounts, qType, "Mixed", sectionConfig);
+              const supabase = createBrowserClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+              const prompt = await buildGeneratePrompt(course, selectedSections, sectionCounts, qType, "Mixed", sectionConfig, null, supabase);
               await autoGenerate(prompt, (result) => {
                 setPasteInput(result);
                 setTimeout(() => { document.getElementById("auto-paste-trigger")?.click(); }, 100);
