@@ -4,8 +4,74 @@ import MathText from "../display/MathText.js";
 import GraphDisplay from "../display/GraphDisplay.js";
 import GraphChoice from "../display/GraphChoice.jsx";
 import ValidationBadge from "./ValidationBadge.jsx";
-import { stripChoiceLabel, isGraphChoice } from "../../lib/utils/questions.js";
+import { stripChoiceLabel, isGraphChoice, validateQuestion } from "../../lib/utils/questions.js";
 import { useAppContext } from "../../context/AppContext.js";
+
+// Clickable structural-validator pill. Mirrors ValidationBadge's popover
+// pattern (trigger button + fixed-position click-outside catcher + absolute
+// panel). Self-hides when there are no issues.
+function StructuralIssuesBadge({ issues }) {
+  const [open, setOpen] = useState(false);
+  if (!issues || issues.length === 0) return null;
+  const count = issues.length;
+  const pillStyle = {
+    cursor: "pointer",
+    background: "#fef3c7",
+    color: "#b45309",
+    border: "1px solid #fcd34d",
+    fontSize: "0.7rem",
+    fontWeight: 600,
+    padding: "0.12rem 0.45rem",
+    borderRadius: "999px",
+    whiteSpace: "nowrap",
+    lineHeight: 1.2,
+  };
+  return (
+    <span style={{ position: "relative", display: "inline-flex" }}>
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); setOpen(o => !o); }}
+        title={`${count} structural ${count === 1 ? "issue" : "issues"}`}
+        style={pillStyle}
+      >
+        ⚠ {count} {count === 1 ? "issue" : "issues"}
+      </button>
+      {open && (
+        <>
+          <div
+            onClick={() => setOpen(false)}
+            style={{ position: "fixed", inset: 0, zIndex: 19, background: "transparent" }}
+          />
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              position: "absolute",
+              top: "calc(100% + 6px)",
+              left: 0,
+              zIndex: 20,
+              minWidth: "240px",
+              maxWidth: "360px",
+              background: "#fff",
+              border: "1px solid #fcd34d",
+              borderRadius: "8px",
+              boxShadow: "0 6px 20px rgba(0,0,0,0.12)",
+              padding: "0.65rem 0.75rem",
+              fontSize: "0.78rem",
+              color: "#1f2937",
+            }}
+          >
+            <div style={{ fontWeight: 700, color: "#b45309", marginBottom: "0.35rem" }}>
+              ⚠ {count} structural {count === 1 ? "issue" : "issues"}
+            </div>
+            <ul style={{ margin: 0, padding: "0 0 0 1.1rem", lineHeight: 1.45 }}>
+              {issues.map((it, i) => <li key={i} style={{ marginBottom: "0.2rem" }}>{it}</li>)}
+            </ul>
+          </div>
+        </>
+      )}
+    </span>
+  );
+}
 
 // Branched MCQ body — shared stem (rendered above by parent) + per-part list.
 // Each part shows its own MCQ choices (with the correct one highlighted in
@@ -127,7 +193,9 @@ export default function QuestionCard({
   border = "#D9D0C0",
   children,
 }) {
-  const issuesArr = Array.isArray(issues) ? issues : null;
+  // Caller may override (e.g. ExportScreen passes a custom list), otherwise
+  // derive from the live structural validator. Empty array means "clean".
+  const issuesArr = Array.isArray(issues) ? issues : validateQuestion(q);
   const hasAnyAction = onDelete || onReplace || onGraphEdit || onEdit || onSelect;
 
   // Validation badge inheritance.
@@ -195,18 +263,10 @@ export default function QuestionCard({
         />
 
         {/* Static-check warning (missing fields, malformed structure) — separate
-            from AI validation. Kept for backwards compatibility with callers
-            that still pass an `issues` prop. */}
-        {issuesArr && issuesArr.length > 0 && (
-          <span title={issuesArr.join("\n")} style={{
-            cursor: "help",
-            background: "#7c2d12", color: "#9B1C1C",
-            fontSize: "0.68rem", fontWeight: "600",
-            padding: "0.1rem 0.4rem", borderRadius: "4px", whiteSpace: "nowrap",
-          }}>
-            ⚠️ {issuesArr.length}{issuesArr.length > 1 ? " issues" : " issue"}
-          </span>
-        )}
+            from AI validation. Derived from validateQuestion(q) on every
+            render; the `issues` prop overrides when callers want to pass a
+            custom list. */}
+        <StructuralIssuesBadge issues={issuesArr} />
 
         {hasAnyAction || headerExtra ? (
           <div style={{ marginLeft: "auto", display: "flex", gap: "0.3rem", alignItems: "center", flexWrap: "wrap" }}>

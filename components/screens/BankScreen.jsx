@@ -464,7 +464,12 @@ export default function BankScreen({
                     {q.question}
                   </span>
                   {used > 0 && <span style={{fontSize:"0.62rem", color:"#06b6d4", flexShrink:0}}>📋×{used}</span>}
-                  {issues.length > 0 && <span style={{fontSize:"0.62rem", color:"#f87171", flexShrink:0}}>⚠</span>}
+                  {issues.length > 0 && (
+                    <span
+                      title={issues.join("\n")}
+                      style={{fontSize:"0.62rem", color:"#f87171", flexShrink:0, cursor:"help"}}
+                    >⚠</span>
+                  )}
                   <button style={{...S.smBtn, flexShrink:0, color:inExam?"#e11d48":text3, border:"1px solid "+(inExam?"#e11d4844":border)}}
                     onClick={() => setSelectedForExam(p => p.includes(q.id) ? p.filter(id=>id!==q.id) : [...p,q.id])}>
                     {inExam?"✓":"+"}</button>
