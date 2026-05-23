@@ -94,7 +94,10 @@ export default function GeneratePage() {
       triggerGenerate={generate.triggerGenerate}
       autoGenerate={autoGenerateWrapped}
       pendingType={generate.pendingType}
+      setPendingType={generate.setPendingType}
+      setPendingMeta={generate.setPendingMeta}
       generatedPrompt={generate.generatedPrompt}
+      setGeneratedPrompt={generate.setGeneratedPrompt}
       pasteInput={generate.pasteInput}
       setPasteInput={generate.setPasteInput}
       pasteError={generate.pasteError}
