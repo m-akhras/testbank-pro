@@ -2,24 +2,7 @@
 import { createBrowserClient } from "@supabase/ssr";
 import PastePanel from "../panels/PastePanel.js";
 import TemplateGenerateForm from "./TemplateGenerateForm.jsx";
-import { calc1_1_1_template } from "../../lib/templates/calc1_1_1.js";
-
-// Template registry: maps "course || section-prefix" to a template object.
-// Detection uses prefix match because section identifiers in this app are
-// the full prefixed title (e.g., "1.1 Four Ways to Represent a Function").
-const TEMPLATE_REGISTRY = [
-  { course: "Calculus 1", sectionPrefix: "1.1 ", template: calc1_1_1_template },
-];
-
-function findTemplate(course, section) {
-  if (!course || !section) return null;
-  for (const entry of TEMPLATE_REGISTRY) {
-    if (entry.course === course && section.startsWith(entry.sectionPrefix)) {
-      return entry.template;
-    }
-  }
-  return null;
-}
+import { findTemplate } from "../../lib/templates/registry.js";
 
 export default function GenerateScreen({
   // Course / section data
