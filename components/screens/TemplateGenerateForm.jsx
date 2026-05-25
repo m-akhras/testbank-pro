@@ -35,6 +35,25 @@ export default function TemplateGenerateForm({ template, onPromptReady, onCancel
     setError(null);
   };
 
+  // Set count for one option in a multi_select_with_counts field.
+  // count <= 0 means "unselected" but the entry stays in the array so toggling
+  // back is fast (UX preserves position). Total count is the sum of counts.
+  const setOptionCount = (fieldId, value, count) => {
+    const clamped = Math.max(0, Math.min(20, parseInt(count, 10) || 0));
+    setAnswers(prev => {
+      const current = Array.isArray(prev[fieldId]) ? prev[fieldId] : [];
+      const existing = current.find(e => e && e.value === value);
+      let next;
+      if (existing) {
+        next = current.map(e => (e.value === value ? { ...e, count: clamped } : e));
+      } else {
+        next = [...current, { value, count: clamped }];
+      }
+      return { ...prev, [fieldId]: next };
+    });
+    setError(null);
+  };
+
   // Build prompt button handler
   const handleBuildPrompt = () => {
     try {
@@ -105,6 +124,82 @@ export default function TemplateGenerateForm({ template, onPromptReady, onCancel
       );
     }
 
+    if (field.type === "multi_select_with_counts") {
+      const entries = Array.isArray(answers[field.id]) ? answers[field.id] : [];
+      const totalCount = entries.reduce((s, e) => s + (Number(e?.count) > 0 ? Number(e.count) : 0), 0);
+      const questionCount = Number(answers.count) || 0;
+      return (
+        <div key={field.id} style={{ width: "100%", marginBottom: "1.25rem" }}>
+          <div style={S.lbl}>
+            {field.label}
+            <span style={{
+              marginLeft: "0.7rem",
+              fontWeight: 400,
+              fontSize: "0.78rem",
+              color: totalCount === questionCount ? green1 : text3,
+            }}>
+              Total: {totalCount} {questionCount > 0 ? `(target: ${questionCount})` : ""}
+            </span>
+          </div>
+          <div style={{ display: "grid", gap: "0.5rem" }}>
+            {field.options.map(opt => {
+              const entry = entries.find(e => e && e.value === opt.value);
+              const count = entry ? Number(entry.count) || 0 : 0;
+              const isActive = count > 0;
+              return (
+                <div
+                  key={opt.value}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.7rem",
+                    padding: "0.55rem 0.8rem",
+                    background: isActive ? "#F0FDF4" : "#FFFFFF",
+                    border: isActive ? `1px solid ${green1}` : "1px solid #E5E7EB",
+                    borderRadius: "8px",
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setOptionCount(field.id, opt.value, Math.max(0, count - 1))}
+                    style={{
+                      width: "28px", height: "28px",
+                      border: "1px solid #D1D5DB", background: "#fff",
+                      borderRadius: "6px", cursor: "pointer", fontSize: "1rem",
+                      lineHeight: 1, color: text2,
+                    }}
+                  >−</button>
+                  <input
+                    type="number"
+                    min={0}
+                    max={20}
+                    value={count}
+                    onChange={(e) => setOptionCount(field.id, opt.value, e.target.value)}
+                    style={{
+                      width: "44px", textAlign: "center", padding: "0.3rem",
+                      border: "1px solid #D1D5DB", borderRadius: "6px",
+                      fontSize: "0.85rem", fontWeight: 600, color: text2,
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setOptionCount(field.id, opt.value, count + 1)}
+                    style={{
+                      width: "28px", height: "28px",
+                      border: "1px solid #D1D5DB", background: "#fff",
+                      borderRadius: "6px", cursor: "pointer", fontSize: "1rem",
+                      lineHeight: 1, color: text2,
+                    }}
+                  >+</button>
+                  <span style={{ flex: 1, fontSize: "0.85rem", color: text2 }}>{opt.label}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
+
     if (field.type === "free_text") {
       return (
         <div key={field.id} style={{ width: "100%", marginBottom: "1.25rem" }}>
@@ -127,11 +222,15 @@ export default function TemplateGenerateForm({ template, onPromptReady, onCancel
     return null;
   };
 
-  // Group fields: number+number/single_select fields go in rows; multi_select and free_text go full width
+  // Group fields: number+single_select fields go in rows; multi_select, multi_select_with_counts, and free_text go full width
   const fieldRows = [];
   let currentRow = [];
   for (const field of template.fields) {
-    if (field.type === "multi_select" || field.type === "free_text") {
+    if (
+      field.type === "multi_select" ||
+      field.type === "multi_select_with_counts" ||
+      field.type === "free_text"
+    ) {
       if (currentRow.length > 0) {
         fieldRows.push({ kind: "row", fields: currentRow });
         currentRow = [];
