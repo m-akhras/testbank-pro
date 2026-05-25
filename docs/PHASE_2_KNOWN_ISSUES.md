@@ -101,3 +101,41 @@ For the record, despite these issues:
 - The questions themselves are pedagogically reasonable (correct answers, distractors trace to real misconceptions, explanations are accurate)
 
 So the architecture is sound. These are bugs in the question-rendering polish layer, not in the prompt or template system.
+
+---
+
+## Issues added May 26, 2026 (renderer + schema + security)
+
+## Issue 6 — Leading minus on squared term renders a blank graph
+
+**Symptom:** A `graphConfig` `fn` like `"-(x-1)^2 + 2"` renders as a single dot, no curve.
+
+**Cause:** The `evalFn` parser doesn't handle a unary minus in front of a parenthesized squared group; it returns `NaN` for all x, so nothing is plotted.
+
+**Workaround (shipped in §1.3 template v3):** the generation prompt instructs the model to EXPAND such expressions to `"-x^2 + 2*x + 1"` form (no leading minus on a parenthesized power).
+
+**Real fix:** patch `evalFn` in `lib/exports/graphRendering.js` to handle unary minus before a parenthesized exponent.
+
+---
+
+## Issue 7 — `type: "multi"` validator/renderer schema mismatch
+
+**Symptom:** Latent. Nothing currently emits `type: "multi"`, but if it did, the validator (`lib/utils/questions.js`) checks for `cfg.fns` while the renderer (`lib/exports/graphRendering.js:718`) reads `cfg.options` + `cfg.boundary`. A config that passes validation would render blank, and a config that renders would trip the validator.
+
+**Real fix:** rewrite the `"multi"` branch with a coherent schema, OR rename it to make its actual purpose (2×2 region-shading multiple-choice) explicit, and align the validator.
+
+---
+
+## Issue 8 — No overlay graph type (original + transformed on same axes)
+
+**Symptom:** Cannot show Stewart-style before/after figures (parent f and transformed h on one set of axes) for transformation questions. §1.3 currently works around this with Pattern B (graph-as-choices) plus abstract "Starting from y = sqrt(x)..." prose framing.
+
+**Real fix:** add a `type: "overlay"` graph type with `fns: [{ fn, label, color, dashed }]`, wired across the renderer, the validator (`lib/utils/questions.js`), the prompt schema (`lib/templates/_generic/graphSchemas.js`), and the Word/OMML export path.
+
+---
+
+## Issue 9 — `courses` table has RLS disabled
+
+**Severity:** Security. With RLS disabled on `public.courses`, anyone holding the anon key can read or write every row in that table.
+
+**Real fix:** design appropriate RLS policies first, then `ALTER TABLE public.courses ENABLE ROW LEVEL SECURITY;`. Enabling RLS without policies will block all access, so the policies must be authored before (or together with) enabling it.
