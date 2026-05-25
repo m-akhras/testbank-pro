@@ -109,7 +109,7 @@ export function AppProvider({ children }) {
   // Merge built-ins + custom courses for screens that need { name: { color, chapters } }.
   const allCourses = {};
   Object.entries(COURSES).forEach(([name, mod]) => {
-    allCourses[name] = { color: mod.color, chapters: mod.chapters };
+    allCourses[name] = { color: mod.color, chapters: mod.chapters, textbook: mod.textbook || "" };
   });
   coursesHook.courses.forEach(c => {
     if (!c.is_builtin && !allCourses[c.name]) {
