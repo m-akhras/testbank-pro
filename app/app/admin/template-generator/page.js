@@ -9,7 +9,7 @@ import { hasTemplate } from "../../../../lib/templates/registry.js";
 // Per-image limit matches the server-side cap in app/api/generate-template/route.js.
 // Keeping these in sync prevents the user from uploading then being rejected.
 const MAX_IMG_BYTES = 5 * 1024 * 1024;
-const MAX_IMAGES = 5;
+const MAX_IMAGES = 20;
 
 /**
  * Split a section string like "1.3 New Functions from Old Functions" into:

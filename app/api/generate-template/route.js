@@ -17,7 +17,7 @@ const ADMIN_EMAIL = "mohammadalakhrass@yahoo.com";
 //     error than the API's cryptic refusal)
 //   - Max 50KB pasted text (a generous cap on textbook-page text — 50KB is
 //     ~12 pages of dense prose, which is far more than any reasonable section)
-const MAX_IMAGES = 5;
+const MAX_IMAGES = 20;
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const MAX_TEXT_CHARS = 50_000;
 
