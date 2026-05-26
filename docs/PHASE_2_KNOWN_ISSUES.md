@@ -116,6 +116,8 @@ So the architecture is sound. These are bugs in the question-rendering polish la
 
 **Real fix:** patch `evalFn` in `lib/exports/graphRendering.js` to handle unary minus before a parenthesized exponent.
 
+**Follow-up fix (commit `951d336`):** A related `evalFn` gap was found and fixed — the implicit-multiplication passes covered `digit→letter/paren` and `)→(` but missed `)→letter`. This caused fractional-coefficient expressions like `(1)/(2)sqrt(x+1)` to become `(2)Math.sqrt(...)` (number adjacent to identifier → `SyntaxError` → `NaN` → blank graph). The fix adds a `)\s*([a-zA-Z]) → )*$1` pass so `(1)/(2)sqrt(...)` correctly evaluates as `(1)/(2)*Math.sqrt(...)`.
+
 ---
 
 ## Issue 7 — `type: "multi"` validator/renderer schema mismatch
