@@ -160,3 +160,39 @@ describe("DEBUG — real failing inputs", () => {
     console.log("OUTPUT:", output);
   });
 });
+
+describe("Greek-in-fraction double-escape regression (fix for pi/2 leak)", () => {
+  test("pi inside (num)/(den) fraction emits single-backslash \\pi", () => {
+    const out = require("../lib/math/toLatex").toLatex("(pi)/(2)");
+    expect(out).toContain("\\dfrac{\\pi}{2}");
+    expect(out).not.toContain("\\\\pi");
+  });
+  test("theta inside fraction emits single-backslash \\theta", () => {
+    const out = require("../lib/math/toLatex").toLatex("(theta)/(2)");
+    expect(out).toContain("\\dfrac{\\theta}{2}");
+    expect(out).not.toContain("\\\\theta");
+  });
+  test("phi inside fraction emits single-backslash \\phi", () => {
+    const out = require("../lib/math/toLatex").toLatex("(phi)/(2)");
+    expect(out).toContain("\\dfrac{\\phi}{2}");
+    expect(out).not.toContain("\\\\phi");
+  });
+  test("pi in denominator also stays single-escaped", () => {
+    const out = require("../lib/math/toLatex").toLatex("(x)/(pi)");
+    expect(out).toContain("\\dfrac{x}{\\pi}");
+    expect(out).not.toContain("\\\\pi");
+  });
+  test("bare pi outside fraction still wraps", () => {
+    const out = require("../lib/math/toLatex").toLatex("pi");
+    expect(out).toContain("\\(\\pi\\)");
+  });
+  test("pi in stem reference like [-pi, pi] still wraps", () => {
+    const out = require("../lib/math/toLatex").toLatex("interval [-pi, pi]");
+    expect(out).toContain("\\(\\pi\\)");
+    expect(out).not.toContain("\\\\pi");
+  });
+  test("sigma (not in innerLatex) remains correct", () => {
+    const out = require("../lib/math/toLatex").toLatex("(sigma)/(2)");
+    expect(out).toContain("\\dfrac{\\sigma}{2}");
+  });
+});
