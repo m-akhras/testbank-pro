@@ -47,7 +47,7 @@ export default function TemplateGenerateForm({ template, onPromptReady, onCancel
       if (existing) {
         next = current.map(e => (e.value === value ? { ...e, count: clamped } : e));
       } else {
-        next = [...current, { value, count: clamped }];
+        next = [...current, { value, count: clamped, difficulty: "medium" }];
       }
       return { ...prev, [fieldId]: next };
     });
@@ -192,6 +192,43 @@ export default function TemplateGenerateForm({ template, onPromptReady, onCancel
                     }}
                   >+</button>
                   <span style={{ flex: 1, fontSize: "0.85rem", color: text2 }}>{opt.label}</span>
+                  {isActive && (
+                    <select
+                      value={entry?.difficulty || "medium"}
+                      onChange={(e) => {
+                        const difficulty = e.target.value;
+                        setAnswers(prev => {
+                          const cur = Array.isArray(prev[field.id]) ? prev[field.id] : [];
+                          let next = cur.map(item =>
+                            item.value === opt.value ? { ...item, difficulty } : item
+                          );
+                          // Defensive: if the entry doesn't exist yet, create it (shouldn't happen when count > 0)
+                          if (!next.find(i => i.value === opt.value)) {
+                            next = [...next, { value: opt.value, count, difficulty }];
+                          }
+                          return { ...prev, [field.id]: next };
+                        });
+                        setError(null);
+                      }}
+                      style={{
+                        marginLeft: "0.4rem",
+                        padding: "0.3rem 0.5rem",
+                        border: "1px solid #D1D5DB",
+                        borderRadius: "6px",
+                        fontSize: "0.8rem",
+                        color: text2,
+                        background: "#fff",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <option value="easy">Easy</option>
+                      <option value="medium">Medium</option>
+                      <option value="hard">Hard</option>
+                      <option value="mix_easy">Mix: mostly easy</option>
+                      <option value="mix_balanced">Mix: balanced</option>
+                      <option value="mix_hard">Mix: mostly hard</option>
+                    </select>
+                  )}
                 </div>
               );
             })}
