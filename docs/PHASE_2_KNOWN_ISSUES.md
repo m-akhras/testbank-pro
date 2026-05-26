@@ -141,3 +141,13 @@ So the architecture is sound. These are bugs in the question-rendering polish la
 **Severity:** Security. With RLS disabled on `public.courses`, anyone holding the anon key can read or write every row in that table.
 
 **Real fix:** design appropriate RLS policies first, then `ALTER TABLE public.courses ENABLE ROW LEVEL SECURITY;`. Enabling RLS without policies will block all access, so the policies must be authored before (or together with) enabling it.
+
+---
+
+## Issue 10 — Em-dashes in buildPrompt.js prompt text (cosmetic)
+
+**Symptom:** Four em-dashes (— U+2014) in prompt-text literals at lines 261, 264, 341, 395 of buildPrompt.js (reference_examples block and prompt header) reach the model on every generation. Templates' notation_additions explicitly say "Do NOT use unicode" but the generic prompt itself violates that rule.
+
+**Impact:** None observed. The model has produced clean ASCII-only output in all generations this session despite the em-dashes in the prompt. Cosmetic inconsistency only.
+
+**Real fix:** ASCII-ify the 4 em-dashes (replace " — " with " - ") in a separate commit. Low priority.
