@@ -196,3 +196,35 @@ describe("Greek-in-fraction double-escape regression (fix for pi/2 leak)", () =>
     expect(out).toContain("\\dfrac{\\sigma}{2}");
   });
 });
+
+describe("Digit-base letter-exponent regression (b^x for §1.4 exponentials)", () => {
+  const { toLatex } = require("../lib/math/toLatex");
+  test("3^x wraps as \\(3^{x}\\)", () => {
+    expect(toLatex("3^x")).toBe("\\(3^{x}\\)");
+  });
+  test("2^x wraps", () => {
+    expect(toLatex("2^x")).toBe("\\(2^{x}\\)");
+  });
+  test("10^x preserves multi-digit base", () => {
+    expect(toLatex("10^x")).toBe("\\(10^{x}\\)");
+  });
+  test("100^x preserves multi-digit base", () => {
+    expect(toLatex("100^x")).toBe("\\(100^{x}\\)");
+  });
+  test("inline in prose: y = 3^x is shown dashed", () => {
+    expect(toLatex("y = 3^x is shown dashed")).toContain("\\(3^{x}\\)");
+  });
+  test("Canvas-bound stem: which sequence produces h(x) = 3^(x+1)", () => {
+    // 3^(x+1) was already working via the parenthesized-exponent pass
+    expect(toLatex("h(x) = 3^(x+1) - 2")).toContain("\\(3^{x+1}\\)");
+  });
+  test("regression: x^2 still works", () => {
+    expect(toLatex("x^2")).toBe("\\(x^{2}\\)");
+  });
+  test("regression: e^x still works", () => {
+    expect(toLatex("e^x")).toContain("\\(e^{x}\\)");
+  });
+  test("does not match digit-suffix of identifier: x1^y stays literal", () => {
+    expect(toLatex("x1^y")).toBe("x1^y");
+  });
+});
