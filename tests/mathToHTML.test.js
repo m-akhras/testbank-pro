@@ -33,16 +33,18 @@ describe("mathToCanvasHTML — Canvas equation_image output", () => {
     expect(out).not.toMatch(/\\\(.*\\\)/);
   });
 
-  test("<= becomes ≤ plain HTML (no equation_image needed)", () => {
+  test("<= now emits equation_image (always-image contract)", () => {
     const out = mathToCanvasHTML("x <= 1");
-    expect(out).not.toContain('<img class="equation_image"');
-    expect(out).toContain("≤");
+    expect(out).toContain('<img class="equation_image"');
+    // The LaTeX source encoded in the img should contain \leq
+    expect(out).toContain("leq");
   });
 
-  test("simple exponent becomes <sup> HTML (no equation_image)", () => {
+  test("simple exponent emits equation_image (always-image contract)", () => {
     const out = mathToCanvasHTML("x^3");
-    expect(out).not.toContain('<img class="equation_image"');
-    expect(out).toContain("<sup>3</sup>");
+    expect(out).toContain('<img class="equation_image"');
+    // The LaTeX source encoded in the img should contain x^{3}
+    expect(out).toContain("x%5E%7B3%7D");
   });
 
   test("pipe table cells use equation_image", () => {
@@ -66,16 +68,16 @@ describe("mathToCanvasHTML — Canvas equation_image output", () => {
     expect(out).not.toMatch(/\\\)/);
   });
 
-  test("x^{2} → x<sup>2</sup>, no equation_image", () => {
+  test("x^2 emits equation_image (always-image contract)", () => {
     const out = mathToCanvasHTML("x^2");
-    expect(out).not.toContain('<img class="equation_image"');
-    expect(out).toContain("<sup>2</sup>");
+    expect(out).toContain('<img class="equation_image"');
+    expect(out).toContain("x%5E%7B2%7D");
   });
 
-  test("y <= x → plain ≤ HTML, no equation_image", () => {
+  test("y <= x emits equation_image (always-image contract)", () => {
     const out = mathToCanvasHTML("y <= x");
-    expect(out).not.toContain('<img class="equation_image"');
-    expect(out).toContain("≤");
+    expect(out).toContain('<img class="equation_image"');
+    expect(out).toContain("leq");
   });
 
   test("sqrt(x) → equation_image (complex)", () => {
@@ -226,5 +228,61 @@ describe("Digit-base letter-exponent regression (b^x for §1.4 exponentials)", (
   });
   test("does not match digit-suffix of identifier: x1^y stays literal", () => {
     expect(toLatex("x1^y")).toBe("x1^y");
+  });
+});
+
+describe("exp(x) → e^x conversion", () => {
+  const { toLatex } = require("../lib/math/toLatex");
+  const { mathToOmml } = require("../lib/math/omml");
+  test("toLatex: exp(x) → \\(e^{x}\\)", () => {
+    expect(toLatex("exp(x)")).toContain("\\(e^{x}\\)");
+  });
+  test("toLatex: y = exp(x) → y = \\(e^{x}\\)", () => {
+    expect(toLatex("y = exp(x)")).toContain("\\(e^{x}\\)");
+  });
+  test("toLatex: exp(x - 1) → e^(x-1) wrapped", () => {
+    expect(toLatex("exp(x - 1)")).toContain("\\(e^{x - 1}\\)");
+  });
+  test("toLatex: exp(-x) renders with negative exponent", () => {
+    expect(toLatex("exp(-x)")).toContain("\\(e^{-x}\\)");
+  });
+  test("omml: exp(x) produces m:sSup with base e", () => {
+    const out = mathToOmml("exp(x)");
+    expect(out).toContain("<m:sSup>");
+    expect(out).toContain("<m:t xml:space=\"preserve\">e</m:t>");
+  });
+  test("omml: y = exp(x) inline", () => {
+    const out = mathToOmml("y = exp(x)");
+    expect(out).toContain("<m:sSup>");
+  });
+});
+
+describe("Canvas always-image rendering", () => {
+  const { toLatexForCanvas } = require("../lib/math/toLatex");
+  test("simple x^2 now emits equation_image (not <sup>)", () => {
+    const out = toLatexForCanvas("x^2");
+    expect(out).toContain("equation_image");
+    expect(out).not.toContain("<sup>");
+  });
+  test("simple 3^x now emits equation_image", () => {
+    const out = toLatexForCanvas("3^x");
+    expect(out).toContain("equation_image");
+  });
+  test("exp(x) emits equation_image via e^x path", () => {
+    const out = toLatexForCanvas("exp(x)");
+    expect(out).toContain("equation_image");
+  });
+  test("sqrt still emits equation_image (regression)", () => {
+    const out = toLatexForCanvas("sqrt(x+1)");
+    expect(out).toContain("equation_image");
+  });
+  test("prose between math blocks stays as text", () => {
+    const out = toLatexForCanvas("Find x^2 in the equation");
+    // "Find" and "in the equation" should NOT be wrapped in equation_image
+    // Only the x^2 should be
+    const imgCount = (out.match(/<img class="equation_image"/g) || []).length;
+    expect(imgCount).toBe(1);
+    expect(out).toContain("Find ");
+    expect(out).toContain(" in the equation");
   });
 });
