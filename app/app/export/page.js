@@ -37,6 +37,7 @@ export default function ExportPage() {
       saveExam={examBuilder.saveExam}
       qtiExamName={examBuilder.qtiExamName} setQtiExamName={examBuilder.setQtiExamName}
       qtiUseGroups={examBuilder.qtiUseGroups} setQtiUseGroups={examBuilder.setQtiUseGroups}
+      qtiIncludeExplanations={examBuilder.qtiIncludeExplanations} setQtiIncludeExplanations={examBuilder.setQtiIncludeExplanations}
       qtiPointsPerQ={examBuilder.qtiPointsPerQ} setQtiPointsPerQ={examBuilder.setQtiPointsPerQ}
       exportLoading={exportHook.exportLoading} setExportLoading={exportHook.setExportLoading}
       exportHighlight={examBuilder.exportHighlight}

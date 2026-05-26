@@ -40,6 +40,8 @@ export default function ExportScreen({
   setQtiExamName,
   qtiUseGroups,
   setQtiUseGroups,
+  qtiIncludeExplanations,
+  setQtiIncludeExplanations,
   qtiPointsPerQ,
   setQtiPointsPerQ,
 
@@ -451,6 +453,10 @@ export default function ExportScreen({
                     <input type="checkbox" checked={qtiUseGroups} onChange={e => setQtiUseGroups(e.target.checked)} style={{ accentColor: "#8b5cf6", width: "14px", height: "14px" }} />
                     Group by question number
                   </label>
+                  <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.78rem", color: text2, cursor: "pointer" }}>
+                    <input type="checkbox" checked={qtiIncludeExplanations} onChange={e => setQtiIncludeExplanations(e.target.checked)} style={{ accentColor: "#8b5cf6", width: "14px", height: "14px" }} />
+                    Include explanations as Canvas feedback
+                  </label>
                   <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.78rem", color: text2 }}>
                     Points per question:
                     <input
@@ -486,7 +492,7 @@ export default function ExportScreen({
                       style={S.btn("#8b5cf6", false)}
                       onClick={async () => {
                         const examTitle = qtiExamName.trim() || versions[0]?.questions[0]?.course || "Exam";
-                        const blobs = await buildClassroomSectionsQTI({ [sec]: classSectionVersions[sec] }, examTitle, qtiUseGroups, qtiPointsPerQ);
+                        const blobs = await buildClassroomSectionsQTI({ [sec]: classSectionVersions[sec] }, examTitle, qtiUseGroups, qtiPointsPerQ, qtiIncludeExplanations);
                         const safeName = (qtiExamName.trim() || "Section").replace(/[^a-zA-Z0-9]/g, "_");
                         dlBlob(blobs[sec], `${safeName}_S${sec}_QTI.zip`);
                       }}
@@ -498,7 +504,7 @@ export default function ExportScreen({
                     style={S.btn("#10b981", false)}
                     onClick={async () => {
                       const examTitle = qtiExamName.trim() || versions[0]?.questions[0]?.course || "Exam";
-                      const blobs = await buildClassroomSectionsQTI(classSectionVersions, examTitle, qtiUseGroups, qtiPointsPerQ);
+                      const blobs = await buildClassroomSectionsQTI(classSectionVersions, examTitle, qtiUseGroups, qtiPointsPerQ, qtiIncludeExplanations);
                       const safeName = (qtiExamName.trim() || "Section").replace(/[^a-zA-Z0-9]/g, "_");
                       for (const [sec, blob] of Object.entries(blobs)) {
                         dlBlob(blob, `${safeName}_S${sec}_QTI.zip`);
@@ -518,6 +524,10 @@ export default function ExportScreen({
                   <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.78rem", color: text2, cursor: "pointer" }}>
                     <input type="checkbox" checked={qtiUseGroups} onChange={e => setQtiUseGroups(e.target.checked)} style={{ accentColor: "#8b5cf6", width: "14px", height: "14px" }} />
                     Group by question number
+                  </label>
+                  <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.78rem", color: text2, cursor: "pointer" }}>
+                    <input type="checkbox" checked={qtiIncludeExplanations} onChange={e => setQtiIncludeExplanations(e.target.checked)} style={{ accentColor: "#8b5cf6", width: "14px", height: "14px" }} />
+                    Include explanations as Canvas feedback
                   </label>
                   <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.78rem", color: text2 }}>
                     Points per question:
@@ -539,7 +549,7 @@ export default function ExportScreen({
                       key={ver.label}
                       style={S.oBtn("#8b5cf6")}
                       onClick={async () => {
-                        const xml = buildQTI(ver.questions, ver.questions[0]?.course || "Exam", ver.label, qtiUseGroups, qtiPointsPerQ);
+                        const xml = buildQTI(ver.questions, ver.questions[0]?.course || "Exam", ver.label, qtiUseGroups, qtiPointsPerQ, qtiIncludeExplanations);
                         const blob = await buildQTIZip(xml, `Version_${ver.label}`);
                         dlBlob(blob, `Version_${ver.label}_Canvas_QTI.zip`);
                       }}
@@ -550,7 +560,7 @@ export default function ExportScreen({
                   <button
                     style={S.btn("#8b5cf6", false)}
                     onClick={async () => {
-                      const xml = buildQTICompare(versions, versions[0]?.questions[0]?.course || "Exam", qtiUseGroups, qtiPointsPerQ);
+                      const xml = buildQTICompare(versions, versions[0]?.questions[0]?.course || "Exam", qtiUseGroups, qtiPointsPerQ, qtiIncludeExplanations);
                       const blob = await buildQTIZip(xml, "AllVersions");
                       dlBlob(blob, "AllVersions_Canvas_QTI.zip");
                     }}
@@ -757,6 +767,10 @@ export default function ExportScreen({
                   <input type="checkbox" checked={qtiUseGroups} onChange={e => setQtiUseGroups(e.target.checked)} style={{ accentColor: "#8b5cf6", width: "14px", height: "14px" }} />
                   Group by section per version
                 </label>
+                <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.78rem", color: text2, cursor: "pointer" }}>
+                  <input type="checkbox" checked={qtiIncludeExplanations} onChange={e => setQtiIncludeExplanations(e.target.checked)} style={{ accentColor: "#8b5cf6", width: "14px", height: "14px" }} />
+                  Include explanations as Canvas feedback
+                </label>
                 <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.78rem", color: text2 }}>
                   Points per question:
                   <input
@@ -778,7 +792,7 @@ export default function ExportScreen({
               <button
                 style={S.btn("#8b5cf6", false)}
                 onClick={async () => {
-                  const xml = buildQTICompare(versions, versions[0]?.questions[0]?.course || "Exam", qtiUseGroups, qtiPointsPerQ);
+                  const xml = buildQTICompare(versions, versions[0]?.questions[0]?.course || "Exam", qtiUseGroups, qtiPointsPerQ, qtiIncludeExplanations);
                   const blob = await buildQTIZip(xml, "AllVersions");
                   dlBlob(blob, "AllVersions_Canvas_QTI.zip");
                 }}
@@ -790,7 +804,7 @@ export default function ExportScreen({
                   style={S.btn("#f59e0b", false)}
                   onClick={async () => {
                     const course = versions[0]?.questions[0]?.course || "Exam";
-                    const xml = buildQTIAllSectionsMerged(classSectionVersions, course, qtiPointsPerQ);
+                    const xml = buildQTIAllSectionsMerged(classSectionVersions, course, qtiPointsPerQ, qtiIncludeExplanations);
                     const blob = await buildQTIZip(xml, "AllSections_Merged");
                     dlBlob(blob, "AllSections_Merged_QTI.zip");
                   }}

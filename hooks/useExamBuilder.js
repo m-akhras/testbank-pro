@@ -60,6 +60,7 @@ export function useExamBuilder({
   const [savedExams, setSavedExams] = useState([]);
   const [qtiExamName, setQtiExamName] = useState("");
   const [qtiUseGroups, setQtiUseGroups] = useState(false);
+  const [qtiIncludeExplanations, setQtiIncludeExplanations] = useState(false);
   const [qtiPointsPerQ, setQtiPointsPerQ] = useState(1);
   const [exportLoading, setExportLoading] = useState("");
   const [autoGenLoading, setAutoGenLoading] = useState(false);
@@ -229,6 +230,7 @@ export function useExamBuilder({
     savedExams, setSavedExams,
     qtiExamName, setQtiExamName,
     qtiUseGroups, setQtiUseGroups,
+    qtiIncludeExplanations, setQtiIncludeExplanations,
     qtiPointsPerQ, setQtiPointsPerQ,
     exportLoading, setExportLoading,
     autoGenLoading,
