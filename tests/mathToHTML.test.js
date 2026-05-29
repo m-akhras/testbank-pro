@@ -43,8 +43,10 @@ describe("mathToCanvasHTML — Canvas equation_image output", () => {
   test("simple exponent emits equation_image (always-image contract)", () => {
     const out = mathToCanvasHTML("x^3");
     expect(out).toContain('<img class="equation_image"');
-    // The LaTeX source encoded in the img should contain x^{3}
-    expect(out).toContain("x%5E%7B3%7D");
+    // src is DOUBLE URL-encoded (Canvas requirement): x^{3} → %5E%7B3%7D → %255E%257B3%257D
+    expect(out).toContain("x%255E%257B3%257D");
+    expect(out).toMatch(/src="\/equation_images\/[^"]*\?scale=1"/);
+    expect(out).toContain("data-ignore-a11y-check");
   });
 
   test("pipe table cells use equation_image", () => {
@@ -71,7 +73,7 @@ describe("mathToCanvasHTML — Canvas equation_image output", () => {
   test("x^2 emits equation_image (always-image contract)", () => {
     const out = mathToCanvasHTML("x^2");
     expect(out).toContain('<img class="equation_image"');
-    expect(out).toContain("x%5E%7B2%7D");
+    expect(out).toContain("x%255E%257B2%257D"); // double-encoded x^{2}
   });
 
   test("y <= x emits equation_image (always-image contract)", () => {
@@ -294,7 +296,9 @@ describe("piecewise cases — Canvas equation_image", () => {
     const out = mathToCanvasHTML("{ x^2 - 1 if x < 0 ; sqrt(x + 4) if x >= 0 }");
     const imgCount = (out.match(/<img class="equation_image"/g) || []).length;
     expect(imgCount).toBe(1);
-    expect(out).toContain("%5Cbegin%7Bcases%7D"); // URL-encoded \begin{cases}
+    expect(out).toContain("%255Cbegin%257Bcases%257D"); // DOUBLE URL-encoded \begin{cases}
+    expect(out).toMatch(/src="\/equation_images\/[^"]*\?scale=1"/);
+    expect(out).toContain("data-ignore-a11y-check");
     expect(out).not.toMatch(/\\\(/);              // no orphan \(
     expect(out).not.toMatch(/\\\)/);              // no orphan \)
   });
@@ -312,8 +316,23 @@ describe("multiplication in Canvas equation_image uses \\cdot, never raw ·", ()
   test("piecewise with a 2*x coefficient → encoded \\cdot, no raw · or %C2%B7", () => {
     const out = mathToCanvasHTML("{ 2*x + 1 if x >= 1 ; x^2 - 3 if x < 1 }");
     expect(out).toContain('<img class="equation_image"');
-    expect(out).toContain("%5Ccdot");   // URL-encoded \cdot in the equation_image src
+    expect(out).toContain("%255Ccdot");  // DOUBLE URL-encoded \cdot in the equation_image src
+    expect(out).toMatch(/src="\/equation_images\/[^"]*\?scale=1"/);
+    expect(out).toContain("data-ignore-a11y-check");
     expect(out).not.toMatch(/·/);        // no raw U+00B7 anywhere in the output
-    expect(out).not.toMatch(/%C2%B7/);   // no URL-encoded U+00B7 in the src
+    expect(out).not.toMatch(/%C2%B7/);   // no single-encoded U+00B7 either
+  });
+});
+
+describe("Canvas equation_image src form — double-encoded + ?scale=1 + a11y flag (ALL math)", () => {
+  test("sqrt(x+5): src is double-encoded, ends with ?scale=1, img has data-ignore-a11y-check", () => {
+    const out = mathToCanvasHTML("sqrt(x+5)");
+    expect(out).toContain('<img class="equation_image"');
+    // \sqrt{x+5} → %5Csqrt%7Bx%2B5%7D → double → %255Csqrt%257Bx%252B5%257D
+    expect(out).toContain("%255Csqrt%257Bx%252B5%257D");
+    expect(out).toMatch(/src="\/equation_images\/[^"]*\?scale=1"/);
+    expect(out).toContain('data-ignore-a11y-check=""');
+    // title/alt/data-equation-content stay single HTML-entity-escaped raw LaTeX
+    expect(out).toContain('data-equation-content="\\sqrt{x+5}"');
   });
 });
