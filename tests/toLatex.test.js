@@ -94,3 +94,38 @@ describe("toLatex — multiplication glyph: \\cdot inside LaTeX, · outside", ()
     expect(out).not.toContain("\\cdot");
   });
 });
+
+describe("toLatex — set theory, composition, partial derivative", () => {
+  test("union: A ∪ B → \\cup", () => {
+    expect(toLatex("A ∪ B")).toContain("\\(\\cup\\)");
+  });
+  test("intersection: A ∩ B → \\cap", () => {
+    expect(toLatex("A ∩ B")).toContain("\\(\\cap\\)");
+  });
+  test("membership: x ∈ A → \\in", () => {
+    expect(toLatex("x ∈ A")).toContain("\\(\\in\\)");
+  });
+  test("subset: A ⊆ B → \\subseteq; A ⊂ B → \\subset", () => {
+    expect(toLatex("A ⊆ B")).toContain("\\(\\subseteq\\)");
+    expect(toLatex("A ⊂ B")).toContain("\\(\\subset\\)");
+  });
+  test("empty set: ∅ → \\emptyset", () => {
+    expect(toLatex("∅")).toContain("\\(\\emptyset\\)");
+  });
+  test("composition: f ∘ g → \\circ, never 'composed with'", () => {
+    const out = toLatex("f ∘ g");
+    expect(out).toContain("\\(\\circ\\)");
+    expect(out).not.toContain("composed with");
+  });
+  test("interval union bare U between brackets → \\cup", () => {
+    expect(toLatex("(-infinity, 3) U (3, infinity)")).toContain("\\(\\cup\\)");
+  });
+  test("negative: 'Let U be the universal set' is NOT converted to \\cup", () => {
+    expect(toLatex("Let U be the universal set")).not.toContain("\\cup");
+  });
+  test("partial derivative: ∂f/∂x → \\partial and \\dfrac", () => {
+    const out = toLatex("∂f/∂x");
+    expect(out).toContain("\\partial");
+    expect(out).toContain("\\dfrac");
+  });
+});
