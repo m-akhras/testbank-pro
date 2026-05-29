@@ -32,7 +32,7 @@ describe("normalizeUnicodeMath", () => {
   });
 
   test("converts Unicode superscripts", () => {
-    expect(normalizeUnicodeMath("x²+y²")).toBe("x2+y2");
+    expect(normalizeUnicodeMath("x²+y²")).toBe("x^2+y^2");
   });
 
   test("preserves already-escaped LaTeX Greek letters", () => {

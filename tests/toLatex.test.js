@@ -105,6 +105,9 @@ describe("toLatex — set theory, composition, partial derivative", () => {
   test("membership: x ∈ A → \\in", () => {
     expect(toLatex("x ∈ A")).toContain("\\(\\in\\)");
   });
+  test("non-membership: x ∉ A → \\notin", () => {
+    expect(toLatex("x ∉ A")).toContain("\\(\\notin\\)");
+  });
   test("subset: A ⊆ B → \\subseteq; A ⊂ B → \\subset", () => {
     expect(toLatex("A ⊆ B")).toContain("\\(\\subseteq\\)");
     expect(toLatex("A ⊂ B")).toContain("\\(\\subset\\)");
@@ -161,5 +164,38 @@ describe("toLatex — powered & inverse trig (no function-name splitting)", () =
   });
   test("regression: generic caret inverse f^-1 still → \\(f^{-1}\\)", () => {
     expect(toLatex("f^-1")).toContain("\\(f^{-1}\\)");
+  });
+});
+
+describe("toLatex — Unicode superscripts → caret exponent", () => {
+  test("f⁻¹ → \\(f^{-1}\\)", () => {
+    expect(toLatex("f⁻¹")).toContain("\\(f^{-1}\\)");
+  });
+  test("f⁻¹(x) → f^{-1}", () => {
+    expect(toLatex("f⁻¹(x)")).toContain("f^{-1}");
+  });
+  test("(g∘f)⁻¹ → \\(\\circ\\) and ^{-1}", () => {
+    const out = toLatex("(g∘f)⁻¹");
+    expect(out).toContain("\\(\\circ\\)");
+    expect(out).toContain("^{-1}");
+  });
+  test("x² → \\(x^{2}\\)", () => {
+    expect(toLatex("x²")).toContain("\\(x^{2}\\)");
+  });
+  test("x³ + 2x → x^{3}", () => {
+    expect(toLatex("x³ + 2x")).toContain("x^{3}");
+  });
+  test("sin²(x) → \\sin^{2}, not split into si\\(n", () => {
+    const out = toLatex("sin²(x)");
+    expect(out).toContain("\\sin^{2}");
+    expect(out).not.toContain("si\\(n");
+  });
+  test("regression: ASCII caret x^2 still → \\(x^{2}\\)", () => {
+    expect(toLatex("x^2")).toContain("\\(x^{2}\\)");
+  });
+  test("regression: subscripts a₁ + a₂ unchanged (→ a1 + a2, subscript handling untouched)", () => {
+    const out = toLatex("a₁ + a₂");
+    expect(out).toContain("a1");
+    expect(out).toContain("a2");
   });
 });
