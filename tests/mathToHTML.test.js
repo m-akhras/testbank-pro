@@ -1,4 +1,4 @@
-const { mathToHTML, mathToCanvasHTML } = require("../lib/math/html");
+const { mathToHTML, mathToCanvasHTML, mathToHTMLInline } = require("../lib/math/html");
 
 describe("mathToHTML — KaTeX-style \\(...\\) output (unchanged)", () => {
   test("sqrt wraps in \\(\\sqrt{...}\\)", () => {
@@ -321,6 +321,18 @@ describe("multiplication in Canvas equation_image uses \\cdot, never raw ·", ()
     expect(out).toContain("data-ignore-a11y-check");
     expect(out).not.toMatch(/·/);        // no raw U+00B7 anywhere in the output
     expect(out).not.toMatch(/%C2%B7/);   // no single-encoded U+00B7 either
+  });
+});
+
+describe("mathToHTMLInline — subscript rendering (<sub>)", () => {
+  test("b_0 → <sub>0</sub>", () => {
+    expect(mathToHTMLInline("b_0")).toContain("<sub>0</sub>");
+  });
+  test("b_{1} → <sub>1</sub>", () => {
+    expect(mathToHTMLInline("b_{1}")).toContain("<sub>1</sub>");
+  });
+  test("regression: x^2 still → <sup>2</sup> (exponent path intact)", () => {
+    expect(mathToHTMLInline("x^2")).toContain("<sup>2</sup>");
   });
 });
 

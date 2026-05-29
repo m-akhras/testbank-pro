@@ -193,9 +193,20 @@ describe("toLatex — Unicode superscripts → caret exponent", () => {
   test("regression: ASCII caret x^2 still → \\(x^{2}\\)", () => {
     expect(toLatex("x^2")).toContain("\\(x^{2}\\)");
   });
-  test("regression: subscripts a₁ + a₂ unchanged (→ a1 + a2, subscript handling untouched)", () => {
+  test("a₁ + a₂ → a_{1} + a_{2} subscripts", () => {
     const out = toLatex("a₁ + a₂");
-    expect(out).toContain("a1");
-    expect(out).toContain("a2");
+    expect(out).toContain("a_{1}");
+    expect(out).toContain("a_{2}");
+  });
+});
+
+describe("toLatex — Unicode subscripts → underscore", () => {
+  test("b₀ → \\(b_{0}\\)", () => {
+    expect(toLatex("b₀")).toContain("\\(b_{0}\\)");
+  });
+  test("y = b₀ + b₁x → b_{0} and b_{1}", () => {
+    const out = toLatex("y = b₀ + b₁x");
+    expect(out).toContain("b_{0}");
+    expect(out).toContain("b_{1}");
   });
 });
