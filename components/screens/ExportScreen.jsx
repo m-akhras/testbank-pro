@@ -482,7 +482,7 @@ export default function ExportScreen({
                     const warnings = validateQTIExport ? validateQTIExport(allVers) : [];
                     return warnings.length > 0 && (
                       <div style={{ width: "100%", fontSize: "0.7rem", color: "#f59e0b", background: "#451a0322", border: "1px solid #f59e0b44", borderRadius: "4px", padding: "0.35rem 0.6rem", marginBottom: "0.35rem" }}>
-                        ⚠ {warnings.length} issue{warnings.length > 1 ? "s" : ""} detected before export: {warnings.slice(0, 2).join(" · ")}{warnings.length > 2 ? ` +${warnings.length - 2} more` : ""}
+                        ⚠ {warnings.length} issue{warnings.length > 1 ? "s" : ""} detected before export: {warnings.join(" · ")}
                       </div>
                     );
                   })()}

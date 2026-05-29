@@ -4,6 +4,7 @@ import { flushSync } from "react-dom";
 import { createBrowserClient } from "@supabase/ssr";
 import { uid, questionSimilarity, stripChoiceLabel, isGraphChoice } from "../lib/utils/questions.js";
 import { parseAiJson } from "../lib/utils/sanitizeJsonPaste.js";
+import { answerMatchesAChoice } from "../lib/exports/index.js";
 import {
   buildGeneratePrompt,
   buildVersionPrompt,
@@ -15,6 +16,21 @@ function getSupabase() {
     process.env.NEXT_PUBLIC_SUPABASE_URL,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   );
+}
+
+// Flag MC questions whose answer matches no choice, using the same lenient
+// matcher the QTI export uses. Advisory only — these still import to Canvas,
+// just unkeyed (no correct answer marked). Caller surfaces via setDupWarnings.
+function collectAnswerWarnings(versionList) {
+  const out = [];
+  (versionList || []).forEach(ver => {
+    (ver.questions || []).forEach((q, i) => {
+      if (!answerMatchesAChoice(q)) {
+        out.push(`${ver.label} Q${i+1}: answer "${q.answer}" not in choices — will import unkeyed; fix before exporting`);
+      }
+    });
+  });
+  return out;
 }
 
 /**
@@ -173,6 +189,7 @@ export function useGenerate({
           return { label, questions: versioned, classSection };
         });
         const finalVersions = masterLocked ? [{ ...versions[0], classSection }, ...allVersions] : allVersions;
+        const answerWarnings = collectAnswerWarnings(finalVersions);
         // flushSync commits all state updates synchronously before router.push fires,
         // preventing the export page from rendering with stale (empty) versions.
         flushSync(() => {
@@ -182,6 +199,7 @@ export function useGenerate({
           setActiveClassSection(classSection);
           setPasteInput("");
           setExamSaved(false); setSaveExamName("");
+          setDupWarnings(answerWarnings);
         });
         setScreen("export");
         return;
@@ -213,6 +231,7 @@ export function useGenerate({
             ? [{ ...versions[0], classSection: s }, ...sectionVariants]
             : sectionVariants;
         }
+        const answerWarnings = collectAnswerWarnings(Object.values(newSectionVersions).flat());
         // flushSync commits all state updates synchronously before router.push fires.
         flushSync(() => {
           setClassSectionVersions(newSectionVersions);
@@ -220,6 +239,7 @@ export function useGenerate({
           setActiveVersion(0); setActiveClassSection(1);
           setPasteInput("");
           setExamSaved(false); setSaveExamName("");
+          setDupWarnings(answerWarnings);
         });
         setScreen("export");
         return;
@@ -282,6 +302,7 @@ export function useGenerate({
           } : {}),
         }));
         const updated = [...allVersions, { label, questions: versioned }];
+        setDupWarnings(collectAnswerWarnings([{ label, questions: versioned }]));
         if (remaining.length > 0) {
           const nextLabel = remaining[0];
           const nextRemaining = remaining.slice(1);
