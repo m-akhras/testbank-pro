@@ -286,3 +286,24 @@ describe("Canvas always-image rendering", () => {
     expect(out).toContain(" in the equation");
   });
 });
+
+describe("piecewise cases — Canvas equation_image", () => {
+  const { mathToCanvasHTML } = require("../lib/math/html");
+
+  test("Form A piecewise → exactly one equation_image with encoded \\begin{cases}", () => {
+    const out = mathToCanvasHTML("{ x^2 - 1 if x < 0 ; sqrt(x + 4) if x >= 0 }");
+    const imgCount = (out.match(/<img class="equation_image"/g) || []).length;
+    expect(imgCount).toBe(1);
+    expect(out).toContain("%5Cbegin%7Bcases%7D"); // URL-encoded \begin{cases}
+    expect(out).not.toMatch(/\\\(/);              // no orphan \(
+    expect(out).not.toMatch(/\\\)/);              // no orphan \)
+  });
+
+  test("piecewise inside a sentence → one image, surrounding prose preserved", () => {
+    const out = mathToCanvasHTML("Let f(x) = { x^2 if x<0 ; x if x>=0 }. Find f(-2).");
+    const imgCount = (out.match(/<img class="equation_image"/g) || []).length;
+    expect(imgCount).toBe(1);
+    expect(out).toContain("Let f(x) =");
+    expect(out).toContain("Find f(-2)");
+  });
+});
