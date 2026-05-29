@@ -73,3 +73,24 @@ describe("toLatex — piecewise → \\begin{cases}", () => {
     expect(out).not.toContain("\\begin{cases}");
   });
 });
+
+describe("toLatex — multiplication glyph: \\cdot inside LaTeX, · outside", () => {
+  test("piecewise coefficient 2*x becomes \\cdot, no Unicode middle-dot leaks into the cases", () => {
+    const out = toLatex("{ 2*x + 1 if x >= 1 ; x^2 - 3 if x < 1 }");
+    expect(out).toContain("\\begin{cases}");
+    expect(out).toContain("\\cdot");
+    expect(out).not.toContain("·"); // U+00B7 must never appear inside the cases LaTeX
+  });
+
+  test("fraction with multiplication (2*x)/3 uses \\cdot, no middle-dot inside \\(...\\)", () => {
+    const out = toLatex("(2*x)/3");
+    expect(out).toContain("\\cdot");
+    expect(out).not.toContain("·");
+  });
+
+  test("regression: bare multiplication 3*5 (not in a math block) still displays as ·", () => {
+    const out = toLatex("3*5");
+    expect(out).toContain("·");
+    expect(out).not.toContain("\\cdot");
+  });
+});

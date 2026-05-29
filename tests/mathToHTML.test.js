@@ -307,3 +307,13 @@ describe("piecewise cases — Canvas equation_image", () => {
     expect(out).toContain("Find f(-2)");
   });
 });
+
+describe("multiplication in Canvas equation_image uses \\cdot, never raw ·", () => {
+  test("piecewise with a 2*x coefficient → encoded \\cdot, no raw · or %C2%B7", () => {
+    const out = mathToCanvasHTML("{ 2*x + 1 if x >= 1 ; x^2 - 3 if x < 1 }");
+    expect(out).toContain('<img class="equation_image"');
+    expect(out).toContain("%5Ccdot");   // URL-encoded \cdot in the equation_image src
+    expect(out).not.toMatch(/·/);        // no raw U+00B7 anywhere in the output
+    expect(out).not.toMatch(/%C2%B7/);   // no URL-encoded U+00B7 in the src
+  });
+});
