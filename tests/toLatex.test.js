@@ -129,3 +129,37 @@ describe("toLatex — set theory, composition, partial derivative", () => {
     expect(out).toContain("\\dfrac");
   });
 });
+
+describe("toLatex — powered & inverse trig (no function-name splitting)", () => {
+  test("sin^-1(x) → \\sin^{-1}, not split into si\\(n", () => {
+    const out = toLatex("sin^-1(x)");
+    expect(out).toContain("\\sin^{-1}");
+    expect(out).not.toContain("si\\(n");
+  });
+  test("sin^-1(x) → the single block \\(\\sin^{-1}(x)\\)", () => {
+    expect(toLatex("sin^-1(x)")).toContain("\\(\\sin^{-1}(x)\\)");
+  });
+  test("sin^(-1)(x) → \\sin^{-1}", () => {
+    expect(toLatex("sin^(-1)(x)")).toContain("\\sin^{-1}");
+  });
+  test("sec^(-1)(2) → \\sec^{-1}; cot^(-1)(x) → \\cot^{-1}", () => {
+    expect(toLatex("sec^(-1)(2)")).toContain("\\sec^{-1}");
+    expect(toLatex("cot^(-1)(x)")).toContain("\\cot^{-1}");
+  });
+  test("sin^2(x) → \\sin^{2}, not split into si\\(n", () => {
+    const out = toLatex("sin^2(x)");
+    expect(out).toContain("\\sin^{2}");
+    expect(out).not.toContain("si\\(n");
+  });
+  test("sin^2(x) + cos^2(x) → both \\sin^{2} and \\cos^{2}", () => {
+    const out = toLatex("sin^2(x) + cos^2(x)");
+    expect(out).toContain("\\sin^{2}");
+    expect(out).toContain("\\cos^{2}");
+  });
+  test("regression: plain sin(x) still → \\sin(x)", () => {
+    expect(toLatex("sin(x)")).toContain("\\sin(x)");
+  });
+  test("regression: generic caret inverse f^-1 still → \\(f^{-1}\\)", () => {
+    expect(toLatex("f^-1")).toContain("\\(f^{-1}\\)");
+  });
+});
