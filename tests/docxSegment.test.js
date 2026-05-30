@@ -1,4 +1,4 @@
-const { _segmentProseMath, _emitSegmentedParagraph } = require("../lib/exports/docx");
+const { _segmentProseMath, _emitSegmentedParagraph, _emitChoiceParagraph } = require("../lib/exports/docx");
 
 // Count occurrences of a literal substring.
 function count(haystack, needle) {
@@ -146,5 +146,31 @@ describe("_segmentProseMath — sentence-final punctuation peeling (decimal-safe
     for (const word of ["Let", "Find", "for"]) {
       expect(new RegExp(`<w:t[^>]*>[^<]*${word}[^<]*</w:t>`).test(out)).toBe(true);
     }
+  });
+});
+
+describe("_emitChoiceParagraph — letter prefix is upright prose, not all-math", () => {
+  const out = _emitChoiceParagraph("A", "f^{-1}(x) = \\frac{1}{2}", "");
+
+  test("letter 'A. ' is a prose <w:t> text run (not italic math)", () => {
+    expect(/<w:t[^>]*>A\. <\/w:t>/.test(out)).toBe(true);
+  });
+
+  test("paragraph contains a text run, so it is NOT all-math", () => {
+    expect(/<w:r>[\s\S]*?<w:t[^>]*>[\s\S]*?<\/w:t>[\s\S]*?<\/w:r>/.test(out)).toBe(true);
+  });
+
+  test("fraction <m:f> appears exactly once inside a single <m:oMath>", () => {
+    expect(count(out, "<m:f>")).toBe(1);
+    const start = out.indexOf("<m:f>");
+    const end = out.indexOf("</m:f>") + "</m:f>".length;
+    const fracXml = out.slice(start, end);
+    expect(fracXml.includes("<m:oMath>")).toBe(false);
+    expect(fracXml.includes("</m:oMath>")).toBe(false);
+  });
+
+  test("exactly one <w:p>/</w:p>", () => {
+    expect(count(out, "<w:p>")).toBe(1);
+    expect(count(out, "</w:p>")).toBe(1);
   });
 });
