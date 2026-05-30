@@ -235,3 +235,26 @@ describe("compound rationals with exponents", () => {
     expect(toLatex("2^{kt} + 3")).toContain("2^{kt}");
   });
 });
+
+describe("fraction whitespace around slash", () => {
+  test("(e^x - e^{-x}) / (e^x + e^{-x}) with spaces → one \\dfrac, slash consumed", () => {
+    const out = toLatex("(e^x - e^{-x}) / (e^x + e^{-x})");
+    expect(out).toContain("\\dfrac");
+    expect(out).not.toContain(") / (");
+    expect(out).not.toContain(")/(");
+  });
+  test("no-space form still works", () => {
+    expect(toLatex("(e^x - e^{-x})/(e^x + e^{-x})")).toContain("\\dfrac");
+  });
+  test("spaced + braced exponents → \\dfrac", () => {
+    expect(toLatex("(e^{2x} - e^{-2x}) / (e^{2x} + e^{-2x})")).toContain("\\dfrac");
+  });
+  test("oracle regression: (1+x)/(1-x) byte-identical", () => {
+    expect(toLatex("(1+x)/(1-x)")).toContain("\\(\\dfrac{1+x}{1-x}\\)");
+  });
+  test("over-span guard: (a) + (b)/(c) → \\dfrac{b}{c} only, (a) preserved", () => {
+    const out = toLatex("(a) + (b)/(c)");
+    expect(out).toContain("\\dfrac{b}{c}");
+    expect(out).toContain("(a)");
+  });
+});

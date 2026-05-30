@@ -324,6 +324,14 @@ describe("multiplication in Canvas equation_image uses \\cdot, never raw ·", ()
   });
 });
 
+describe("fraction whitespace around slash — single equation_image", () => {
+  test("(e^x - e^{-x}) / (e^x + e^{-x}) → exactly ONE equation_image (not fragments)", () => {
+    const out = mathToCanvasHTML("(e^x - e^{-x}) / (e^x + e^{-x})");
+    const imgCount = (out.match(/<img class="equation_image"/g) || []).length;
+    expect(imgCount).toBe(1);
+  });
+});
+
 describe("mathToHTMLInline — subscript rendering (<sub>)", () => {
   test("b_0 → <sub>0</sub>", () => {
     expect(mathToHTMLInline("b_0")).toContain("<sub>0</sub>");
