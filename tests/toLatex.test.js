@@ -258,3 +258,34 @@ describe("fraction whitespace around slash", () => {
     expect(out).toContain("(a)");
   });
 });
+
+describe("paren-exponent rationals (fix B)", () => {
+  test("(e^(x) - e^(-x))/(e^(x) + e^(-x)) → one \\dfrac, slash consumed", () => {
+    const out = toLatex("(e^(x) - e^(-x))/(e^(x) + e^(-x))");
+    expect(out).toContain("\\dfrac");
+    expect(out).not.toContain(")/(");
+  });
+  test("spaced paren-exponent rational → \\dfrac", () => {
+    expect(toLatex("(e^(x) - e^(-x)) / (e^(x) + e^(-x))")).toContain("\\dfrac");
+  });
+  test("fractional exponent e^(1/2) → \\frac{1}{2}, not garbled", () => {
+    const out = toLatex("e^(1/2)");
+    expect(out).toContain("\\frac{1}{2}");
+    expect(out).not.toContain("\\dfrac{1}");
+  });
+  test("fractional exponent x^(2/3) → \\frac{2}{3}", () => {
+    expect(toLatex("x^(2/3)")).toContain("\\frac{2}{3}");
+  });
+  test("standalone e^(x) → \\(e^{x}\\)", () => {
+    expect(toLatex("e^(x)")).toContain("\\(e^{x}\\)");
+  });
+  test("3^(x+1) - 2 → 3^{x+1}", () => {
+    expect(toLatex("3^(x+1) - 2")).toContain("3^{x+1}");
+  });
+  test("oracle: (1+x)/(1-x) unchanged", () => {
+    expect(toLatex("(1+x)/(1-x)")).toContain("\\(\\dfrac{1+x}{1-x}\\)");
+  });
+  test("539a837 regression: braced-exponent rational → \\dfrac", () => {
+    expect(toLatex("(e^{2x} - e^{-2x})/(e^{2x} + e^{-2x})")).toContain("\\dfrac");
+  });
+});
