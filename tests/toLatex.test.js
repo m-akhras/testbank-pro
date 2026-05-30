@@ -210,3 +210,28 @@ describe("toLatex — Unicode subscripts → underscore", () => {
     expect(out).toContain("b_{1}");
   });
 });
+
+describe("compound rationals with exponents", () => {
+  test("(e^{2x} - e^{-2x})/(e^{2x} + e^{-2x}) → one \\dfrac, slash consumed", () => {
+    const out = toLatex("(e^{2x} - e^{-2x})/(e^{2x} + e^{-2x})");
+    expect(out).toContain("\\dfrac");
+    expect(out).toContain("e^{2x}");
+    expect(out).toContain("e^{-2x}");
+    expect(out).not.toContain(")/(");
+  });
+  test("regression: bare e^x rational still → \\dfrac", () => {
+    expect(toLatex("(e^x - 1)/(e^x + 1)")).toContain("\\dfrac");
+  });
+  test("regression: bare x^2 rational still → \\dfrac", () => {
+    expect(toLatex("(x^2 - 1)/(x^2 + 1)")).toContain("\\dfrac");
+  });
+  test("oracle: plain (1+x)/(1-x) unchanged", () => {
+    expect(toLatex("(1+x)/(1-x)")).toContain("\\(\\dfrac{1+x}{1-x}\\)");
+  });
+  test("relocated pass: standalone braced exponent e^{2x} → \\(e^{2x}\\)", () => {
+    expect(toLatex("e^{2x}")).toContain("\\(e^{2x}\\)");
+  });
+  test("relocated pass: standalone 2^{kt} + 3 → 2^{kt}", () => {
+    expect(toLatex("2^{kt} + 3")).toContain("2^{kt}");
+  });
+});
