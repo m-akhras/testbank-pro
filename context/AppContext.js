@@ -8,6 +8,7 @@ import { useExamBuilder } from "../hooks/useExamBuilder";
 import { useExport } from "../hooks/useExport";
 import { useCourses } from "../hooks/useCourses";
 import { useValidation } from "../hooks/useValidation";
+import { useExamGenerator } from "../hooks/useExamGenerator";
 import { COURSES, getCourse } from "../lib/courses/index.js";
 
 const SCREEN_ROUTES = {
@@ -15,6 +16,7 @@ const SCREEN_ROUTES = {
   generate: "/app/generate", review: "/app/review", bank: "/app/bank",
   versions: "/app/build", build: "/app/build", variants: "/app/variants", export: "/app/export",
   exams: "/app/exams", saved: "/app/exams", courses: "/app/courses", admin: "/app/admin",
+  examGenerator: "/app/exam-generator",
 };
 
 const ADMIN_EMAIL = "mohammadalakhrass@yahoo.com";
@@ -106,6 +108,10 @@ export function AppProvider({ children }) {
     activeVersion: examBuilderHook.activeVersion,
   });
 
+  // Exam Generator wizard (guided second door). Owns only its own wizard state;
+  // course/chapter option data is read from the generate flow in the screen.
+  const examGeneratorHook = useExamGenerator();
+
   // Merge built-ins + custom courses for screens that need { name: { color, chapters } }.
   const allCourses = {};
   Object.entries(COURSES).forEach(([name, mod]) => {
@@ -144,6 +150,7 @@ export function AppProvider({ children }) {
     exportHook,
     courses: coursesHook,
     validation: validationHook,
+    examGenerator: examGeneratorHook,
     // Derived convenience
     allCourses,
     courseColors,

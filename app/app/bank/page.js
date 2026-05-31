@@ -11,6 +11,7 @@ const SCREEN_ROUTES = {
   generate: "/app/generate", review: "/app/review", bank: "/app/bank",
   versions: "/app/build", build: "/app/build", export: "/app/export",
   exams: "/app/exams", saved: "/app/exams", courses: "/app/courses", admin: "/app/admin",
+  examGenerator: "/app/exam-generator",
 };
 
 export default function BankPage() {

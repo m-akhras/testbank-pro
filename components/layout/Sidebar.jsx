@@ -10,9 +10,10 @@ const NAV_GROUPS = [
   {
     label: "CONTENT",
     items: [
-      { href: "/app/dashboard", icon: "🏠", label: "Dashboard" },
-      { href: "/app/generate",  icon: "✨", label: "Generate" },
-      { href: "/app/bank",      icon: "📚", label: "Question Bank", badgeKey: "bank" },
+      { href: "/app/dashboard",       icon: "🏠", label: "Dashboard" },
+      { href: "/app/generate",        icon: "✨", label: "Generate" },
+      { href: "/app/exam-generator",  icon: "🧭", label: "Exam Generator" },
+      { href: "/app/bank",            icon: "📚", label: "Question Bank", badgeKey: "bank" },
     ],
   },
   {
