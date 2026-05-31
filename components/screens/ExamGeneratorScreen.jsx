@@ -1,7 +1,18 @@
 "use client";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { createBrowserClient } from "@supabase/ssr";
 import { useAppContext } from "../../context/AppContext.js";
 import { makeStyles, text1, text2, text3, border, bg1, bg2, bg0, green1 } from "../../lib/theme.js";
 import { EG_TYPES } from "../../hooks/useExamGenerator.js";
+import { buildExamGeneratorPrompt } from "../../lib/prompts/index.js";
+
+function getSupabase() {
+  return createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  );
+}
 
 // The four Add-Question steps shown in the indicator. 'list' is the draft surface.
 const STEP_FLOW = [
@@ -15,9 +26,11 @@ const typeLabel = (v) => EG_TYPES.find(t => t.value === v)?.label || v || "—";
 
 export default function ExamGeneratorScreen() {
   const ctx = useAppContext();
+  const router = useRouter();
   const S = makeStyles(green1);
   const eg = ctx.examGenerator;
   const { step, setStep, draft, drafts } = eg;
+  const [building, setBuilding] = useState(false);
 
   // Option data comes from the existing generate flow — never hardcoded here.
   const course = ctx.course;
@@ -26,6 +39,40 @@ export default function ExamGeneratorScreen() {
   const courseNames = Object.keys(allCourses);
   const selectedChapter = chapters.find(c => c.title === draft.chapter) || null;
   const sections = selectedChapter?.sections || [];
+
+  // Section gate (Phase B): drafts may hold a blank/chapter-wide section, but
+  // every question needs a concrete section before Build — the prompt and the
+  // bank row both require one. Surface the first offending question by index.
+  const missingSectionIdx = drafts.findIndex(d => !d.section || !String(d.section).trim());
+  const hasMissingSection = missingSectionIdx !== -1;
+  const canBuild = drafts.length > 0 && !!course && !hasMissingSection && !building;
+  const buildReason =
+    drafts.length === 0 ? "Add at least one question first."
+    : !course ? "Pick a course (on a question's Topic step) before building."
+    : hasMissingSection ? `Q${missingSectionIdx + 1} needs a section — tap to fix.`
+    : null;
+
+  // Assemble the wizard's draft list into the existing single-generation
+  // pipeline: build the TIGHT prompt, set the SHARED generate state exactly as
+  // useGenerate.triggerGenerate does, then route to the Generate screen's
+  // prompt+paste panel. handlePaste's "generate" branch does the rest
+  // (parse → sanitize → uid → upsert → setBank prepend → seed versions[A]).
+  async function handleBuild() {
+    if (!canBuild) return;
+    setBuilding(true);
+    try {
+      const prompt = await buildExamGeneratorPrompt(drafts, course, ctx.courseObject, getSupabase());
+      ctx.generate.setGeneratedPrompt(prompt);
+      ctx.generate.setPendingType("generate");
+      ctx.generate.setPendingMeta({ course });
+      ctx.generate.setPasteInput("");
+      ctx.generate.setPasteError("");
+      router.push("/app/generate");
+    } catch (e) {
+      console.error("Exam Generator build error:", e);
+      setBuilding(false);
+    }
+  }
 
   const inWalk = step !== "list";
   const activeStepIdx = STEP_FLOW.findIndex(s => s.key === step);
@@ -263,7 +310,12 @@ export default function ExamGeneratorScreen() {
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={S.qMeta}>
                       <span style={S.tag(green1)}>{typeLabel(q.type)}</span>
-                      <span>{q.chapter || "—"}{q.section ? ` · ${q.section}` : " · whole chapter"}</span>
+                      <span>{q.chapter || "—"}{q.section ? ` · ${q.section}` : ""}</span>
+                      {(!q.section || !String(q.section).trim()) && (
+                        <span style={{ ...S.tag("#9B1C1C"), cursor: "pointer" }} onClick={() => eg.editDraft(q.id)}>
+                          ⚠ needs section
+                        </span>
+                      )}
                     </div>
                     <div style={{ ...S.qText, marginBottom: q.details ? "0.3rem" : 0 }}>
                       {q.wording || <span style={{ color: text3, fontStyle: "italic" }}>No wording</span>}
@@ -289,14 +341,31 @@ export default function ExamGeneratorScreen() {
             ))
           )}
 
-          {/* Build Exam — wired in Phase B */}
+          {/* Build Exam — assembles a TIGHT generate prompt and routes to the
+              Generate screen's copy-paste panel (admin path). */}
           <hr style={S.divider} />
           <div style={{ display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
-            <button style={S.btn(green1, true)} disabled>Build Exam</button>
-            <span style={{ fontSize: "0.75rem", color: text3, fontStyle: "italic", fontFamily: "'Inter',system-ui,sans-serif" }}>
-              Wired up in the next step.
-            </span>
+            <button style={S.btn(green1, !canBuild)} disabled={!canBuild} onClick={handleBuild}>
+              {building ? "Building…" : "Build Exam"}
+            </button>
+            {buildReason && (
+              <span
+                onClick={hasMissingSection ? () => eg.editDraft(drafts[missingSectionIdx].id) : undefined}
+                style={{
+                  fontSize: "0.75rem", color: hasMissingSection ? "#9B1C1C" : text3,
+                  fontStyle: "italic", fontFamily: "'Inter',system-ui,sans-serif",
+                  cursor: hasMissingSection ? "pointer" : "default",
+                  textDecoration: hasMissingSection ? "underline" : "none",
+                }}>
+                {buildReason}
+              </span>
+            )}
           </div>
+          <p style={{ fontSize: "0.7rem", color: text3, marginTop: "0.75rem", fontFamily: "'Inter',system-ui,sans-serif" }}>
+            Build assembles your questions into a prompt and opens the Generate panel,
+            where you copy it to Claude and paste the result back — the questions then
+            land in the bank and seed a master exam, exactly like the manual flow.
+          </p>
         </div>
       )}
     </div>
