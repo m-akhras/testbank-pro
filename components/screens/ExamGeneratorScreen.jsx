@@ -1,11 +1,19 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createBrowserClient } from "@supabase/ssr";
 import { useAppContext } from "../../context/AppContext.js";
 import { makeStyles, text1, text2, text3, border, bg1, bg2, bg0, green1 } from "../../lib/theme.js";
 import { EG_TYPES } from "../../hooks/useExamGenerator.js";
 import { buildExamGeneratorPrompt } from "../../lib/prompts/index.js";
+import {
+  getWordingSuggestions,
+  buildWordingSuggestionPrompt,
+  parseWordingSuggestions,
+} from "../../lib/suggestions/wordingSuggestions.js";
+
+// Friendly label for a suggestion's provenance badge.
+const WS_SOURCE_LABEL = { template: "textbook", bank: "your bank", grounding: "style", ai: "AI" };
 
 function getSupabase() {
   return createBrowserClient(
@@ -39,6 +47,60 @@ export default function ExamGeneratorScreen() {
   const courseNames = Object.keys(allCourses);
   const selectedChapter = chapters.find(c => c.title === draft.chapter) || null;
   const sections = selectedChapter?.sections || [];
+  const bank = ctx.bank?.bank || [];
+
+  // --- Wording suggestions (additive; the textarea path is never blocked) -----
+  const wsSection = draft.section;
+  const [wsLoading, setWsLoading] = useState(false);
+  const [wsSuggestions, setWsSuggestions] = useState([]);
+  const [wsNeedsFallback, setWsNeedsFallback] = useState(false);
+  const [wsShowFallback, setWsShowFallback] = useState(false);
+  const [wsPaste, setWsPaste] = useState("");
+
+  // Fetch suggestions once when the wording step opens with a known section.
+  // Deliberately keyed only on step+course+section so it doesn't re-run as the
+  // user types or as the bank array identity changes.
+  useEffect(() => {
+    if (step !== "wording" || !course || !wsSection) {
+      setWsSuggestions([]);
+      setWsNeedsFallback(false);
+      setWsShowFallback(false);
+      return;
+    }
+    let cancelled = false;
+    setWsLoading(true);
+    setWsShowFallback(false);
+    getWordingSuggestions(course, wsSection, { bank, supabase: getSupabase() })
+      .then(res => {
+        if (cancelled) return;
+        setWsSuggestions(res.suggestions || []);
+        setWsNeedsFallback(!!res.needsFallback);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setWsSuggestions([]);
+        setWsNeedsFallback(true);
+      })
+      .finally(() => { if (!cancelled) setWsLoading(false); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, course, wsSection]);
+
+  // Parse pasted AI suggestions and append any new ones as more chips.
+  function applyPastedWordingSuggestions() {
+    const parsed = parseWordingSuggestions(wsPaste);
+    if (parsed.length === 0) return;
+    setWsSuggestions(prev => {
+      const seen = new Set(prev.map(s => s.text.trim().toLowerCase()));
+      const adds = [];
+      for (const t of parsed) {
+        const key = t.trim().toLowerCase();
+        if (key && !seen.has(key)) { seen.add(key); adds.push({ text: t, source: "ai" }); }
+      }
+      return [...prev, ...adds];
+    });
+    setWsPaste("");
+  }
 
   // Section gate (Phase B): drafts may hold a blank/chapter-wide section, but
   // every question needs a concrete section before Build — the prompt and the
@@ -231,16 +293,110 @@ export default function ExamGeneratorScreen() {
         </div>
       )}
 
-      {/* STEP: wording (Phase A stub) ---------------------------------------- */}
+      {/* STEP: wording -------------------------------------------------------- */}
       {step === "wording" && (
         <div style={S.card}>
           <h2 style={S.h2}>3 · Wording</h2>
-          <p style={{ ...S.sub, marginBottom: "0.5rem" }}>
-            Write the question wording.
+          <p style={{ ...S.sub, marginBottom: "0.75rem" }}>
+            Write the question wording — or tap a suggestion to start from a concrete example, then edit.
           </p>
-          <p style={{ fontSize: "0.72rem", color: text3, fontStyle: "italic", marginBottom: "1rem", fontFamily: "'Inter',system-ui,sans-serif" }}>
-            ✨ AI suggestions coming soon — type your wording for now.
-          </p>
+
+          {/* Suggestion chips (above the textarea; never block it) */}
+          {!wsSection ? (
+            <p style={{ fontSize: "0.72rem", color: text3, fontStyle: "italic", marginBottom: "1rem", fontFamily: "'Inter',system-ui,sans-serif" }}>
+              Pick a section on the Topic step for tailored wording suggestions.
+            </p>
+          ) : wsLoading ? (
+            <p style={{ fontSize: "0.72rem", color: text3, marginBottom: "1rem", fontFamily: "'Inter',system-ui,sans-serif" }}>
+              Loading suggestions…
+            </p>
+          ) : wsSuggestions.length > 0 ? (
+            <div style={{ marginBottom: "1rem" }}>
+              <div style={{ fontSize: "0.72rem", color: text3, marginBottom: "0.5rem", fontFamily: "'Inter',system-ui,sans-serif" }}>
+                ✨ Suggested wordings — tap to use:
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+                {wsSuggestions.map((s, i) => (
+                  <button
+                    key={i}
+                    onClick={() => eg.setWording(s.text)}
+                    title="Use this wording"
+                    style={{
+                      textAlign: "left", cursor: "pointer",
+                      background: bg2, border: "1px solid " + border,
+                      borderRadius: "10px", padding: "0.55rem 0.75rem",
+                      color: text1, fontSize: "0.8rem", lineHeight: 1.4,
+                      fontFamily: "'Georgia',serif", transition: "all 0.15s",
+                      display: "flex", alignItems: "flex-start", gap: "0.5rem",
+                    }}
+                  >
+                    <span style={{
+                      flexShrink: 0, marginTop: "0.1rem", fontSize: "0.6rem", fontWeight: 700,
+                      color: green1, background: green1 + "14", borderRadius: "6px",
+                      padding: "0.1rem 0.35rem", fontFamily: "'Inter',system-ui,sans-serif",
+                      textTransform: "uppercase", letterSpacing: "0.02em",
+                    }}>{WS_SOURCE_LABEL[s.source] || s.source}</span>
+                    <span style={{ flex: 1, minWidth: 0 }}>{s.text}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <p style={{ fontSize: "0.72rem", color: text3, fontStyle: "italic", marginBottom: "1rem", fontFamily: "'Inter',system-ui,sans-serif" }}>
+              No saved suggestions for this section yet — type your own below, or use ✨ AI suggest.
+            </p>
+          )}
+
+          {/* AI fallback: copy a prompt, paste back stems → more chips */}
+          {wsSection && (
+            <div style={{ marginBottom: "1rem" }}>
+              {!wsShowFallback ? (
+                <button
+                  style={{ ...S.oBtn(green1), fontSize: "0.75rem", padding: "0.4rem 0.8rem" }}
+                  onClick={() => setWsShowFallback(true)}
+                >
+                  ✨ AI suggest{wsNeedsFallback ? " (recommended)" : ""}
+                </button>
+              ) : (
+                <div style={{ border: "1px dashed " + border, borderRadius: "12px", padding: "0.9rem", background: bg1 }}>
+                  <div style={{ fontSize: "0.72rem", color: text2, marginBottom: "0.5rem", fontFamily: "'Inter',system-ui,sans-serif" }}>
+                    Copy this prompt into Claude, then paste the JSON array of stems back below.
+                  </div>
+                  <div style={{ ...S.promptBox, maxHeight: "160px", overflow: "auto" }}>
+                    {buildWordingSuggestionPrompt(course, wsSection, "")}
+                  </div>
+                  <div style={{ display: "flex", gap: "0.5rem", margin: "0.5rem 0", flexWrap: "wrap" }}>
+                    <button
+                      style={{ ...S.oBtn(green1), fontSize: "0.75rem", padding: "0.4rem 0.8rem" }}
+                      onClick={() => navigator.clipboard.writeText(buildWordingSuggestionPrompt(course, wsSection, ""))}
+                    >
+                      📋 Copy Prompt
+                    </button>
+                    <button
+                      style={{ ...S.oBtn(text2), borderColor: border, fontSize: "0.75rem", padding: "0.4rem 0.8rem" }}
+                      onClick={() => { setWsShowFallback(false); setWsPaste(""); }}
+                    >
+                      Close
+                    </button>
+                  </div>
+                  <textarea
+                    style={{ ...S.textarea, minHeight: "70px", fontFamily: "monospace", fontSize: "0.75rem" }}
+                    placeholder={`Paste Claude's JSON array here, e.g. ["Find ...", "Compute ..."]`}
+                    value={wsPaste}
+                    onChange={(e) => setWsPaste(e.target.value)}
+                  />
+                  <button
+                    style={{ ...S.btn(green1, !parseWordingSuggestions(wsPaste).length), fontSize: "0.75rem", padding: "0.4rem 0.8rem", marginTop: "0.4rem" }}
+                    disabled={!parseWordingSuggestions(wsPaste).length}
+                    onClick={applyPastedWordingSuggestions}
+                  >
+                    Add as suggestions
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
           <textarea
             style={{ ...S.textarea, fontFamily: "'Georgia',serif", minHeight: "120px" }}
             placeholder="Question wording"
