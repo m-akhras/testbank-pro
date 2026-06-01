@@ -468,7 +468,7 @@ export default function ExamGeneratorScreen() {
                       <span style={S.tag(green1)}>{typeLabel(q.type)}</span>
                       <span>{q.chapter || "—"}{q.section ? ` · ${q.section}` : ""}</span>
                       {(!q.section || !String(q.section).trim()) && (
-                        <span style={{ ...S.tag("#9B1C1C"), cursor: "pointer" }} onClick={() => eg.editDraft(q.id)}>
+                        <span style={{ ...S.tag("#9B1C1C"), cursor: "pointer" }} onClick={() => eg.editDraft(q.id, "chapter")}>
                           ⚠ needs section
                         </span>
                       )}
@@ -506,7 +506,7 @@ export default function ExamGeneratorScreen() {
             </button>
             {buildReason && (
               <span
-                onClick={hasMissingSection ? () => eg.editDraft(drafts[missingSectionIdx].id) : undefined}
+                onClick={hasMissingSection ? () => eg.editDraft(drafts[missingSectionIdx].id, "chapter") : undefined}
                 style={{
                   fontSize: "0.75rem", color: hasMissingSection ? "#9B1C1C" : text3,
                   fontStyle: "italic", fontFamily: "'Inter',system-ui,sans-serif",

@@ -68,14 +68,19 @@ export function useExamGenerator() {
     setStep("type");
   }
 
-  // Load an existing draft back into `draft` and walk it from the top.
-  function editDraft(id) {
+  // Load an existing draft's full selections back into `draft` and reopen the
+  // wizard with that draft active (editingId set, so commitDraft saves in place).
+  // Lands on the Wording step by default — the earlier steps are already filled
+  // and reachable via Back, so Edit never dumps the user back on a blank step 1.
+  // Callers that edit to fix a missing section pass toStep="chapter" (the Topic
+  // step owns the Section dropdown).
+  function editDraft(id, toStep = "wording") {
     const found = drafts.find(q => q.id === id);
     if (!found) return;
     const { id: _omit, ...fields } = found;
     setDraft({ ...EMPTY_DRAFT, ...fields });
     setEditingId(id);
-    setStep("type");
+    setStep(toStep);
   }
 
   // Patch a draft in place (used for inline list edits).
