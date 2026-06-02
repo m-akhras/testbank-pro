@@ -8,6 +8,7 @@ import PastePanel from "../panels/PastePanel.js";
 import ExportTemplateModal from "../modals/ExportTemplateModal.jsx";
 import { useExportFunctions } from "../../context/ExportFunctionsContext.js";
 import { getCourse } from "../../lib/courses/index.js";
+import { collectUnkeyedMCQuestions } from "../../lib/exports/index.js";
 import { stripChoiceLabel, isGraphChoice } from "../../lib/utils/questions.js";
 import GraphChoice from "../display/GraphChoice.jsx";
 
@@ -140,6 +141,44 @@ export default function ExportScreen({
   }, []);
 
   const openWordExportModal = (type, payload) => setTemplateModal({ open: true, type, payload });
+
+  // ── Loud QTI guard ────────────────────────────────────────────────────────
+  // Blocks a QTI export when any Multiple Choice question would import into
+  // Canvas without a correct answer marked (answer matches no choice under the
+  // writers' lenient matcher → Canvas: "couldn't determine the correct
+  // answers"). Persistent red banner because showToast is currently a no-op.
+  const [qtiBlockMsg, setQtiBlockMsg] = useState("");
+
+  // Flatten a classSectionVersions object into a flat {label, questions}[] with
+  // each version's label augmented to S{sec} {label}, so a blocked message names
+  // the class section the offending question lives in.
+  const flattenSectionVersions = (csv) =>
+    Object.entries(csv || {}).flatMap(([sec, vers]) =>
+      (vers || []).map(v => ({ ...v, label: `S${sec} ${v.label}`.trim() }))
+    );
+
+  // Run the guard on a flat {label, questions}[]. Returns true when clean (and
+  // clears any banner); on failure sets the banner naming every offender and
+  // returns false so the caller aborts before building the zip.
+  const guardQTI = (versionList) => {
+    const broken = collectUnkeyedMCQuestions(versionList);
+    if (broken.length === 0) { setQtiBlockMsg(""); return true; }
+    const names = broken
+      .map(b => `${b.label ? b.label + " " : ""}Q${b.qNum}${b.section ? " · " + b.section : ""} (answer "${b.answer}")`)
+      .join("; ");
+    const msg = `Export blocked: ${broken.length} multiple-choice question${broken.length > 1 ? "s" : ""} ${broken.length > 1 ? "have" : "has"} a correct answer that matches none of ${broken.length > 1 ? "their" : "its"} choices, so Canvas would reject ${broken.length > 1 ? "them" : "it"} with "couldn't determine the correct answers." Fix ${broken.length > 1 ? "them" : "it"} before exporting — ${names}.`;
+    setQtiBlockMsg(msg);
+    if (showToast) showToast(msg, "error");
+    return false;
+  };
+
+  // Prominent red banner shown when a QTI export is blocked. Rendered at the top
+  // of each QTI button region so it's visible regardless of which view is active.
+  const QtiBlockBanner = () => qtiBlockMsg ? (
+    <div style={{ width: "100%", fontSize: "0.72rem", color: "#fca5a5", background: "#7c2d1233", border: "1px solid #f8717166", borderRadius: "4px", padding: "0.5rem 0.7rem", marginBottom: "0.5rem", lineHeight: 1.5 }}>
+      ✕ {qtiBlockMsg}
+    </div>
+  ) : null;
 
   if (!versions || versions.length === 0) {
     return (
@@ -477,6 +516,7 @@ export default function ExportScreen({
                     : "Flat: all question versions listed sequentially — no Canvas grouping."}
                 </div>
                 <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                  <QtiBlockBanner />
                   {(() => {
                     const allVers = Object.values(classSectionVersions).flat();
                     const warnings = validateQTIExport ? validateQTIExport(allVers) : [];
@@ -491,6 +531,7 @@ export default function ExportScreen({
                       key={sec}
                       style={S.btn("#8b5cf6", false)}
                       onClick={async () => {
+                        if (!guardQTI(flattenSectionVersions({ [sec]: classSectionVersions[sec] }))) return;
                         const examTitle = qtiExamName.trim() || versions[0]?.questions[0]?.course || "Exam";
                         const blobs = await buildClassroomSectionsQTI({ [sec]: classSectionVersions[sec] }, examTitle, qtiUseGroups, qtiPointsPerQ, qtiIncludeExplanations);
                         const safeName = (qtiExamName.trim() || "Section").replace(/[^a-zA-Z0-9]/g, "_");
@@ -503,6 +544,7 @@ export default function ExportScreen({
                   <button
                     style={S.btn("#10b981", false)}
                     onClick={async () => {
+                      if (!guardQTI(flattenSectionVersions(classSectionVersions))) return;
                       const examTitle = qtiExamName.trim() || versions[0]?.questions[0]?.course || "Exam";
                       const blobs = await buildClassroomSectionsQTI(classSectionVersions, examTitle, qtiUseGroups, qtiPointsPerQ, qtiIncludeExplanations);
                       const safeName = (qtiExamName.trim() || "Section").replace(/[^a-zA-Z0-9]/g, "_");
@@ -544,11 +586,13 @@ export default function ExportScreen({
                   </label>
                 </div>
                 <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                  <QtiBlockBanner />
                   {versions.map(ver => (
                     <button
                       key={ver.label}
                       style={S.oBtn("#8b5cf6")}
                       onClick={async () => {
+                        if (!guardQTI([ver])) return;
                         const xml = buildQTI(ver.questions, ver.questions[0]?.course || "Exam", ver.label, qtiUseGroups, qtiPointsPerQ, qtiIncludeExplanations);
                         const blob = await buildQTIZip(xml, `Version_${ver.label}`);
                         dlBlob(blob, `Version_${ver.label}_Canvas_QTI.zip`);
@@ -560,6 +604,7 @@ export default function ExportScreen({
                   <button
                     style={S.btn("#8b5cf6", false)}
                     onClick={async () => {
+                      if (!guardQTI(versions)) return;
                       const xml = buildQTICompare(versions, versions[0]?.questions[0]?.course || "Exam", qtiUseGroups, qtiPointsPerQ, qtiIncludeExplanations);
                       const blob = await buildQTIZip(xml, "AllVersions");
                       dlBlob(blob, "AllVersions_Canvas_QTI.zip");
@@ -787,11 +832,13 @@ export default function ExportScreen({
               </div>
             </div>
 
+            <QtiBlockBanner />
             <div style={{ display: "flex", gap: "0.75rem", marginBottom: "1.25rem", flexWrap: "wrap", alignItems: "center" }}>
               <span style={{ fontSize: "0.72rem", color: accent, fontWeight: "bold" }}>Canvas export — one file, all versions:</span>
               <button
                 style={S.btn("#8b5cf6", false)}
                 onClick={async () => {
+                  if (!guardQTI(versions)) return;
                   const xml = buildQTICompare(versions, versions[0]?.questions[0]?.course || "Exam", qtiUseGroups, qtiPointsPerQ, qtiIncludeExplanations);
                   const blob = await buildQTIZip(xml, "AllVersions");
                   dlBlob(blob, "AllVersions_Canvas_QTI.zip");
@@ -803,6 +850,7 @@ export default function ExportScreen({
                 <button
                   style={S.btn("#f59e0b", false)}
                   onClick={async () => {
+                    if (!guardQTI(flattenSectionVersions(classSectionVersions))) return;
                     const course = versions[0]?.questions[0]?.course || "Exam";
                     const xml = buildQTIAllSectionsMerged(classSectionVersions, course, qtiPointsPerQ, qtiIncludeExplanations);
                     const blob = await buildQTIZip(xml, "AllSections_Merged");

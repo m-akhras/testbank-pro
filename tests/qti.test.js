@@ -1,4 +1,4 @@
-const { buildQTI, buildQTICompare, validateQTIExport, answerMatchesAChoice } = require("../lib/exports/qti");
+const { buildQTI, buildQTICompare, validateQTIExport, answerMatchesAChoice, collectUnkeyedMCQuestions } = require("../lib/exports/qti");
 
 describe("QTI export structure", () => {
   const sampleQ = {
@@ -126,5 +126,40 @@ describe("validateQTIExport — answer-not-in-choices warning", () => {
     };
     const warnings = validateQTIExport([{ label: "A", questions: [goodQ] }]);
     expect(warnings.some(w => /not among the choices/.test(w))).toBe(false);
+  });
+});
+
+describe("collectUnkeyedMCQuestions — blocking guard input (MC-only)", () => {
+  const goodMC = { type: "Multiple Choice", choices: ["3", "4", "5", "6"], answer: "4", section: "1.1" };
+  const lenientMC = { type: "Multiple Choice", choices: ["3", "-4", "5", "6"], answer: "B) -4", section: "1.2" };
+  const badMC = { type: "Multiple Choice", choices: ["12", "-4", "20", "0"], answer: "7", section: "2.3" };
+  const tfMismatch = { type: "True/False", choices: ["True", "False"], answer: "Yes", section: "3.1" };
+  const formula = { type: "Formula", answer: "x^2 + C", section: "4.1" };
+  const freeResp = { type: "Free Response", answer: "diverges", section: "5.1" };
+
+  test("MC whose answer matches a choice (exact or lenient) → not collected", () => {
+    expect(collectUnkeyedMCQuestions([{ label: "A", questions: [goodMC, lenientMC] }])).toEqual([]);
+  });
+
+  test("MC whose answer matches NO choice → collected with label, qNum, section, answer", () => {
+    const broken = collectUnkeyedMCQuestions([{ label: "A", questions: [goodMC, badMC] }]);
+    expect(broken).toEqual([{ label: "A", qNum: 2, section: "2.3", answer: "7" }]);
+  });
+
+  test("True/False with answer not in choices → NOT collected (writers never key T/F)", () => {
+    expect(collectUnkeyedMCQuestions([{ label: "A", questions: [tfMismatch] }])).toEqual([]);
+  });
+
+  test("choice-less types (Formula, Free Response) → NOT collected", () => {
+    expect(collectUnkeyedMCQuestions([{ label: "A", questions: [formula, freeResp] }])).toEqual([]);
+  });
+
+  test("multi-section flatten: broken MC in S2 reports its augmented label", () => {
+    const flat = [
+      { label: "S1 A", questions: [goodMC] },
+      { label: "S2 A", questions: [goodMC, badMC] },
+    ];
+    const broken = collectUnkeyedMCQuestions(flat);
+    expect(broken).toEqual([{ label: "S2 A", qNum: 2, section: "2.3", answer: "7" }]);
   });
 });
