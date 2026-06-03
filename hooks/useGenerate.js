@@ -59,6 +59,7 @@ export function useGenerate({
   setExamSaved = () => {},
   setSaveExamName = () => {},
   setMasterLocked = () => {},
+  setBuiltStale = () => {},
   setSelectedForExam = () => {},
   appendToMaster = false,
   setAppendToMaster = () => {},
@@ -199,6 +200,7 @@ export function useGenerate({
           setActiveClassSection(classSection);
           setPasteInput("");
           setExamSaved(false); setSaveExamName("");
+          setBuiltStale(false); // fresh build — the version set is clean
           setDupWarnings(answerWarnings);
         });
         setScreen("export");
@@ -239,6 +241,7 @@ export function useGenerate({
           setActiveVersion(0); setActiveClassSection(1);
           setPasteInput("");
           setExamSaved(false); setSaveExamName("");
+          setBuiltStale(false); // fresh build — the version set is clean
           setDupWarnings(answerWarnings);
         });
         setScreen("export");

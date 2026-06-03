@@ -20,6 +20,7 @@ export default function ExportScreen({
   setActiveVersion,
   classSectionVersions,
   setClassSectionVersions,
+  builtStale = false,
   activeClassSection,
   setActiveClassSection,
   versionsViewMode,
@@ -300,6 +301,23 @@ export default function ExportScreen({
 
       {classroomTabs}
 
+      {/* Stale built-set gate — the master was edited after build, so the
+          version/section snapshot no longer matches it. All exports are
+          disabled until the user rebuilds. See docs/exam_pipeline_design.md §2. */}
+      {builtStale && (
+        <div style={{ background: "#7c2d1233", border: "1px solid #f8717166", borderRadius: "8px", padding: "0.75rem 1rem", marginBottom: "1.25rem", fontSize: "0.8rem", color: "#fca5a5", lineHeight: 1.5 }}>
+          <span style={{ fontWeight: "700" }}>✕ Master changed — rebuild versions to export.</span>{" "}
+          The built versions no longer match the edited master. Go to{" "}
+          <button
+            onClick={() => setScreen && setScreen("build")}
+            style={{ background: "transparent", border: "none", color: "#fca5a5", textDecoration: "underline", cursor: "pointer", font: "inherit", padding: 0 }}
+          >
+            Build → Generate Variants
+          </button>{" "}
+          to refresh, then export.
+        </div>
+      )}
+
       {/* Save to DB */}
       {!examSaved && (
         <div style={{ ...S.card, borderColor: "#10b98144", marginBottom: "1.5rem" }}>
@@ -376,8 +394,8 @@ export default function ExportScreen({
           >
             <div style={{ display: "flex", gap: "0.75rem", marginBottom: "1.25rem", flexWrap: "wrap" }}>
               <button
-                style={S.btn("#10b981", exportLoading !== "")}
-                disabled={exportLoading !== ""}
+                style={S.btn("#10b981", exportLoading !== "" || builtStale)}
+                disabled={exportLoading !== "" || builtStale}
                 onClick={() => openWordExportModal("single", {
                   questions: v.questions,
                   course: v.questions[0]?.course || "Calculus",
@@ -392,7 +410,7 @@ export default function ExportScreen({
               {hasMultiSections && (
                 <button
                   style={S.oBtn("#8b5cf6")}
-                  disabled={exportLoading !== ""}
+                  disabled={exportLoading !== "" || builtStale}
                   onClick={() => openWordExportModal("sections", null)}
                 >
                   ⬇ All Sections Word
@@ -400,7 +418,7 @@ export default function ExportScreen({
               )}
               <button
                 style={S.oBtn("#f43f5e")}
-                disabled={exportLoading !== ""}
+                disabled={exportLoading !== "" || builtStale}
                 onClick={() => openWordExportModal("answerKey", null)}
               >
                 🔑 Answer Key (.docx)
@@ -529,7 +547,8 @@ export default function ExportScreen({
                   {Object.keys(classSectionVersions).sort((a, b) => Number(a) - Number(b)).map(sec => (
                     <button
                       key={sec}
-                      style={S.btn("#8b5cf6", false)}
+                      style={S.btn("#8b5cf6", builtStale)}
+                      disabled={builtStale}
                       onClick={async () => {
                         if (!guardQTI(flattenSectionVersions({ [sec]: classSectionVersions[sec] }))) return;
                         const examTitle = qtiExamName.trim() || versions[0]?.questions[0]?.course || "Exam";
@@ -542,7 +561,8 @@ export default function ExportScreen({
                     </button>
                   ))}
                   <button
-                    style={S.btn("#10b981", false)}
+                    style={S.btn("#10b981", builtStale)}
+                    disabled={builtStale}
                     onClick={async () => {
                       if (!guardQTI(flattenSectionVersions(classSectionVersions))) return;
                       const examTitle = qtiExamName.trim() || versions[0]?.questions[0]?.course || "Exam";
@@ -591,6 +611,7 @@ export default function ExportScreen({
                     <button
                       key={ver.label}
                       style={S.oBtn("#8b5cf6")}
+                      disabled={builtStale}
                       onClick={async () => {
                         if (!guardQTI([ver])) return;
                         const xml = buildQTI(ver.questions, ver.questions[0]?.course || "Exam", ver.label, qtiUseGroups, qtiPointsPerQ, qtiIncludeExplanations);
@@ -602,7 +623,8 @@ export default function ExportScreen({
                     </button>
                   ))}
                   <button
-                    style={S.btn("#8b5cf6", false)}
+                    style={S.btn("#8b5cf6", builtStale)}
+                    disabled={builtStale}
                     onClick={async () => {
                       if (!guardQTI(versions)) return;
                       const xml = buildQTICompare(versions, versions[0]?.questions[0]?.course || "Exam", qtiUseGroups, qtiPointsPerQ, qtiIncludeExplanations);
@@ -836,7 +858,8 @@ export default function ExportScreen({
             <div style={{ display: "flex", gap: "0.75rem", marginBottom: "1.25rem", flexWrap: "wrap", alignItems: "center" }}>
               <span style={{ fontSize: "0.72rem", color: accent, fontWeight: "bold" }}>Canvas export — one file, all versions:</span>
               <button
-                style={S.btn("#8b5cf6", false)}
+                style={S.btn("#8b5cf6", builtStale)}
+                disabled={builtStale}
                 onClick={async () => {
                   if (!guardQTI(versions)) return;
                   const xml = buildQTICompare(versions, versions[0]?.questions[0]?.course || "Exam", qtiUseGroups, qtiPointsPerQ, qtiIncludeExplanations);
@@ -848,7 +871,8 @@ export default function ExportScreen({
               </button>
               {hasMultiSections && (
                 <button
-                  style={S.btn("#f59e0b", false)}
+                  style={S.btn("#f59e0b", builtStale)}
+                  disabled={builtStale}
                   onClick={async () => {
                     if (!guardQTI(flattenSectionVersions(classSectionVersions))) return;
                     const course = versions[0]?.questions[0]?.course || "Exam";
@@ -861,7 +885,8 @@ export default function ExportScreen({
                 </button>
               )}
               <button
-                style={S.btn("#10b981", false)}
+                style={S.btn("#10b981", builtStale)}
+                disabled={builtStale}
                 onClick={() => openWordExportModal("compare", null)}
               >
                 ⬇ Export to Word (all versions)

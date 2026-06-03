@@ -29,6 +29,7 @@ export default function ExportPage() {
       versions={examBuilder.versions} setVersions={examBuilder.setVersions}
       activeVersion={examBuilder.activeVersion} setActiveVersion={examBuilder.setActiveVersion}
       classSectionVersions={examBuilder.classSectionVersions} setClassSectionVersions={examBuilder.setClassSectionVersions}
+      builtStale={examBuilder.builtStale}
       activeClassSection={examBuilder.activeClassSection} setActiveClassSection={examBuilder.setActiveClassSection}
       versionsViewMode={examBuilder.versionsViewMode} setVersionsViewMode={examBuilder.setVersionsViewMode}
       compareSection={examBuilder.compareSection} setCompareSection={examBuilder.setCompareSection}

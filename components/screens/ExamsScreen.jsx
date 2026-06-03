@@ -103,6 +103,7 @@ export default function ExamsScreen({
     }
     setActiveVersion && setActiveVersion(0);
     setMasterLocked && setMasterLocked(false);
+    examBuilder.setBuiltStale && examBuilder.setBuiltStale(false); // freshly loaded set is clean
     setExamSaved && setExamSaved(true);
     setSaveExamName && setSaveExamName(exam.name);
     setCourse && setCourse(vers[0]?.questions?.[0]?.course || null);
@@ -118,6 +119,7 @@ export default function ExamsScreen({
 
     examBuilder.setVersions([{ label: "A", questions: resolvedQuestions }]);
     examBuilder.setMasterLocked(true);
+    examBuilder.setBuiltStale(false); // freshly loaded master — nothing built to be stale
     examBuilder.setSelectedForExam(resolvedQuestions.map(q => q.id));
     examBuilder.setVersionCount(master.settings?.versionCount || 2);
     examBuilder.setNumClassSections(master.settings?.numClassSections || 1);

@@ -28,6 +28,8 @@ export default function BuildPage() {
       course={ctx.course}
       selectedForExam={examBuilder.selectedForExam} setSelectedForExam={examBuilder.setSelectedForExam}
       versions={examBuilder.versions} setVersions={examBuilder.setVersions}
+      classSectionVersions={examBuilder.classSectionVersions}
+      builtStale={examBuilder.builtStale} setBuiltStale={examBuilder.setBuiltStale}
       masterLocked={examBuilder.masterLocked} setMasterLocked={examBuilder.setMasterLocked}
       masterName={examBuilder.masterName} setMasterName={examBuilder.setMasterName}
       savingMaster={examBuilder.savingMaster}

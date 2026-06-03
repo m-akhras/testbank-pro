@@ -82,6 +82,9 @@ export default function BuildScreen({
   setSelectedForExam,
   versions,
   setVersions,
+  classSectionVersions = {},
+  builtStale = false,
+  setBuiltStale = () => {},
   masterLocked,
   setMasterLocked,
   masterName,
@@ -211,6 +214,7 @@ export default function BuildScreen({
                 setSelectedForExam(selected.map(q => q.id));
                 setVersions([{ label: "A", questions: selected }]);
                 setMasterLocked(true);
+                setBuiltStale(false); // fresh master — no built set to be stale
               }}
             >
               🏗 Create Master Version A →
@@ -225,11 +229,27 @@ export default function BuildScreen({
   if (masterLocked === true && versions.length > 0 && versions[0].questions.length > 0) {
     const v = versions[0];
 
+    // Editing the master after variants have been built collapses versions to
+    // [A] and would leave the built classSectionVersions snapshot STALE. Once a
+    // built set exists, warn once, mark it stale (which gates exports until a
+    // rebuild), then allow the edit. Pre-build edits are unchanged. See
+    // docs/exam_pipeline_design.md §2.
+    const hasBuiltSet = versions.length > 1 || Object.keys(classSectionVersions || {}).length > 0;
+    const guardMasterEdit = () => {
+      if (builtStale) return true;     // already stale — allow, no repeat nag
+      if (!hasBuiltSet) return true;   // pre-build — unchanged behavior
+      if (!window.confirm("Editing the master discards variants B–U and requires a rebuild. Continue?")) return false;
+      setBuiltStale(true);
+      return true;
+    };
+
     const updateMasterQuestion = updatedQ => {
+      if (!guardMasterEdit()) return;
       setVersions([{ ...v, questions: v.questions.map((q, i) => (q.id === updatedQ.id ? updatedQ : q)) }]);
     };
 
     const removeMasterQuestion = (qid) => {
+      if (!guardMasterEdit()) return;
       setVersions([{ ...v, questions: v.questions.filter(q => q.id !== qid) }]);
       setSelectedForExam(p => p.filter(id => id !== qid));
     };
@@ -240,6 +260,7 @@ export default function BuildScreen({
       const oldIdx = v.questions.findIndex(q => q.id === active.id);
       const newIdx = v.questions.findIndex(q => q.id === over.id);
       if (oldIdx < 0 || newIdx < 0) return;
+      if (!guardMasterEdit()) return;
       setVersions([{ ...v, questions: arrayMove(v.questions, oldIdx, newIdx) }]);
     };
 
@@ -265,6 +286,7 @@ export default function BuildScreen({
         showToast && showToast("All MCQ questions already have 'None of these' ✓", "info");
         return;
       }
+      if (!guardMasterEdit()) return;
       setVersions([{ ...v, questions: nextQuestions }]);
       showToast && showToast(`✓ Added "None of these" to ${updated} question${updated > 1 ? "s" : ""}`);
     };
@@ -285,6 +307,7 @@ export default function BuildScreen({
                 setMasterLocked(false);
                 setVersions([]);
                 setOrderedSelected(null);
+                setBuiltStale(false); // discarded — nothing to be stale
               }}
             >
               ✕ Discard Master & Start Over
@@ -431,6 +454,7 @@ export default function BuildScreen({
                       <InlineEditor
                         q={q}
                         onSave={updated => {
+                          if (!guardMasterEdit()) return;
                           setVersions([{ ...v, questions: v.questions.map((vq, vqi) => (vqi !== qi ? vq : updated)) }]);
                           setInlineEditQId(null);
                           showToast && showToast("Question updated ✓");
@@ -442,12 +466,14 @@ export default function BuildScreen({
                       <GraphEditor
                         initialConfig={q.graphConfig || null}
                         onSave={cfg => {
+                          if (!guardMasterEdit()) return;
                           const updated = { ...q, hasGraph: true, graphConfig: cfg };
                           setVersions([{ ...v, questions: v.questions.map((vq, vqi) => (vqi !== qi ? vq : updated)) }]);
                           setGraphEditorQId(null);
                           showToast && showToast("Graph saved ✓");
                         }}
                         onRemove={() => {
+                          if (!guardMasterEdit()) return;
                           const updated = { ...q, hasGraph: false, graphConfig: null };
                           setVersions([{ ...v, questions: v.questions.map((vq, vqi) => (vqi !== qi ? vq : updated)) }]);
                           setGraphEditorQId(null);

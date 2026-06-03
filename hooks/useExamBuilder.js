@@ -45,6 +45,12 @@ export function useExamBuilder({
   const [currentClassSection, setCurrentClassSection] = useState(1);
   const [versionMutationType, setVersionMutationType] = useState({});
   const [masterLocked, setMasterLocked] = useState(false);
+  // Marks a built version set (variants B–U / classSectionVersions) STALE after
+  // the master is edited post-build. While true, exports are gated until the
+  // user rebuilds. Set by the BuildScreen master-edit handlers; cleared on a
+  // fresh build, saved-exam load, master creation/discard. See
+  // docs/exam_pipeline_design.md §2.
+  const [builtStale, setBuiltStale] = useState(false);
   const [appendToMaster, setAppendToMaster] = useState(false);
   const [pendingAddFromBank, setPendingAddFromBank] = useState(false);
   const [masterName, setMasterName] = useState("");
@@ -215,6 +221,7 @@ export function useExamBuilder({
     currentClassSection, setCurrentClassSection,
     versionMutationType, setVersionMutationType,
     masterLocked, setMasterLocked,
+    builtStale, setBuiltStale,
     appendToMaster, setAppendToMaster,
     pendingAddFromBank, setPendingAddFromBank,
     masterName, setMasterName,

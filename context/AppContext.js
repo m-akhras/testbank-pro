@@ -94,6 +94,7 @@ export function AppProvider({ children }) {
     setExamSaved:            examBuilderHook.setExamSaved,
     setSaveExamName:         examBuilderHook.setSaveExamName,
     setMasterLocked:         examBuilderHook.setMasterLocked,
+    setBuiltStale:           examBuilderHook.setBuiltStale,
     setSelectedForExam:      examBuilderHook.setSelectedForExam,
     appendToMaster:          examBuilderHook.appendToMaster,
     setAppendToMaster:       examBuilderHook.setAppendToMaster,
