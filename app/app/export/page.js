@@ -66,7 +66,6 @@ export default function ExportPage() {
       autoGenLoading={examBuilder.autoGenLoading}
       autoGenError={examBuilder.autoGenError}
       autoGenerateVersions={examBuilder.autoGenerateVersions}
-      inlineEditQId={null} setInlineEditQId={() => {}}
       validating={validation.validating}
       validationResults={validation.validationResults}
       validationError={validation.validationError}

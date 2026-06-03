@@ -93,8 +93,6 @@ export default function ExportScreen({
   copyValidationPrompt,
 
   // Misc
-  inlineEditQId,
-  setInlineEditQId,
   showToast,
   validateQuestion,
 
@@ -122,6 +120,10 @@ export default function ExportScreen({
   const buildQTIAllSectionsMerged = exportFns.buildQTIAllSectionsMerged || buildQTIAllSectionsMergedProp;
   const validateQTIExport         = exportFns.validateQTIExport         || validateQTIExportProp;
   const dlBlob                    = exportFns.dlBlob                    || dlBlobProp;
+
+  // Per-question inline edit key (e.g. `v${activeVersion}_${qi}`). Owned locally
+  // like BuildScreen/BankScreen — the page wrapper previously passed dead stubs.
+  const [inlineEditQId, setInlineEditQId] = useState(null);
 
   // Word export template (cover page, header, footer)
   const [templateModal, setTemplateModal] = useState({ open: false, type: null, payload: null });
