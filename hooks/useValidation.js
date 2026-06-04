@@ -3,6 +3,7 @@ import { useState } from "react";
 
 export function useValidation({
   versions,
+  classSectionVersions,
   courseObject,
   onResult,
   setVersions,
@@ -17,9 +18,22 @@ export function useValidation({
   const [validationResults, setValidationResults] = useState([]);
   const [validationError, setValidationError] = useState("");
 
+  // Collect every question to validate. When a built multi-section set exists,
+  // validate ACROSS ALL SECTIONS (not just the active one) — otherwise unselected
+  // sections ship unvalidated. Falls back to `versions` at the master stage /
+  // pre-build (classSectionVersions empty). De-duped by question id so the active
+  // section (which equals classSectionVersions[active]) isn't counted twice.
   const collectQuestions = () => {
     const list = [];
-    (versions || []).forEach(v => (v?.questions || []).forEach(q => list.push(q)));
+    const seen = new Set();
+    const push = (q) => {
+      if (!q) return;
+      if (q.id != null) { if (seen.has(q.id)) return; seen.add(q.id); }
+      list.push(q);
+    };
+    const sectionVersions = Object.values(classSectionVersions || {}).flat();
+    const source = sectionVersions.length > 0 ? sectionVersions : (versions || []);
+    source.forEach(v => (v?.questions || []).forEach(push));
     return list;
   };
 

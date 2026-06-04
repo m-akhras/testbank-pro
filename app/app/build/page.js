@@ -18,7 +18,7 @@ export default function BuildPage() {
   const ctx = useAppContext();
   const S = makeStyles(green1);
   const accent = green1;
-  const { bank, examBuilder, generate } = ctx;
+  const { bank, examBuilder, generate, validation } = ctx;
 
   const setScreen = (s) => { if (SCREEN_ROUTES[s]) router.push(SCREEN_ROUTES[s]); };
 
@@ -50,6 +50,9 @@ export default function BuildPage() {
       autoGenLoading={examBuilder.autoGenLoading}
       autoGenError={examBuilder.autoGenError}
       autoGenerateVersions={examBuilder.autoGenerateVersions}
+      autoValidateAllVersions={validation.autoValidateAllVersions}
+      validating={validation.validating}
+      copyValidationPrompt={validation.copyValidationPrompt}
       showToast={ctx.showToast}
       validateQuestion={validateQuestion}
       sectionSortKey={sectionSortKey}

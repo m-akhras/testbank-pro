@@ -120,6 +120,10 @@ export default function BuildScreen({
   autoGenLoading = false,
   autoGenError = "",
   autoGenerateVersions,
+  // Master-stage AI validation (versions=[A]); same hook used on Export
+  autoValidateAllVersions,
+  validating = false,
+  copyValidationPrompt,
   // Styles
   S,
   text1,
@@ -376,6 +380,28 @@ export default function BuildScreen({
           >
             ＋ Generate more
           </button>
+          {isAdmin && autoValidateAllVersions && (
+            <button
+              style={{ ...S.btn("#7c3aed", validating), fontSize: "0.75rem" }}
+              disabled={validating}
+              onClick={() => {
+                const questionCount = v.questions.length;
+                const estimatedCost = (questionCount * 300 * 3 / 1_000_000) + (questionCount * 200 * 15 / 1_000_000);
+                if (!window.confirm(`Auto Validate will check ${questionCount} master question${questionCount === 1 ? "" : "s"}.\n\nEstimated cost: ~$${estimatedCost.toFixed(4)}\n\nProceed?`)) return;
+                autoValidateAllVersions();
+              }}
+            >
+              {validating ? "⏳ Validating..." : "✅ Auto Validate"}
+            </button>
+          )}
+          {isAdmin && copyValidationPrompt && (
+            <button
+              style={{ ...S.oBtn("#7c3aed"), fontSize: "0.75rem" }}
+              onClick={() => copyValidationPrompt()}
+            >
+              📋 Copy Validation Prompt
+            </button>
+          )}
         </div>
 
         {(() => {

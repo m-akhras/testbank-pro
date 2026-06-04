@@ -4,7 +4,7 @@ import MathText from "../display/MathText.js";
 import GraphDisplay from "../display/GraphDisplay.js";
 import GraphChoice from "../display/GraphChoice.jsx";
 import ValidationBadge from "./ValidationBadge.jsx";
-import { stripChoiceLabel, isGraphChoice, validateQuestion } from "../../lib/utils/questions.js";
+import { stripChoiceLabel, isGraphChoice, validateQuestion, resolveInheritedStatus } from "../../lib/utils/questions.js";
 import { useAppContext } from "../../context/AppContext.js";
 
 // Clickable structural-validator pill. Mirrors ValidationBadge's popover
@@ -211,30 +211,14 @@ export default function QuestionCard({
   // its status. Inherited badges are visually distinguished in
   // <ValidationBadge>. Re-validating the source automatically updates every
   // variant since they all read through this lookup on the next render.
+  // resolveInheritedStatus is the shared single source of truth (also used by
+  // ExportScreen) so both screens render the same verdict.
   const { bank: bankHook } = useAppContext();
   const bankArr = bankHook?.bank;
-  const inherited = useMemo(() => {
-    if (q.validationStatus) {
-      return {
-        status: q.validationStatus,
-        issues: q.validationIssues,
-        validatedAt: q.validatedAt,
-        inherited: false,
-      };
-    }
-    if (q.originalId && Array.isArray(bankArr)) {
-      const source = bankArr.find(b => b.id === q.originalId);
-      if (source?.validationStatus) {
-        return {
-          status: source.validationStatus,
-          issues: source.validationIssues,
-          validatedAt: source.validatedAt,
-          inherited: true,
-        };
-      }
-    }
-    return { status: null, issues: [], validatedAt: null, inherited: false };
-  }, [q.validationStatus, q.validationIssues, q.validatedAt, q.originalId, bankArr]);
+  const inherited = useMemo(
+    () => resolveInheritedStatus(q, bankArr),
+    [q.validationStatus, q.validationIssues, q.validatedAt, q.originalId, bankArr]
+  );
 
   return (
     <div style={{

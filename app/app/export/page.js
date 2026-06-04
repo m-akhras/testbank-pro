@@ -73,6 +73,7 @@ export default function ExportPage() {
       copyValidationPrompt={validation.copyValidationPrompt}
       showToast={ctx.showToast}
       validateQuestion={validateQuestion}
+      bank={bank.bank}
       setScreen={setScreen}
       isAdmin={ctx.auth.isAdmin}
       S={S}

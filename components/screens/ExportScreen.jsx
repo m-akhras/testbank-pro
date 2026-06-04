@@ -9,9 +9,10 @@ import ExportTemplateModal from "../modals/ExportTemplateModal.jsx";
 import { useExportFunctions } from "../../context/ExportFunctionsContext.js";
 import { getCourse } from "../../lib/courses/index.js";
 import { collectUnkeyedMCQuestions } from "../../lib/exports/index.js";
-import { stripChoiceLabel, isGraphChoice } from "../../lib/utils/questions.js";
+import { stripChoiceLabel, isGraphChoice, resolveInheritedStatus } from "../../lib/utils/questions.js";
 import GraphChoice from "../display/GraphChoice.jsx";
 import RegenerateMenu from "../question/RegenerateMenu.jsx";
+import ValidationBadge from "../question/ValidationBadge.jsx";
 
 export default function ExportScreen({
   // Versions state
@@ -96,6 +97,7 @@ export default function ExportScreen({
   // Misc
   showToast,
   validateQuestion,
+  bank,
 
   // Navigation + permissions
   setScreen,
@@ -144,7 +146,23 @@ export default function ExportScreen({
     })();
   }, []);
 
-  const openWordExportModal = (type, payload) => setTemplateModal({ open: true, type, payload });
+  // Open the Word/Answer-Key template modal — but first run the soft-confirm
+  // gate on the questions this export will ship. A flagged question is just as
+  // wrong in Word as in Canvas, so the .docx buttons honor the same gate (the
+  // QTI-only hard block does NOT apply here — keyless MCQs still render fine in
+  // Word). builtStale already disables these buttons upstream.
+  const openWordExportModal = (type, payload) => {
+    let versionList;
+    if (type === "single") {
+      versionList = [{ label: payload?.label, questions: payload?.questions || [] }];
+    } else if (type === "sections") {
+      versionList = flattenSectionVersions(classSectionVersions);
+    } else {
+      versionList = versions; // "answerKey" + "compare" cover all versions
+    }
+    if (!softConfirmFlags(versionList)) return;
+    setTemplateModal({ open: true, type, payload });
+  };
 
   // ── Loud QTI guard ────────────────────────────────────────────────────────
   // Blocks a QTI export when any Multiple Choice question would import into
@@ -183,6 +201,31 @@ export default function ExportScreen({
       ✕ {qtiBlockMsg}
     </div>
   ) : null;
+
+  // ── Soft-confirm gate (honor system — the user owns the exam) ───────────────
+  // Runs AFTER the hard block (guardQTI) has passed. Collects any OTHER uncleared
+  // flag — an AI validationStatus of "error"/"warning" (own or inherited) or a
+  // non-empty static validateQuestion list — and asks for confirmation. Yes
+  // ships, No aborts. Never blocks (the hard block is the only un-overridable
+  // gate). See docs/exam_pipeline_design.md §4. Returns true to proceed.
+  const softConfirmFlags = (versionList) => {
+    const flagged = [];
+    (versionList || []).forEach(v => {
+      (v?.questions || []).forEach((q, qi) => {
+        const { status } = resolveInheritedStatus(q, bank);
+        const aiFlag = status === "error" || status === "warning";
+        const staticFlag = validateQuestion ? validateQuestion(q).length > 0 : false;
+        if (aiFlag || staticFlag) {
+          flagged.push(`${v.label ? v.label + " " : ""}Q${qi + 1}`);
+        }
+      });
+    });
+    if (flagged.length === 0) return true;
+    const shown = flagged.slice(0, 8).join(", ") + (flagged.length > 8 ? "…" : "");
+    return window.confirm(
+      `${flagged.length} flagged question${flagged.length > 1 ? "s weren't" : " wasn't"} fixed (${shown}). Export anyway?`
+    );
+  };
 
   if (!versions || versions.length === 0) {
     return (
@@ -554,6 +597,7 @@ export default function ExportScreen({
                       disabled={builtStale}
                       onClick={async () => {
                         if (!guardQTI(flattenSectionVersions({ [sec]: classSectionVersions[sec] }))) return;
+                        if (!softConfirmFlags(flattenSectionVersions({ [sec]: classSectionVersions[sec] }))) return;
                         const examTitle = qtiExamName.trim() || versions[0]?.questions[0]?.course || "Exam";
                         const blobs = await buildClassroomSectionsQTI({ [sec]: classSectionVersions[sec] }, examTitle, qtiUseGroups, qtiPointsPerQ, qtiIncludeExplanations);
                         const safeName = (qtiExamName.trim() || "Section").replace(/[^a-zA-Z0-9]/g, "_");
@@ -568,6 +612,7 @@ export default function ExportScreen({
                     disabled={builtStale}
                     onClick={async () => {
                       if (!guardQTI(flattenSectionVersions(classSectionVersions))) return;
+                      if (!softConfirmFlags(flattenSectionVersions(classSectionVersions))) return;
                       const examTitle = qtiExamName.trim() || versions[0]?.questions[0]?.course || "Exam";
                       const blobs = await buildClassroomSectionsQTI(classSectionVersions, examTitle, qtiUseGroups, qtiPointsPerQ, qtiIncludeExplanations);
                       const safeName = (qtiExamName.trim() || "Section").replace(/[^a-zA-Z0-9]/g, "_");
@@ -617,6 +662,7 @@ export default function ExportScreen({
                       disabled={builtStale}
                       onClick={async () => {
                         if (!guardQTI([ver])) return;
+                        if (!softConfirmFlags([ver])) return;
                         const xml = buildQTI(ver.questions, ver.questions[0]?.course || "Exam", ver.label, qtiUseGroups, qtiPointsPerQ, qtiIncludeExplanations);
                         const blob = await buildQTIZip(xml, `Version_${ver.label}`);
                         dlBlob(blob, `Version_${ver.label}_Canvas_QTI.zip`);
@@ -630,6 +676,7 @@ export default function ExportScreen({
                     disabled={builtStale}
                     onClick={async () => {
                       if (!guardQTI(versions)) return;
+                      if (!softConfirmFlags(versions)) return;
                       const xml = buildQTICompare(versions, versions[0]?.questions[0]?.course || "Exam", qtiUseGroups, qtiPointsPerQ, qtiIncludeExplanations);
                       const blob = await buildQTIZip(xml, "AllVersions");
                       dlBlob(blob, "AllVersions_Canvas_QTI.zip");
@@ -652,6 +699,15 @@ export default function ExportScreen({
                   <span style={S.tag("#f43f5e")}>{q.type}</span>
                   <span style={S.tag()}>{q.section}</span>
                   <span style={S.tag()}>{q.difficulty}</span>
+                  {(() => {
+                    // Surface the AI validation verdict on the export side too
+                    // (own status, or inherited from the bank source) so the
+                    // fix-before-export loop is visible where exports happen.
+                    const ai = resolveInheritedStatus(q, bank);
+                    return ai.status ? (
+                      <ValidationBadge status={ai.status} issues={ai.issues} validatedAt={ai.validatedAt} inherited={ai.inherited} />
+                    ) : null;
+                  })()}
                   {issues.length > 0 && (
                     <span title={issues.join("\n")} style={{ cursor: "help", background: "#7c2d12", color: "#9B1C1C", fontSize: "0.68rem", fontWeight: "600", padding: "0.1rem 0.4rem", borderRadius: "4px", whiteSpace: "nowrap" }}>
                       ⚠️ {issues.length}
@@ -858,6 +914,7 @@ export default function ExportScreen({
                 disabled={builtStale}
                 onClick={async () => {
                   if (!guardQTI(versions)) return;
+                  if (!softConfirmFlags(versions)) return;
                   const xml = buildQTICompare(versions, versions[0]?.questions[0]?.course || "Exam", qtiUseGroups, qtiPointsPerQ, qtiIncludeExplanations);
                   const blob = await buildQTIZip(xml, "AllVersions");
                   dlBlob(blob, "AllVersions_Canvas_QTI.zip");
@@ -871,6 +928,7 @@ export default function ExportScreen({
                   disabled={builtStale}
                   onClick={async () => {
                     if (!guardQTI(flattenSectionVersions(classSectionVersions))) return;
+                    if (!softConfirmFlags(flattenSectionVersions(classSectionVersions))) return;
                     const course = versions[0]?.questions[0]?.course || "Exam";
                     const xml = buildQTIAllSectionsMerged(classSectionVersions, course, qtiPointsPerQ, qtiIncludeExplanations);
                     const blob = await buildQTIZip(xml, "AllSections_Merged");
