@@ -262,6 +262,24 @@ Ship in this order — each step stands alone and is independently testable:
 
 ---
 
+## 5a. Known limitations
+
+**Per-variant validation verdicts are not durably persisted.** Validation keys
+verdicts by `dbId = originalId || id`, and all variants of a question share one
+`originalId`, so the DB stores one verdict per source question. During a session,
+each variant carries its own correct in-memory `validationStatus` (written by
+`_patchLocalVersions`). On reload, a variant with no own-status falls back to the
+bank source's badge (`resolveInheritedStatus` → `inherited:true`), so all
+variants of a question show the same badge regardless of their actual per-variant
+state. This is cosmetic-on-reload only: the export gates do **NOT** trust
+persisted badges — `collectUnkeyedMCQuestions` (hard block) and `validateQuestion`
+(soft confirm) recompute from live question data at export time. Fixing durably
+would require giving variants their own identity in the `questions` table or a
+separate per-variant verdict store (a schema migration); deferred as not worth the
+migration risk for a reload-only display issue.
+
+---
+
 ## 6. Anchor index (current tree — for impl prompts)
 
 | Concern | Symbol / file:line |
