@@ -120,8 +120,8 @@ export function useGenerate({
     setPasteError("");
   }
 
-  function triggerReplace(vIdx, qIdx, mutationType = "numbers") {
-    const prompt = buildReplacePrompt(versions[vIdx].questions[qIdx], mutationType);
+  function triggerReplace(vIdx, qIdx, mutationType = "numbers", reason = "") {
+    const prompt = buildReplacePrompt(versions[vIdx].questions[qIdx], mutationType, reason);
     setGeneratedPrompt(prompt);
     setPendingType("replace");
     setPendingMeta({ vIdx, qIdx });

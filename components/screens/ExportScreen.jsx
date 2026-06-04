@@ -11,6 +11,7 @@ import { getCourse } from "../../lib/courses/index.js";
 import { collectUnkeyedMCQuestions } from "../../lib/exports/index.js";
 import { stripChoiceLabel, isGraphChoice } from "../../lib/utils/questions.js";
 import GraphChoice from "../display/GraphChoice.jsx";
+import RegenerateMenu from "../question/RegenerateMenu.jsx";
 
 export default function ExportScreen({
   // Versions state
@@ -657,18 +658,11 @@ export default function ExportScreen({
                     </span>
                   )}
                   <div style={{ marginLeft: "auto", display: "flex", gap: "0.3rem" }}>
-                    <button
-                      style={{ ...S.smBtn, color: "#f59e0b", border: "1px solid #f59e0b44" }}
-                      onClick={() => isAdmin ? triggerReplace && triggerReplace(activeVersion, qi, "numbers") : triggerReplaceAuto && triggerReplaceAuto(activeVersion, qi, "numbers")}
-                    >
-                      ↻ Replace
-                    </button>
-                    <button
-                      style={{ ...S.smBtn, color: "#e879f9", border: "1px solid #e879f944" }}
-                      onClick={() => isAdmin ? triggerReplace && triggerReplace(activeVersion, qi, "function") : triggerReplaceAuto && triggerReplaceAuto(activeVersion, qi, "function")}
-                    >
-                      ↻ Diff.
-                    </button>
+                    <RegenerateMenu
+                      q={q}
+                      S={S}
+                      onPick={(mutationType, reason) => triggerReplace && triggerReplace(activeVersion, qi, mutationType, reason)}
+                    />
                     <button
                       style={{ ...S.smBtn, color: inlineEditQId === `v${activeVersion}_${qi}` ? "#60a5fa" : "#a78bfa", border: "1px solid #a78bfa44" }}
                       onClick={() => setInlineEditQId(inlineEditQId === `v${activeVersion}_${qi}` ? null : `v${activeVersion}_${qi}`)}

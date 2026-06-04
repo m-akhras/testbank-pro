@@ -20,6 +20,8 @@ import { CSS } from "@dnd-kit/utilities";
 import InlineEditor from "../editors/InlineEditor.js";
 import GraphEditor from "../editors/GraphEditor.js";
 import QuestionCard from "../question/QuestionCard.jsx";
+import RegenerateMenu from "../question/RegenerateMenu.jsx";
+import PastePanel from "../panels/PastePanel.js";
 
 function SortableRow({ id, children, S, border, text3 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
@@ -103,6 +105,21 @@ export default function BuildScreen({
   setAppendToMaster,
   pendingAddFromBank,
   setPendingAddFromBank,
+  // Per-question regenerate (replace) round-trip — master writes versions[0]
+  triggerReplace,
+  pendingType,
+  pendingMeta,
+  setPendingType = () => {},
+  generatedPrompt,
+  setGeneratedPrompt = () => {},
+  pasteInput,
+  setPasteInput = () => {},
+  pasteError,
+  handlePaste,
+  isAdmin = false,
+  autoGenLoading = false,
+  autoGenError = "",
+  autoGenerateVersions,
   // Styles
   S,
   text1,
@@ -436,20 +453,87 @@ export default function BuildScreen({
                 onEdit={() => { setInlineEditQId(editing ? null : `master_${qi}`); setGraphEditorQId(null); }}
                 onGraphEdit={() => { setGraphEditorQId(editingGraph ? null : q.id); setInlineEditQId(null); }}
                 onDelete={() => removeMasterQuestion(q.id)}
-                onReplace={() => showToast && showToast("Replace from the Bank screen for now", "info")}
-                headerExtra={q.choices && (
-                  <label style={{ display: "flex", alignItems: "center", gap: "0.3rem", fontSize: "0.68rem", color: text2, cursor: "pointer", border: "1px solid " + border, padding: "0.15rem 0.45rem", borderRadius: "4px" }}>
-                    <input
-                      type="checkbox"
-                      checked={hasNone}
-                      onChange={() => toggleNoneOfAbove(qi)}
-                      style={{ accentColor: accent, width: "12px", height: "12px" }}
-                    />
-                    None of these
-                  </label>
-                )}
-                bodyTop={(editing || editingGraph) && (
+                headerExtra={
                   <>
+                    {q.choices && (
+                      <label style={{ display: "flex", alignItems: "center", gap: "0.3rem", fontSize: "0.68rem", color: text2, cursor: "pointer", border: "1px solid " + border, padding: "0.15rem 0.45rem", borderRadius: "4px" }}>
+                        <input
+                          type="checkbox"
+                          checked={hasNone}
+                          onChange={() => toggleNoneOfAbove(qi)}
+                          style={{ accentColor: accent, width: "12px", height: "12px" }}
+                        />
+                        None of these
+                      </label>
+                    )}
+                    {triggerReplace && (
+                      <RegenerateMenu
+                        q={q}
+                        S={S}
+                        onPick={(mutationType, reason) => {
+                          // Master edit: post-build this discards variants (§2);
+                          // pre-build it's a normal edit. Guard first, then arm
+                          // the replace round-trip targeting version A (index 0).
+                          if (!guardMasterEdit()) return;
+                          triggerReplace(0, qi, mutationType, reason);
+                        }}
+                      />
+                    )}
+                  </>
+                }
+                bodyTop={(editing || editingGraph || (pendingType === "replace" && pendingMeta?.vIdx === 0 && pendingMeta?.qIdx === qi)) && (
+                  <>
+                    {pendingType === "replace" && pendingMeta?.vIdx === 0 && pendingMeta?.qIdx === qi && (
+                      <>
+                        {isAdmin && generatedPrompt && (
+                          <>
+                            <div style={{ fontSize: "0.75rem", color: "#f59e0b", fontWeight: "bold", margin: "0.75rem 0 0.4rem" }}>
+                              📋 Replacement prompt:
+                            </div>
+                            <div style={S.promptBox}>{generatedPrompt}</div>
+                            <div style={{ display: "flex", gap: "0.5rem", marginBottom: "0.75rem", flexWrap: "wrap" }}>
+                              {autoGenerateVersions && (
+                                <button
+                                  style={{ ...S.btn("#10b981", autoGenLoading), minWidth: "150px" }}
+                                  disabled={autoGenLoading}
+                                  onClick={() => autoGenerateVersions(generatedPrompt, "replace", pendingMeta)}
+                                >
+                                  {autoGenLoading ? "⏳ Generating..." : "⚡ Auto-Generate"}
+                                </button>
+                              )}
+                              <button style={S.oBtn("#f59e0b")} onClick={() => navigator.clipboard.writeText(generatedPrompt)}>
+                                Copy Prompt
+                              </button>
+                            </div>
+                            {autoGenError && <div style={{ color: "#f87171", fontSize: "0.78rem", marginBottom: "0.5rem" }}>{autoGenError}</div>}
+                            <PastePanel
+                              label="Paste the replacement question JSON here."
+                              S={S}
+                              text2={text2}
+                              pasteInput={pasteInput}
+                              setPasteInput={setPasteInput}
+                              pasteError={pasteError}
+                              handlePaste={handlePaste}
+                              onCancel={() => { setPendingType(null); setPasteInput(""); setGeneratedPrompt(""); }}
+                            />
+                          </>
+                        )}
+                        {!isAdmin && (
+                          <div style={{ marginTop: "0.75rem", display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap", padding: "0.6rem 0.75rem", background: "#052e1688", borderRadius: "6px", border: "1px solid #22c55e22" }}>
+                            {autoGenLoading ? (
+                              <span style={{ fontSize: "0.75rem", color: "#86efac" }}>⏳ Generating replacement...</span>
+                            ) : autoGenError ? (
+                              <span style={{ fontSize: "0.72rem", color: "#f87171" }}>{autoGenError}</span>
+                            ) : (
+                              <span style={{ fontSize: "0.72rem", color: "#86efac" }}>✓ Done</span>
+                            )}
+                            <button style={{ ...S.smBtn, color: text2, marginLeft: "auto" }} onClick={() => { setPendingType(null); setGeneratedPrompt(""); }}>
+                              Cancel
+                            </button>
+                          </div>
+                        )}
+                      </>
+                    )}
                     {editing && (
                       <InlineEditor
                         q={q}

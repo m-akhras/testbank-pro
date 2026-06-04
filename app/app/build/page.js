@@ -39,6 +39,17 @@ export default function BuildPage() {
       setAppendToMaster={examBuilder.setAppendToMaster}
       pendingAddFromBank={examBuilder.pendingAddFromBank}
       setPendingAddFromBank={examBuilder.setPendingAddFromBank}
+      triggerReplace={generate.triggerReplace}
+      pendingType={generate.pendingType} setPendingType={generate.setPendingType}
+      pendingMeta={generate.pendingMeta}
+      generatedPrompt={generate.generatedPrompt} setGeneratedPrompt={generate.setGeneratedPrompt}
+      pasteInput={generate.pasteInput} setPasteInput={generate.setPasteInput}
+      pasteError={generate.pasteError}
+      handlePaste={generate.handlePaste}
+      isAdmin={ctx.auth.isAdmin}
+      autoGenLoading={examBuilder.autoGenLoading}
+      autoGenError={examBuilder.autoGenError}
+      autoGenerateVersions={examBuilder.autoGenerateVersions}
       showToast={ctx.showToast}
       validateQuestion={validateQuestion}
       sectionSortKey={sectionSortKey}
