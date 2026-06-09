@@ -11,7 +11,13 @@ export const EG_TYPES = [
   { value: "branched",   label: "Branched" },
 ];
 
-const EMPTY_DRAFT = { type: "", chapter: "", section: "", wording: "", details: "" };
+const EMPTY_DRAFT = {
+  type: "", chapter: "", section: "", wording: "", details: "",
+  // When the chosen section has a template, the filled template-form answers
+  // live here (and templateId records which template they belong to). Both are
+  // cleared on any topic change so stale answers never survive a section switch.
+  templateAnswers: null, templateId: null,
+};
 
 function newId() {
   if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
@@ -41,20 +47,27 @@ export function useExamGenerator() {
 
   // --- per-step value setters (Phase A: just store the typed value) ----------
   const setType = (type) => setDraft(d => ({ ...d, type }));
-  const setChapterSection = (chapter, section = "") => setDraft(d => ({ ...d, chapter, section }));
+  // Any topic change invalidates template-form answers (they're section-bound).
+  const setChapterSection = (chapter, section = "") =>
+    setDraft(d => ({ ...d, chapter, section, templateAnswers: null, templateId: null }));
   const setWording = (wording) => setDraft(d => ({ ...d, wording }));
   const setDetails = (details) => setDraft(d => ({ ...d, details }));
+  const setTemplateAnswers = (templateAnswers, templateId = null) =>
+    setDraft(d => ({ ...d, templateAnswers, templateId }));
 
   // --- draft-list lifecycle --------------------------------------------------
 
   // Push the in-progress draft onto the list (or save edits back), then reset
-  // and return to the draft list.
-  function commitDraft() {
+  // and return to the draft list. An optional `patch` is merged synchronously
+  // so callers that just set state in the same tick (e.g. the template form
+  // handing back its answers) don't lose that value to React's async setDraft.
+  function commitDraft(patch = null) {
+    const merged = patch && typeof patch === "object" ? { ...draft, ...patch } : draft;
     setDrafts(prev => {
       if (editingId != null) {
-        return prev.map(q => q.id === editingId ? { ...q, ...draft, id: editingId } : q);
+        return prev.map(q => q.id === editingId ? { ...q, ...merged, id: editingId } : q);
       }
-      return [...prev, { ...draft, id: newId() }];
+      return [...prev, { ...merged, id: newId() }];
     });
     setDraft({ ...EMPTY_DRAFT });
     setEditingId(null);
@@ -119,6 +132,7 @@ export function useExamGenerator() {
     setChapterSection,
     setWording,
     setDetails,
+    setTemplateAnswers,
     // lifecycle
     commitDraft,
     startNewQuestion,

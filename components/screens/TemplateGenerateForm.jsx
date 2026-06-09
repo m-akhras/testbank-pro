@@ -3,16 +3,35 @@ import { useState, useMemo } from "react";
 import { makeStyles, green1, text2, text3 } from "../../lib/theme.js";
 import { buildTemplatePrompt } from "../../lib/templates/buildTemplatePrompt.js";
 
-export default function TemplateGenerateForm({ template, onPromptReady, onCancel }) {
+export default function TemplateGenerateForm({
+  template,
+  onPromptReady,
+  onCancel,
+  // ── Additive, opt-in props (omitted = today's GenerateScreen behavior) ──
+  // Seed the form from previously-saved answers (Exam Generator edit round-trip).
+  initialAnswers = null,
+  // Field ids to hide from the form (e.g. batch-only count / student_tasks when
+  // the form is mounted per-question inside the Exam Generator wizard). Hidden
+  // fields keep their defaults in `answers` so validation/build still work.
+  hideFieldIds = [],
+  // Action-button label. The wizard passes "Save details →" since the actual
+  // build happens later at the wizard's Build step, not here.
+  submitLabel = "Build Prompt →",
+  // Compact, wizard-friendly heading instead of the standalone "Template
+  // Generator —" title block.
+  perQuestion = false,
+}) {
   const S = useMemo(() => makeStyles(green1), []);
 
-  // Initialize state from template defaults
+  // Initialize state from template defaults, then overlay any saved answers.
   const [answers, setAnswers] = useState(() => {
     const init = {};
     for (const field of template.fields) {
       init[field.id] = field.default;
     }
-    return init;
+    return initialAnswers && typeof initialAnswers === "object"
+      ? { ...init, ...initialAnswers }
+      : init;
   });
 
   const [error, setError] = useState(null);
@@ -259,10 +278,12 @@ export default function TemplateGenerateForm({ template, onPromptReady, onCancel
     return null;
   };
 
-  // Group fields: number+single_select fields go in rows; multi_select, multi_select_with_counts, and free_text go full width
+  // Group fields: number+single_select fields go in rows; multi_select, multi_select_with_counts, and free_text go full width.
+  // Hidden fields are filtered out of rendering (they keep their defaults in `answers`).
+  const visibleFields = template.fields.filter(f => !hideFieldIds.includes(f.id));
   const fieldRows = [];
   let currentRow = [];
-  for (const field of template.fields) {
+  for (const field of visibleFields) {
     if (
       field.type === "multi_select" ||
       field.type === "multi_select_with_counts" ||
@@ -287,22 +308,35 @@ export default function TemplateGenerateForm({ template, onPromptReady, onCancel
 
   return (
     <div style={S.card}>
-      <h2 style={{
-        fontFamily: "'Georgia', serif",
-        fontSize: "1.4rem",
-        color: text2,
-        margin: "0 0 0.3rem 0"
-      }}>
-        Template Generator — {template.course}, Section {template.section}
-      </h2>
-      <div style={{
-        fontFamily: "'Inter', system-ui, sans-serif",
-        fontSize: "0.85rem",
-        color: text3,
-        marginBottom: "1.5rem"
-      }}>
-        {template.sectionTitle} · {template.textbook}
-      </div>
+      {perQuestion ? (
+        <>
+          <h2 style={{ fontFamily: "'Georgia', serif", fontSize: "1.4rem", color: text2, margin: "0 0 0.3rem 0" }}>
+            4 · Details — {template.section} template
+          </h2>
+          <div style={{ fontFamily: "'Inter', system-ui, sans-serif", fontSize: "0.85rem", color: text3, marginBottom: "1.5rem" }}>
+            {template.sectionTitle} · these choices guide the choices, answer key, and explanation — your wording stays as written.
+          </div>
+        </>
+      ) : (
+        <>
+          <h2 style={{
+            fontFamily: "'Georgia', serif",
+            fontSize: "1.4rem",
+            color: text2,
+            margin: "0 0 0.3rem 0"
+          }}>
+            Template Generator — {template.course}, Section {template.section}
+          </h2>
+          <div style={{
+            fontFamily: "'Inter', system-ui, sans-serif",
+            fontSize: "0.85rem",
+            color: text3,
+            marginBottom: "1.5rem"
+          }}>
+            {template.sectionTitle} · {template.textbook}
+          </div>
+        </>
+      )}
 
       {fieldRows.map((item, idx) => {
         if (item.kind === "row") {
@@ -336,7 +370,7 @@ export default function TemplateGenerateForm({ template, onPromptReady, onCancel
           </button>
         )}
         <button type="button" style={S.btn(green1, false)} onClick={handleBuildPrompt}>
-          Build Prompt →
+          {submitLabel}
         </button>
       </div>
     </div>

@@ -6,11 +6,29 @@ import { useAppContext } from "../../context/AppContext.js";
 import { makeStyles, text1, text2, text3, border, bg1, bg2, bg0, green1 } from "../../lib/theme.js";
 import { EG_TYPES } from "../../hooks/useExamGenerator.js";
 import { buildExamGeneratorPrompt } from "../../lib/prompts/index.js";
+import { findTemplate } from "../../lib/templates/registry.js";
+import TemplateGenerateForm from "./TemplateGenerateForm.jsx";
 import {
   getWordingSuggestions,
   buildWordingSuggestionPrompt,
   parseWordingSuggestions,
 } from "../../lib/suggestions/wordingSuggestions.js";
+
+// Short, readable summary of a draft's saved template answers for the draft list.
+function summarizeTemplateAnswers(tmpl, a) {
+  if (!tmpl || !a) return "";
+  const lab = (fid, val) => {
+    const f = tmpl.fields.find(x => x.id === fid);
+    const o = f?.options?.find(x => x.value === val);
+    return o ? o.label : val;
+  };
+  const bits = [];
+  if (a.primary_focus) bits.push(lab("primary_focus", a.primary_focus));
+  if (Array.isArray(a.function_types) && a.function_types.length) {
+    bits.push(a.function_types.map(v => lab("function_types", v)).join(", "));
+  }
+  return bits.join(" · ");
+}
 
 // Friendly label for a suggestion's provenance badge.
 const WS_SOURCE_LABEL = { template: "textbook", bank: "your bank", grounding: "style", ai: "AI" };
@@ -410,30 +428,54 @@ export default function ExamGeneratorScreen() {
         </div>
       )}
 
-      {/* STEP: details (Phase A stub) ---------------------------------------- */}
-      {step === "details" && (
-        <div style={S.card}>
-          <h2 style={S.h2}>4 · Function / details</h2>
-          <p style={{ ...S.sub, marginBottom: "0.5rem" }}>
-            Add the specifics this question needs (base, evaluation point, coefficients…).
-          </p>
-          <p style={{ fontSize: "0.72rem", color: text3, fontStyle: "italic", marginBottom: "1rem", fontFamily: "'Inter',system-ui,sans-serif" }}>
-            ✨ AI suggestions coming soon — type the details for now.
-          </p>
-          <textarea
-            style={{ ...S.textarea, fontFamily: "'Georgia',serif", minHeight: "100px" }}
-            placeholder="Function / details"
-            value={draft.details}
-            onChange={(e) => eg.setDetails(e.target.value)}
-          />
-          <div style={{ display: "flex", justifyContent: "space-between", marginTop: "1.5rem" }}>
-            <Back to="wording" />
-            <button style={S.btn(green1)} onClick={() => eg.commitDraft()}>
-              {eg.editingId != null ? "Save changes" : "Add to draft list ✓"}
-            </button>
+      {/* STEP: details — section template form when available, else free-text */}
+      {step === "details" && (() => {
+        const tmpl = course ? findTemplate(course, draft.section) : null;
+
+        // Section has a template: mount the reusable template form per-question.
+        // Batch-only fields are hidden; we keep ONLY the captured answers (the
+        // generated prompt is ignored — the real build happens at the wizard's
+        // Build step). commitDraft takes the answers as a synchronous patch.
+        if (tmpl) {
+          return (
+            <TemplateGenerateForm
+              template={tmpl}
+              perQuestion
+              hideFieldIds={["count", "student_tasks"]}
+              initialAnswers={draft.templateAnswers}
+              submitLabel={eg.editingId != null ? "Save changes ✓" : "Save details →"}
+              onPromptReady={(_prompt, answers) =>
+                eg.commitDraft({ templateAnswers: answers, templateId: tmpl.id })}
+              onCancel={() => setStep("wording")}
+            />
+          );
+        }
+
+        // No template for this section — honest free-text fallback.
+        return (
+          <div style={S.card}>
+            <h2 style={S.h2}>4 · Function / details</h2>
+            <p style={{ ...S.sub, marginBottom: "0.5rem" }}>
+              Add the specifics this question needs (base, evaluation point, coefficients…).
+            </p>
+            <p style={{ fontSize: "0.72rem", color: text3, fontStyle: "italic", marginBottom: "1rem", fontFamily: "'Inter',system-ui,sans-serif" }}>
+              No template for this section — type the details for now.
+            </p>
+            <textarea
+              style={{ ...S.textarea, fontFamily: "'Georgia',serif", minHeight: "100px" }}
+              placeholder="Function / details"
+              value={draft.details}
+              onChange={(e) => eg.setDetails(e.target.value)}
+            />
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: "1.5rem" }}>
+              <Back to="wording" />
+              <button style={S.btn(green1)} onClick={() => eg.commitDraft()}>
+                {eg.editingId != null ? "Save changes" : "Add to draft list ✓"}
+              </button>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* STEP: draft list ----------------------------------------------------- */}
       {step === "list" && (
@@ -473,14 +515,29 @@ export default function ExamGeneratorScreen() {
                         </span>
                       )}
                     </div>
-                    <div style={{ ...S.qText, marginBottom: q.details ? "0.3rem" : 0 }}>
-                      {q.wording || <span style={{ color: text3, fontStyle: "italic" }}>No wording</span>}
-                    </div>
-                    {q.details && (
-                      <div style={{ fontSize: "0.75rem", color: text2, fontFamily: "'Inter',system-ui,sans-serif" }}>
-                        {q.details}
-                      </div>
-                    )}
+                    {(() => {
+                      const tmplSummary = q.templateAnswers
+                        ? summarizeTemplateAnswers(findTemplate(course, q.section), q.templateAnswers)
+                        : "";
+                      const hasSub = !!q.details || !!tmplSummary;
+                      return (
+                        <>
+                          <div style={{ ...S.qText, marginBottom: hasSub ? "0.3rem" : 0 }}>
+                            {q.wording || <span style={{ color: text3, fontStyle: "italic" }}>No wording</span>}
+                          </div>
+                          {tmplSummary && (
+                            <div style={{ fontSize: "0.75rem", color: green1, fontFamily: "'Inter',system-ui,sans-serif" }}>
+                              ✦ {tmplSummary}
+                            </div>
+                          )}
+                          {q.details && (
+                            <div style={{ fontSize: "0.75rem", color: text2, fontFamily: "'Inter',system-ui,sans-serif" }}>
+                              {q.details}
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
 
                   {/* Row actions */}
