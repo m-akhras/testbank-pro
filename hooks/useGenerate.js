@@ -5,6 +5,7 @@ import { createBrowserClient } from "@supabase/ssr";
 import { uid, questionSimilarity, stripChoiceLabel, isGraphChoice } from "../lib/utils/questions.js";
 import { parseAiJson } from "../lib/utils/sanitizeJsonPaste.js";
 import { answerMatchesAChoice } from "../lib/exports/index.js";
+import { applyLimitSpec } from "../lib/limits/applyLimitSpec.js";
 import {
   buildGeneratePrompt,
   buildVersionPrompt,
@@ -254,7 +255,11 @@ export function useGenerate({
       const sanitized = parsed.map(sanitize);
 
       if (pendingType === "generate") {
-        const tagged = sanitized.map(q => ({ ...q, id: uid(), course: pendingMeta.course, createdAt: Date.now() }));
+        // §2.2: a question carrying a limitSpec gets its graph compiled and its
+        // answer/explanation DERIVED here (a throw — e.g. a hard-failed MC whose
+        // derived answer isn't among its choices — surfaces via pasteError below).
+        // No-op for every question without a limitSpec.
+        const tagged = sanitized.map(q => ({ ...applyLimitSpec(q), id: uid(), course: pendingMeta.course, createdAt: Date.now() }));
         const warnings = [];
         tagged.forEach((newQ, i) => {
           if (newQ.hasGraph) return;

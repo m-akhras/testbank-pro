@@ -4,6 +4,7 @@
 import { deriveLimits } from "../lib/limits/deriveLimits.js";
 import { validateLimitSpec } from "../lib/limits/limitGraphSpec.js";
 import { compileToGraphConfig } from "../lib/limits/compileToGraphConfig.js";
+import { applyLimitSpec } from "../lib/limits/applyLimitSpec.js";
 
 describe("deriveLimits — §2.2 cases", () => {
   // 1. Removable hole: x+2 on [0,4], hole at (2,4).
@@ -279,5 +280,116 @@ describe("compileToGraphConfig — §2.2 → existing piecewise graphConfig", ()
 
   test("rejects a malformed spec before compiling", () => {
     expect(() => compileToGraphConfig({})).toThrow(/`segments` must be an array/);
+  });
+});
+
+describe("applyLimitSpec — §2.2 spec → derived answer key + graph", () => {
+  const removableSpec = {
+    segments: [{ fn: "x+2", from: 0, to: 4 }],
+    holes: [{ x: 2, y: 4 }],
+  };
+
+  // FR single ask: the two-sided limit at the hole.
+  test("FR single ask: answer reflects the derived limit, graph compiled", () => {
+    const q = applyLimitSpec({
+      type: "Free Response",
+      question: "Find the limit as x approaches 2.",
+      answer: "(model guess, ignored)",
+      explanation: "(model guess, ignored)",
+      limitSpec: removableSpec,
+      asks: [{ quantity: "limit", at: 2 }],
+    });
+    expect(q.answer).toBe("4");
+    expect(q.hasGraph).toBe(true);
+    expect(q.graphConfig).toEqual({
+      type: "piecewise",
+      pieces: [{ fn: "x+2", domain: [0, 4] }],
+      holes: [[2, 4]],
+      points: [],
+      verticalAsymptotes: [],
+      xDomain: [-0.5, 4.5],
+    });
+    expect(q.explanation).toMatch(/limit as x approaches 2 is 4/i);
+  });
+
+  // FR multi-ask on a jump: left / right / two-sided / f(a) each stated.
+  test("FR multi-ask jump: answer states each derived fact", () => {
+    const jumpSpec = {
+      segments: [
+        { fn: "x+1", from: 0, to: 3, openRight: true }, // left limit 4
+        { fn: "x-2", from: 3, to: 6 }, // right limit 1
+      ],
+      points: [{ x: 3, y: 1 }], // f(3) = 1
+    };
+    const q = applyLimitSpec({
+      type: "Free Response",
+      question: "At x = 3, find the one-sided limits, the limit, and f(3).",
+      limitSpec: jumpSpec,
+      asks: [
+        { quantity: "leftLimit", at: 3 },
+        { quantity: "rightLimit", at: 3 },
+        { quantity: "limit", at: 3 },
+        { quantity: "fValue", at: 3 },
+      ],
+    });
+    expect(q.answer).toMatch(/left-hand limit as x approaches 3 = 4/);
+    expect(q.answer).toMatch(/right-hand limit as x approaches 3 = 1/);
+    expect(q.answer).toMatch(/limit as x approaches 3 = does not exist \(DNE\)/);
+    expect(q.answer).toMatch(/f\(3\) = 1/);
+  });
+
+  // VA: asks verticalAsymptotes → answer lists the VA x-locations.
+  test("FR vertical asymptotes: answer lists the VA x's", () => {
+    const vaSpec = {
+      segments: [],
+      verticalAsymptotes: [{ x: 3, leftSign: "-inf", rightSign: "+inf" }],
+    };
+    const q = applyLimitSpec({
+      type: "Free Response",
+      question: "List the vertical asymptotes.",
+      limitSpec: vaSpec,
+      asks: [{ quantity: "verticalAsymptotes", at: 0 }],
+    });
+    expect(q.answer).toBe("x = 3");
+    expect(q.graphConfig.verticalAsymptotes).toEqual([3]);
+  });
+
+  // MC match: derived "4" matches a choice → answer set to that choice string.
+  test("MC match: derived value matched to a choice", () => {
+    const q = applyLimitSpec({
+      type: "Multiple Choice",
+      question: "What is the limit as x approaches 2?",
+      choices: ["2", "4", "6", "does not exist (DNE)"],
+      answer: "6", // model guess — ignored
+      limitSpec: removableSpec,
+      asks: [{ quantity: "limit", at: 2 }],
+    });
+    expect(q.answer).toBe("4");
+  });
+
+  // MC hard-fail: derived "4" but no choice equals it → throws (question rejected).
+  test("MC hard-fail: derived value not among choices throws", () => {
+    expect(() =>
+      applyLimitSpec({
+        type: "Multiple Choice",
+        question: "What is the limit as x approaches 2?",
+        choices: ["2", "3", "5", "6"],
+        answer: "3",
+        limitSpec: removableSpec,
+        asks: [{ quantity: "limit", at: 2 }],
+      })
+    ).toThrow(/not among the choices/);
+  });
+
+  // No-op: a question without limitSpec is returned byte-identical.
+  test("no-op: question without limitSpec passes through unchanged", () => {
+    const q = {
+      type: "Multiple Choice",
+      question: "Plain question",
+      choices: ["a", "b", "c", "d"],
+      answer: "b",
+    };
+    const out = applyLimitSpec(q);
+    expect(out).toBe(q); // same reference — truly untouched
   });
 });
