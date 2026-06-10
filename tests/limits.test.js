@@ -228,6 +228,75 @@ describe("validateLimitSpec — phantom vertical-asymptote guard", () => {
   });
 });
 
+describe("validateLimitSpec — undeclared-pole guard", () => {
+  // PART A — interior pole (odd): the production wrong-DNE bug.
+  test("rejects an interior odd pole (x+1)/(x-1) on [0,3]", () => {
+    expect(() =>
+      validateLimitSpec({ segments: [{ fn: "(x+1)/(x-1)", from: 0, to: 3 }] })
+    ).toThrow(/diverges at the interior point/);
+  });
+
+  // PART A — interior pole even, even when a (declared) VA exists elsewhere.
+  test("rejects an interior even pole 1/(x-1)^2 on [0,3]", () => {
+    expect(() =>
+      validateLimitSpec({ segments: [{ fn: "1/(x-1)^2", from: 0, to: 3 }] })
+    ).toThrow(/diverges at the interior point/);
+  });
+
+  // The exact production bug spec: interval CONTAINS the pole x=1 as an interior point.
+  test("rejects the production wrong-DNE spec (pole strictly inside)", () => {
+    expect(() =>
+      validateLimitSpec({
+        segments: [{ fn: "(x+1)/(x-1)", from: -2, to: 4 }],
+        verticalAsymptotes: [{ x: 1, leftSign: "-inf", rightSign: "+inf" }], // irrelevant: pole is interior
+      })
+    ).toThrow(/diverges at the interior point/);
+  });
+
+  // PART B — boundary pole with NO declared VA → rejected.
+  test("rejects a boundary pole with no declared VA", () => {
+    expect(() =>
+      validateLimitSpec({ segments: [{ fn: "(x+1)/(x-1)", from: 1, to: 3 }] })
+    ).toThrow(/diverges at the boundary x=1 but no vertical asymptote is declared/);
+  });
+
+  // PART B — boundary pole WITH a declared VA → legal, passes.
+  test("accepts a boundary pole when a VA is declared there", () => {
+    expect(() =>
+      validateLimitSpec({
+        segments: [{ fn: "(x+1)/(x-1)", from: 1, to: 3, openLeft: true }],
+        verticalAsymptotes: [{ x: 1, leftSign: "-inf", rightSign: "+inf" }],
+      })
+    ).not.toThrow();
+  });
+
+  // ACCEPT — steep-but-finite must not false-positive.
+  test("accepts steep-but-finite exp(x) and x^3", () => {
+    expect(() =>
+      validateLimitSpec({ segments: [{ fn: "exp(x)", from: -2, to: 5 }] })
+    ).not.toThrow();
+    expect(() =>
+      validateLimitSpec({ segments: [{ fn: "x^3", from: -4, to: 4 }] })
+    ).not.toThrow();
+  });
+
+  // ACCEPT — clean cases, including a declared removable hole (0/0 = NaN, bounded).
+  test("accepts clean segments and a declared removable hole", () => {
+    expect(() =>
+      validateLimitSpec({ segments: [{ fn: "x+2", from: 0, to: 4 }] })
+    ).not.toThrow();
+    expect(() =>
+      validateLimitSpec({ segments: [{ fn: "sqrt(x+5)", from: -5, to: 4 }] })
+    ).not.toThrow();
+    expect(() =>
+      validateLimitSpec({
+        segments: [{ fn: "(x^2-4)/(x-2)", from: 0, to: 4 }],
+        holes: [{ x: 2, y: 4 }],
+      })
+    ).not.toThrow();
+  });
+});
+
 describe("compileToGraphConfig — §2.2 → existing piecewise graphConfig", () => {
   // 1. Removable hole → the hole coordinate is carried; no filled point.
   test("removable hole: piece + hole, no points", () => {
