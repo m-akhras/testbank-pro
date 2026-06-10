@@ -3,7 +3,7 @@
 
 import { deriveLimits } from "../lib/limits/deriveLimits.js";
 import { validateLimitSpec } from "../lib/limits/limitGraphSpec.js";
-import { compileToGraphConfig } from "../lib/limits/compileToGraphConfig.js";
+import { compileToGraphConfig, compileToFunctionPairConfig } from "../lib/limits/compileToGraphConfig.js";
 import { applyLimitSpec } from "../lib/limits/applyLimitSpec.js";
 import {
   deriveDiscontinuitySet,
@@ -691,5 +691,42 @@ describe("§2.5 continuity — enumeration, statements, point + global asks", ()
         ],
       })
     ).toThrow(/must be the only ask/);
+  });
+});
+
+describe("compileToFunctionPairConfig — §2.3 two specs → one functionPair config", () => {
+  const jumpSpec = {
+    segments: [
+      { fn: "x+1", from: 0, to: 2, openRight: true },
+      { fn: "x", from: 2, to: 4 },
+    ],
+    points: [{ x: 2, y: 2 }],
+  };
+  const vaSpec = {
+    segments: [],
+    verticalAsymptotes: [{ x: 3, leftSign: "-inf", rightSign: "+inf" }],
+  };
+
+  test("nests both compiled sub-configs under type functionPair", () => {
+    const cfg = compileToFunctionPairConfig(jumpSpec, vaSpec);
+    expect(cfg.type).toBe("functionPair");
+    // each sub-config is byte-identical to a standalone compileToGraphConfig
+    expect(cfg.f).toEqual(compileToGraphConfig(jumpSpec));
+    expect(cfg.g).toEqual(compileToGraphConfig(vaSpec));
+    expect(cfg.f.type).toBe("piecewise");
+    expect(cfg.g.type).toBe("piecewise");
+  });
+
+  test("throws (fail closed) when EITHER spec fails validation", () => {
+    // phantom VA: a finite segment declared as a vertical asymptote → rejected.
+    const phantomVA = {
+      segments: [{ fn: "x+2", from: 0, to: 4 }],
+      verticalAsymptotes: [{ x: 2, leftSign: "+inf", rightSign: "+inf" }],
+    };
+    expect(() => compileToFunctionPairConfig(phantomVA, vaSpec)).toThrow();
+    expect(() => compileToFunctionPairConfig(jumpSpec, phantomVA)).toThrow();
+    // interior pole strictly inside a segment → rejected.
+    const interiorPole = { segments: [{ fn: "1/(x-1)", from: 0, to: 2 }] };
+    expect(() => compileToFunctionPairConfig(interiorPole, vaSpec)).toThrow();
   });
 });
