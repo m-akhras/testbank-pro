@@ -362,6 +362,23 @@ describe("compileToGraphConfig — §2.2 → existing piecewise graphConfig", ()
     expect(cfg.xDomain).toEqual([-0.5, 4.5]); // span 4 → pad 0.5
   });
 
+  // Fix 3: an integer x-tick step is emitted for denser axis labels.
+  test("emits xTickStep so x integers are labeled across the domain", () => {
+    const small = compileToGraphConfig({ segments: [{ fn: "x+2", from: 0, to: 4 }] });
+    expect(small.xTickStep).toBe(1); // span 5 ≤ 12 → step 1
+
+    // A wide domain (segments far apart) scales the step up to keep ~12 labels.
+    const wide = compileToGraphConfig({
+      segments: [
+        { fn: "x", from: -20, to: -18, openRight: true },
+        { fn: "x", from: 18, to: 20, openLeft: true },
+      ],
+    });
+    const span = wide.xDomain[1] - wide.xDomain[0];
+    expect(wide.xTickStep).toBe(Math.ceil(span / 12));
+    expect(wide.xTickStep).toBeGreaterThan(1);
+  });
+
   // 7. Raw rational: declared hole carried verbatim; fn never sampled AT x=2.
   test("raw rational: hole [2,4] carried, no divide-by-zero", () => {
     const cfg = compileToGraphConfig({
@@ -424,6 +441,7 @@ describe("applyLimitSpec — §2.2 spec → derived answer key + graph", () => {
       points: [],
       verticalAsymptotes: [],
       xDomain: [-0.5, 4.5],
+      xTickStep: 1, // span 5 ≤ 12 → integer step
     });
     expect(q.explanation).toMatch(/limit as x approaches 2 is 4/i);
   });
