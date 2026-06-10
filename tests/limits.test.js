@@ -5,6 +5,14 @@ import { deriveLimits } from "../lib/limits/deriveLimits.js";
 import { validateLimitSpec } from "../lib/limits/limitGraphSpec.js";
 import { compileToGraphConfig } from "../lib/limits/compileToGraphConfig.js";
 import { applyLimitSpec } from "../lib/limits/applyLimitSpec.js";
+import {
+  deriveDiscontinuitySet,
+  limitDNESet,
+  discontinuitySet,
+  removableSet,
+  composeContinuityStatement,
+  composeLimitDNEStatement,
+} from "../lib/limits/continuity.js";
 
 describe("deriveLimits — §2.2 cases", () => {
   // 1. Removable hole: x+2 on [0,4], hole at (2,4).
@@ -525,5 +533,163 @@ describe("applyLimitSpec — §2.2 spec → derived answer key + graph", () => {
     };
     const out = applyLimitSpec(q);
     expect(out).toBe(q); // same reference — truly untouched
+  });
+});
+
+describe("§2.5 continuity — enumeration, statements, point + global asks", () => {
+  // Representative spec with ALL three discontinuity kinds + a continuous join:
+  //  - continuous join at x = 0.5 (same fn both sides) — must NOT appear in any set
+  //  - removable hole at x = 1 (limit 2 exists, f(1) undefined)
+  //  - jump at x = 2 (left-limit 3 ≠ right-limit 2, f(2)=2)
+  //  - infinite VA at x = 3 (declared, in a gap)
+  const spec = {
+    segments: [
+      { fn: "x+1", from: 0, to: 0.5 },
+      { fn: "x+1", from: 0.5, to: 2, openRight: true },
+      { fn: "x", from: 2, to: 2.5 },
+    ],
+    holes: [{ x: 1, y: 2 }],
+    points: [{ x: 2, y: 2 }],
+    verticalAsymptotes: [{ x: 3, leftSign: "-inf", rightSign: "+inf" }],
+  };
+
+  test("deriveDiscontinuitySet → exactly {1:removable, 2:jump, 3:infinite}", () => {
+    const set = deriveDiscontinuitySet(spec);
+    expect(set.map((r) => [r.x, r.kind])).toEqual([
+      [1, "removable"],
+      [2, "jump"],
+      [3, "infinite"],
+    ]);
+    // the continuous join at 0.5 (and the domain endpoints) are absent
+    expect(set.some((r) => r.x === 0.5)).toBe(false);
+  });
+
+  test("selectors: limitDNESet / discontinuitySet / removableSet", () => {
+    expect(limitDNESet(spec)).toEqual([2, 3]); // jumps + infinite
+    expect(discontinuitySet(spec)).toEqual([1, 2, 3]);
+    expect(removableSet(spec)).toEqual([1]);
+  });
+
+  test("composeContinuityStatement: all modes + edge cases", () => {
+    const three = deriveDiscontinuitySet(spec);
+    expect(composeContinuityStatement(three, "discontinuous_at")).toBe(
+      "f is discontinuous at x = 1, x = 2 and x = 3"
+    );
+    expect(composeContinuityStatement(three, "continuous_except")).toBe(
+      "f is continuous except at x = 1, x = 2 and x = 3"
+    );
+    expect(composeContinuityStatement(three, "with_reasons")).toBe(
+      "f is discontinuous at x = 1 (removable), x = 2 (jump) and x = 3 (infinite)"
+    );
+    expect(composeContinuityStatement([1], "discontinuous_at")).toBe(
+      "f is discontinuous at x = 1"
+    );
+    expect(composeContinuityStatement([], "discontinuous_at")).toBe(
+      "f is continuous everywhere"
+    );
+    expect(composeContinuityStatement([1, 3], "discontinuous_at", { fn: "g" })).toBe(
+      "g is discontinuous at x = 1 and x = 3"
+    );
+    expect(composeLimitDNEStatement([2, 3])).toBe(
+      "the two-sided limit of f does not exist at x = 2 and x = 3"
+    );
+  });
+
+  test("point asks: isContinuous / classifyDiscontinuity", () => {
+    const ask = (quantity, at) =>
+      applyLimitSpec({ type: "Free Response", limitSpec: spec, asks: [{ quantity, at }] }).answer;
+
+    expect(ask("isContinuous", 0.5)).toBe("continuous"); // the continuous join
+    expect(ask("isContinuous", 1)).toBe("discontinuous"); // the removable hole
+    expect(ask("classifyDiscontinuity", 1)).toBe("removable");
+    expect(ask("classifyDiscontinuity", 2)).toBe("jump");
+    expect(ask("classifyDiscontinuity", 3)).toBe("infinite");
+    expect(ask("classifyDiscontinuity", 0.5)).toBe("continuous");
+  });
+
+  test("global FR ask: system composes the canonical answer", () => {
+    const q = applyLimitSpec({
+      type: "Free Response",
+      limitSpec: spec,
+      asks: [{ quantity: "discontinuitySet", mode: "discontinuous_at" }],
+    });
+    expect(q.answer).toBe("f is discontinuous at x = 1, x = 2 and x = 3");
+    expect(q.explanation).toMatch(/removable/);
+    expect(q.explanation).toMatch(/jump/);
+    expect(q.explanation).toMatch(/infinite/);
+  });
+
+  test("global MC ask: system injects the correct statement among distractors", () => {
+    const correct = "f is discontinuous at x = 1, x = 2 and x = 3";
+    const q = applyLimitSpec({
+      type: "Multiple Choice",
+      limitSpec: spec,
+      // distractors only (all WRONG) — the model never supplies the correct one
+      choices: [
+        "f is discontinuous at x = 2 only",
+        "f is continuous everywhere",
+        "f is discontinuous at x = 1 and x = 2",
+      ],
+      answer: "f is continuous everywhere", // model guess — ignored
+      asks: [{ quantity: "discontinuitySet", mode: "discontinuous_at" }],
+    });
+    expect(q.answer).toBe(correct); // system-derived key
+    expect(q.choices).toContain(correct); // injected (replaced the last distractor)
+    expect(q.choices).toHaveLength(3);
+    expect(q.choices[2]).toBe(correct);
+    // the model's wrong guess did NOT become the answer
+    expect(q.answer).not.toBe("f is continuous everywhere");
+  });
+
+  test("global MC ask: reuses a matching choice if the model already included it", () => {
+    const correct = "f is discontinuous at x = 1, x = 2 and x = 3";
+    const q = applyLimitSpec({
+      type: "Multiple Choice",
+      limitSpec: spec,
+      choices: ["f is continuous everywhere", correct, "f is discontinuous at x = 2 only"],
+      asks: [{ quantity: "discontinuitySet" }],
+    });
+    expect(q.answer).toBe(correct);
+    expect(q.choices).toEqual([
+      "f is continuous everywhere",
+      correct,
+      "f is discontinuous at x = 2 only",
+    ]); // unchanged — no injection needed
+  });
+
+  test("global MC hard-fails with fewer than 2 distractor choices", () => {
+    expect(() =>
+      applyLimitSpec({
+        type: "Multiple Choice",
+        limitSpec: spec,
+        choices: ["f is continuous everywhere"],
+        asks: [{ quantity: "discontinuitySet" }],
+      })
+    ).toThrow(/at least 2 distractor/);
+  });
+
+  test("point MC hard-fails when the derived value is not among choices", () => {
+    expect(() =>
+      applyLimitSpec({
+        type: "Multiple Choice",
+        limitSpec: spec,
+        choices: ["continuous", "jump", "infinite", "none"], // missing "removable"
+        answer: "jump",
+        asks: [{ quantity: "classifyDiscontinuity", at: 1 }],
+      })
+    ).toThrow(/not among the choices/);
+  });
+
+  test("a global ask must stand alone (not mixed with other asks)", () => {
+    expect(() =>
+      applyLimitSpec({
+        type: "Free Response",
+        limitSpec: spec,
+        asks: [
+          { quantity: "discontinuitySet" },
+          { quantity: "limit", at: 2 },
+        ],
+      })
+    ).toThrow(/must be the only ask/);
   });
 });
