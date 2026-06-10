@@ -140,7 +140,9 @@ describe("validateLimitSpec", () => {
       segments: [{ fn: "x+2", from: 0, to: 4, openLeft: false, openRight: true }],
       holes: [{ x: 2, y: 4 }],
       points: [{ x: 2, y: 6 }],
-      verticalAsymptotes: [{ x: 3, leftSign: "-inf", rightSign: "+inf" }],
+      // VA sits in a gap beyond the segment (x=6 > to=4) so the phantom-VA guard
+      // has no covering segment to contradict it.
+      verticalAsymptotes: [{ x: 6, leftSign: "-inf", rightSign: "+inf" }],
     };
     expect(validateLimitSpec(spec)).toBe(spec);
   });
@@ -178,6 +180,51 @@ describe("validateLimitSpec", () => {
     expect(() =>
       validateLimitSpec({ segments: [], holes: [{ x: 2, y: "high" }] })
     ).toThrow(/holes\[0\]\.y must be a finite number/);
+  });
+});
+
+describe("validateLimitSpec — phantom vertical-asymptote guard", () => {
+  // REJECT: a root segment is finite (~2.65) at the declared VA.
+  test("rejects a VA where a sqrt segment is finite", () => {
+    expect(() =>
+      validateLimitSpec({
+        segments: [{ fn: "sqrt(x+5)", from: -5, to: 4 }],
+        verticalAsymptotes: [{ x: 2, leftSign: "-inf", rightSign: "+inf" }],
+      })
+    ).toThrow(/declared vertical asymptote at x=2 but segment "sqrt\(x\+5\)" is finite/);
+  });
+
+  // REJECT: a polynomial segment never diverges → no real VA.
+  test("rejects a VA where a polynomial segment is finite", () => {
+    expect(() =>
+      validateLimitSpec({
+        segments: [{ fn: "x^2+2", from: -3, to: 3 }],
+        verticalAsymptotes: [{ x: 1, leftSign: "+inf", rightSign: "+inf" }],
+      })
+    ).toThrow(/declared vertical asymptote at x=1 but segment "x\^2\+2" is finite/);
+  });
+
+  // ACCEPT: a rational bordering x=2 genuinely blows up there.
+  test("accepts a VA where a bordering rational diverges", () => {
+    expect(() =>
+      validateLimitSpec({
+        segments: [{ fn: "(x+1)/(x-2)", from: 2, to: 6, openLeft: true }],
+        verticalAsymptotes: [{ x: 2, leftSign: "-inf", rightSign: "+inf" }],
+      })
+    ).not.toThrow();
+  });
+
+  // ACCEPT: a VA sitting in a GAP between two segments (no covering segment).
+  test("accepts a VA in a gap between segments (no covering segment)", () => {
+    expect(() =>
+      validateLimitSpec({
+        segments: [
+          { fn: "x", from: -3, to: 2, openRight: true },
+          { fn: "x", from: 4, to: 7, openLeft: true },
+        ],
+        verticalAsymptotes: [{ x: 3, leftSign: "+inf", rightSign: "-inf" }],
+      })
+    ).not.toThrow();
   });
 });
 
