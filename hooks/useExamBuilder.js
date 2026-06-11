@@ -3,6 +3,8 @@ import { useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import { sectionSortKey } from "../lib/utils/questions.js";
 import { buildAllVersionsPrompt, buildAllSectionsPrompt } from "../lib/prompts/index.js";
+import { parseAiJson, looksTruncated } from "../lib/utils/sanitizeJsonPaste.js";
+import { findIncompleteKeys, formatVersionCompletenessError } from "../lib/exams/versionMerge.js";
 
 // A is always the master; B–U are the 20 possible variant labels.
 const VERSIONS = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U"];
@@ -71,6 +73,8 @@ export function useExamBuilder({
   const [exportLoading, setExportLoading] = useState("");
   const [autoGenLoading, setAutoGenLoading] = useState(false);
   const [autoGenError, setAutoGenError] = useState("");
+  // Per-section chunk progress for the multi-section generate ("section 2 of 5").
+  const [genProgress, setGenProgress] = useState(null);
   const [exportHighlight, setExportHighlight] = useState(false);
 
   async function loadSavedExams() {
@@ -182,21 +186,69 @@ export function useExamBuilder({
     setPasteError("");
   }
 
+  async function _callGenerate(prompt) {
+    const res = await fetch("/api/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt }),
+    });
+    if (!res.ok) throw new Error(`API error: ${res.status}`);
+    const data = await res.json();
+    const text = data.content?.[0]?.text || data.text || "";
+    return { text, stopReason: data.stop_reason, warning: data.warning };
+  }
+
   async function autoGenerateVersions(prompt, pendingTypeVal, pendingMetaVal) {
     setAutoGenLoading(true);
     setAutoGenError("");
     try {
-      const res = await fetch("/api/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt }),
-      });
-      if (!res.ok) throw new Error(`API error: ${res.status}`);
-      const data = await res.json();
-      const text = data.content?.[0]?.text || data.text || "";
+      // MULTI-SECTION: one API call PER CLASS SECTION (each carries only that
+      // section's versions), so a request can never approach the model's output
+      // cap the way "all sections at once" did. Accumulate every section's keys
+      // into one object, then hand it to the shared merge path (handlePaste via
+      // the auto-submit button), which re-runs the LOUD completeness guard and
+      // performs the single dual-write. A failed/truncated chunk fails loudly,
+      // NAMING the section; completed chunks are not committed (retry re-runs).
+      if (pendingTypeVal === "version_all_sections" && (pendingMetaVal?.numClassSections || 1) > 1) {
+        const { selected, labels, numClassSections: ncs } = pendingMetaVal;
+        const vmt = pendingMetaVal.versionMutationType || versionMutationType;
+        const combined = {};
+        for (let s = 1; s <= ncs; s++) {
+          setGenProgress({ current: s, total: ncs });
+          const chunkPrompt = buildAllSectionsPrompt(selected, labels, ncs, course, vmt, courseObject, [s]);
+          const { text, stopReason, warning } = await _callGenerate(chunkPrompt);
+          if (warning) showToast(warning, "error");
+          // FIX 2: max_tokens is ALWAYS a hard error now (not only when empty).
+          if (stopReason === "max_tokens") {
+            throw new Error(`Section ${s} of ${ncs} was cut off by the model's token limit (too many questions × versions in one section). Reduce questions or versions, then retry.`);
+          }
+          if (!text) throw new Error(`Section ${s} of ${ncs}: empty response from the model. Retry.`);
+          let chunk;
+          try { chunk = parseAiJson(text); }
+          catch (e) { throw new Error(`Section ${s} of ${ncs}: ${e.message}`); }
+          const expected = labels.map(l => `S${s}_${l}`);
+          const { missing, short } = findIncompleteKeys(chunk, expected, selected.length);
+          if (missing.length || short.length) {
+            throw new Error(`Section ${s} of ${ncs} — ` + formatVersionCompletenessError(expected, { missing, short }, looksTruncated(text)));
+          }
+          for (const l of labels) combined[`S${s}_${l}`] = chunk[`S${s}_${l}`];
+        }
+        setGenProgress(null);
+        setPasteInput(JSON.stringify(combined));
+        setPendingType(pendingTypeVal);
+        setPendingMeta(pendingMetaVal);
+        setGeneratedPrompt(prompt);
+        setTimeout(() => { document.getElementById("auto-submit-paste")?.click(); }, 100);
+        return;
+      }
+
+      // SINGLE SECTION (version_all): one call (existing behavior).
+      const { text, stopReason, warning } = await _callGenerate(prompt);
+      if (warning) showToast(warning, "error");
+      if (stopReason === "max_tokens") {
+        throw new Error("Response truncated at the model's token limit — generate fewer questions/versions, or use Copy Prompt.");
+      }
       if (!text) throw new Error("Empty response from API. Try again or use Copy Prompt.");
-      if (data.warning) showToast(data.warning, "error");
-      if (data.stop_reason === "max_tokens" && !text) throw new Error("Response truncated — generate fewer questions at once (max 10 recommended).");
       setPasteInput(text);
       setPendingType(pendingTypeVal);
       setPendingMeta(pendingMetaVal);
@@ -206,6 +258,7 @@ export function useExamBuilder({
       setAutoGenError(e.message || "Generation failed. Try Copy Prompt instead.");
     } finally {
       setAutoGenLoading(false);
+      setGenProgress(null);
     }
   }
 
@@ -242,6 +295,7 @@ export function useExamBuilder({
     exportLoading, setExportLoading,
     autoGenLoading,
     autoGenError, setAutoGenError,
+    genProgress,
     exportHighlight, setExportHighlight,
     loadSavedExams,
     saveExam,

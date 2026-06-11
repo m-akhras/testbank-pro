@@ -4,8 +4,11 @@ import PastePanel from "../panels/PastePanel.js";
 // A is always the master; B–U are the 20 possible variant labels.
 const VERSIONS = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U"];
 const MAX_VARIANTS = 20;
-const SOFT_LIMIT = 50;
-const HARD_LIMIT = 100;
+// HONEST LIMIT: generation now runs ONE request per class section, so the real
+// bottleneck is the items in a SINGLE section chunk (versions × questions), not
+// the grand total. At ~400 output tokens/item the model's ~16k cap is ~40 items;
+// warn a little below that.
+const PER_CHUNK_WARN = 35;
 
 export default function VariantsScreen({
   versions,
@@ -18,6 +21,7 @@ export default function VariantsScreen({
   setVersionMutationType,
   autoGenLoading,
   autoGenError,
+  genProgress,
   triggerVersions,
   autoGenerateVersions,
   pendingType,
@@ -71,8 +75,9 @@ export default function VariantsScreen({
   const numQ = master.questions.length;
   const totalVersions = versionCount * numClassSections;
   const totalItems = numQ * totalVersions;
-  const hardOverLimit = totalItems > HARD_LIMIT;
-  const softOverLimit = !hardOverLimit && totalItems > SOFT_LIMIT;
+  // What one section's request actually has to produce (the real per-call budget).
+  const perChunkItems = numQ * versionCount;
+  const chunkOverBudget = perChunkItems > PER_CHUNK_WARN;
   const estTokens = Math.round(totalItems * 400 + 1500);
   const estCost = ((totalItems * 400 * 3) / 1_000_000 + (totalItems * 350 * 15) / 1_000_000).toFixed(3);
   const variantLabels = VERSIONS.slice(1, 1 + versionCount);
@@ -170,15 +175,13 @@ export default function VariantsScreen({
           <div style={{ fontSize: "0.75rem", color: text2, marginTop: "0.2rem" }}>
             ~{estTokens.toLocaleString()} tokens · ~${estCost}
           </div>
-          {hardOverLimit && (
-            <div style={{ fontSize: "0.75rem", color: "#fca5a5", marginTop: "0.45rem", padding: "0.5rem 0.7rem", background: "#7f1d1d33", borderRadius: "6px", border: "1px solid #ef444466" }}>
-              <div style={{ fontWeight: 700, marginBottom: "0.2rem" }}>⛔ {totalItems} items likely exceeds Claude's output limit</div>
-              Run this in batches — split into smaller groups (e.g. ≤ {HARD_LIMIT} items per request, or fewer questions × fewer variants × fewer sections) and generate them separately.
-            </div>
-          )}
-          {softOverLimit && (
-            <div style={{ fontSize: "0.75rem", color: "#f59e0b", marginTop: "0.45rem", padding: "0.4rem 0.6rem", background: "#451a0322", borderRadius: "6px", border: "1px solid #f59e0b44" }}>
-              ⚠ {totalItems} items is approaching Claude's typical output ceiling — generation may truncate. Consider running in batches if responses come back incomplete.
+          <div style={{ fontSize: "0.72rem", color: text3, marginTop: "0.3rem" }}>
+            Generated as {numClassSections > 1 ? `${numClassSections} requests (one per section)` : "1 request"} of {versionCount} version{versionCount > 1 ? "s" : ""} × {numQ} question{numQ !== 1 ? "s" : ""} = {perChunkItems} items each.
+          </div>
+          {chunkOverBudget && (
+            <div style={{ fontSize: "0.75rem", color: "#f59e0b", marginTop: "0.45rem", padding: "0.5rem 0.7rem", background: "#451a0322", borderRadius: "6px", border: "1px solid #f59e0b66" }}>
+              <div style={{ fontWeight: 700, marginBottom: "0.2rem" }}>⚠ {perChunkItems} items per section may be cut off by the model</div>
+              Each section is generated in its own request. A request this large ({versionCount} versions × {numQ} questions) can hit the model's output limit and come back incomplete — reduce the number of questions or versions. If a section is cut off, generation stops with a clear error and you can retry.
             </div>
           )}
         </div>
@@ -234,7 +237,11 @@ export default function VariantsScreen({
                 // On successful handlePaste the parent will setScreen("export")
               }}
             >
-              {autoGenLoading ? "⏳ Generating..." : "⚡ Generate Variants"}
+              {autoGenLoading
+                ? (genProgress && genProgress.total > 1
+                    ? `⏳ Generating section ${genProgress.current} of ${genProgress.total}…`
+                    : "⏳ Generating…")
+                : "⚡ Generate Variants"}
             </button>
             {isAdmin && (
               <button style={S.oBtn(accent)} onClick={() => navigator.clipboard.writeText(generatedPrompt)}>

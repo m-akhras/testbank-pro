@@ -30,6 +30,7 @@ export default function VariantsPage() {
       versionMutationType={examBuilder.versionMutationType} setVersionMutationType={examBuilder.setVersionMutationType}
       autoGenLoading={examBuilder.autoGenLoading}
       autoGenError={examBuilder.autoGenError}
+      genProgress={examBuilder.genProgress}
       triggerVersions={examBuilder.triggerVersions}
       autoGenerateVersions={examBuilder.autoGenerateVersions}
       pendingType={generate.pendingType} setPendingType={generate.setPendingType}

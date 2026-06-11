@@ -3,7 +3,13 @@ import { useState } from "react";
 import { flushSync } from "react-dom";
 import { createBrowserClient } from "@supabase/ssr";
 import { uid, questionSimilarity, stripChoiceLabel, isGraphChoice } from "../lib/utils/questions.js";
-import { parseAiJson } from "../lib/utils/sanitizeJsonPaste.js";
+import { parseAiJson, looksTruncated } from "../lib/utils/sanitizeJsonPaste.js";
+import {
+  expectedVersionKeys,
+  findIncompleteKeys,
+  formatVersionCompletenessError,
+  buildSectionVersions,
+} from "../lib/exams/versionMerge.js";
 import { answerMatchesAChoice } from "../lib/exports/index.js";
 import { applyLimitDerivation } from "../lib/limits/applyLimitLaws.js";
 import { isLimitTemplateSection } from "../lib/templates/registry.js";
@@ -172,75 +178,47 @@ export function useGenerate({
     try {
       const raw = pasteInput.trim();
 
-      if (pendingType === "version_all") {
+      if (pendingType === "version_all" || pendingType === "version_all_sections") {
         const parsed = parseAiJson(raw);
         if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
           throw new Error("Expected a JSON object keyed by version label.");
         }
-        const { selected, labels, classSection } = pendingMeta;
-        const allVersions = labels.map(label => {
-          const qs = parsed[label] || [];
-          const versioned = qs.map((q, i) => ({
-            ...sanitize(q), id: uid(), originalId: selected[i]?.id,
-            course: selected[i]?.course || course,
-            versionLabel: label, classSection, createdAt: Date.now(),
-            ...(selected[i]?.hasGraph ? {
-              hasGraph: true,
-              graphConfig: mergeVariantGraphConfig(selected[i].graphConfig, q.graphConfig),
-            } : {}),
-          }));
-          return { label, questions: versioned, classSection };
+        const { selected, labels } = pendingMeta;
+        const sections = pendingType === "version_all_sections"
+          ? (pendingMeta.numClassSections || 1)
+          : 1;
+
+        // LOUD completeness guard — every expected version set must be present
+        // with the full question count, else fail by NAME (no silent empties).
+        const expected = expectedVersionKeys(sections, labels);
+        const { missing, short } = findIncompleteKeys(parsed, expected, selected.length);
+        if (missing.length || short.length) {
+          throw new Error(
+            formatVersionCompletenessError(expected, { missing, short }, looksTruncated(raw))
+          );
+        }
+
+        // Single source for the dual-write (classSectionVersions + versions).
+        const { classSectionVersions, versions: vers } = buildSectionVersions({
+          parsed,
+          numClassSections: sections,
+          labels,
+          selected,
+          course,
+          masterLocked,
+          masterVersion: versions[0],
+          sanitizeFn: sanitize,
+          mergeGraphFn: mergeVariantGraphConfig,
+          makeId: uid,
         });
-        const finalVersions = masterLocked ? [{ ...versions[0], classSection }, ...allVersions] : allVersions;
-        const answerWarnings = collectAnswerWarnings(finalVersions);
+        const answerWarnings = collectAnswerWarnings(Object.values(classSectionVersions).flat());
         // flushSync commits all state updates synchronously before router.push fires,
         // preventing the export page from rendering with stale (empty) versions.
         flushSync(() => {
-          setClassSectionVersions({ [classSection]: finalVersions });
-          setVersions(finalVersions);
+          setClassSectionVersions(classSectionVersions);
+          setVersions(vers);
           setActiveVersion(0);
-          setActiveClassSection(classSection);
-          setPasteInput("");
-          setExamSaved(false); setSaveExamName("");
-          setBuiltStale(false); // fresh build — the version set is clean
-          setDupWarnings(answerWarnings);
-        });
-        setScreen("export");
-        return;
-      }
-
-      if (pendingType === "version_all_sections") {
-        const parsed = parseAiJson(raw);
-        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-          throw new Error("Expected a JSON object keyed by section/version label.");
-        }
-        const { selected, labels, numClassSections: ncs } = pendingMeta;
-        const newSectionVersions = {};
-        for (let s = 1; s <= ncs; s++) {
-          const sectionVariants = labels.map(label => {
-            const key = `S${s}_${label}`;
-            const qs = parsed[key] || [];
-            const versioned = qs.map((q, i) => ({
-              ...sanitize(q), id: uid(), originalId: selected[i]?.id,
-              course: selected[i]?.course || course,
-              versionLabel: label, classSection: s, createdAt: Date.now(),
-              ...(selected[i]?.hasGraph ? {
-                hasGraph: true,
-                graphConfig: mergeVariantGraphConfig(selected[i].graphConfig, q.graphConfig),
-              } : {}),
-            }));
-            return { label, questions: versioned, classSection: s };
-          });
-          newSectionVersions[s] = masterLocked
-            ? [{ ...versions[0], classSection: s }, ...sectionVariants]
-            : sectionVariants;
-        }
-        const answerWarnings = collectAnswerWarnings(Object.values(newSectionVersions).flat());
-        // flushSync commits all state updates synchronously before router.push fires.
-        flushSync(() => {
-          setClassSectionVersions(newSectionVersions);
-          setVersions(newSectionVersions[1]);
-          setActiveVersion(0); setActiveClassSection(1);
+          setActiveClassSection(1);
           setPasteInput("");
           setExamSaved(false); setSaveExamName("");
           setBuiltStale(false); // fresh build — the version set is clean
