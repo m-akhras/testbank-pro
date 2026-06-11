@@ -43,3 +43,103 @@ describe("OMML digit-base letter-exponent (parallel to toLatex fix)", () => {
     expect(hasSSup(out)).toBe(true);
   });
 });
+
+// ── OMML export-pipeline audit fixes (counterpart to the display audit) ──
+describe("OMML audit fixes — exact-output", () => {
+  const M = (s) => mathToOmml(s);
+
+  // FIX 1: derivatives → real m:f fraction; d/dx(composite) no longer corrupts.
+  test("d/dx(sin(x)) — fraction operator + operand preserved (was sin(x)→0)", () => {
+    const out = M("d/dx(sin(x))");
+    expect(out).toContain("<m:f><m:num><m:r><m:t xml:space=\"preserve\">d</m:t></m:r></m:num><m:den><m:r><m:t xml:space=\"preserve\">dx</m:t></m:r></m:den></m:f>");
+    expect(out).toContain("sin(x)");      // operand survived
+    expect(out).not.toContain(">0<");      // not the old "dx(0)" corruption
+    expect(out).toContain('<m:begChr m:val="("/>');
+  });
+  test("d/dx[x^2] — bracket operand with inner exponent", () => {
+    const out = M("d/dx[x^2]");
+    expect(out).toContain("<m:f>");
+    expect(out).toContain('<m:begChr m:val="["/>');
+    expect(out).toContain("<m:sSup>"); // x^2 inside
+  });
+  test("dy/dx, d^2y/dx^2, ∂f/∂x render as fractions", () => {
+    expect(M("dy/dx")).toContain("<m:num><m:r><m:t xml:space=\"preserve\">dy</m:t></m:r></m:num><m:den><m:r><m:t xml:space=\"preserve\">dx</m:t></m:r></m:den>");
+    expect(M("d^2y/dx^2")).toMatch(/<m:f><m:num><m:sSup>.*<\/m:sSup><m:r><m:t[^>]*>y<\/m:t>/);
+    expect(M("∂f/∂x")).toContain("<m:num><m:r><m:t xml:space=\"preserve\">∂f</m:t></m:r></m:num><m:den><m:r><m:t xml:space=\"preserve\">∂x</m:t></m:r></m:den>");
+  });
+
+  // FIX 2: complete greek words (standalone + exponent).
+  test("missing greek words → glyphs (μ ν ξ ω τ), standalone and with exponent", () => {
+    expect(M("mu")).toContain(">μ<");
+    expect(M("nu")).toContain(">ν<");
+    expect(M("xi")).toContain(">ξ<");
+    expect(M("omega")).toContain(">ω<");
+    // mu^2 must be a single sSup on μ, NOT split into m + u²
+    expect(M("mu^2")).toContain("<m:sSup><m:e><m:r><m:t xml:space=\"preserve\">μ</m:t></m:r></m:e><m:sup><m:r><m:t xml:space=\"preserve\">2</m:t></m:r></m:sup></m:sSup>");
+    expect(M("mu^2")).not.toContain(">m<");
+    expect(M("tau^2")).toContain(">τ<");
+  });
+
+  // FIX 3: powered / inverse trig.
+  test("sin^2(x) / sin^-1(x) → sSup on the function name", () => {
+    expect(M("sin^2(x)")).toContain("<m:sSup><m:e><m:r><m:t xml:space=\"preserve\">sin</m:t></m:r></m:e><m:sup><m:r><m:t xml:space=\"preserve\">2</m:t></m:r></m:sup></m:sSup>");
+    expect(M("sin^2(x)")).toContain(">(x)<");
+    expect(M("sin^-1(x)")).toContain("<m:sup><m:r><m:t xml:space=\"preserve\">-1</m:t></m:r></m:sup>");
+    expect(M("cos^2(theta)")).toContain("(θ)");
+  });
+
+  // FIX 4: one-sided limit superscript.
+  test("lim x→2^+ / x→2^- → raised + / - in the subscript (not a literal caret)", () => {
+    const plus = M("lim x→2^+ f(x)");
+    expect(plus).toContain("<m:lim><m:r><m:t xml:space=\"preserve\">x→</m:t></m:r><m:sSup><m:e><m:r><m:t xml:space=\"preserve\">2</m:t></m:r></m:e><m:sup><m:r><m:t xml:space=\"preserve\">+</m:t></m:r></m:sup></m:sSup></m:lim>");
+    expect(plus).not.toContain("2^+");
+    expect(M("lim x→2^- f(x)")).toContain("<m:sup><m:r><m:t xml:space=\"preserve\">-</m:t></m:r></m:sup>");
+    // negative APPROACH (not one-sided) stays a plain value, not a superscript
+    expect(M("lim x→-1 f(x)")).toContain("<m:lim><m:r><m:t xml:space=\"preserve\">x→-1</m:t></m:r></m:lim>");
+  });
+
+  // FIX 5: parenthesized base + braced exponent.
+  test("(x+1)^{10} → sSup (and (x+1)^2 still works)", () => {
+    expect(M("(x+1)^{10}")).toContain("<m:sSup><m:e><m:r><m:t xml:space=\"preserve\">(x+1)</m:t></m:r></m:e><m:sup><m:r><m:t xml:space=\"preserve\">10</m:t></m:r></m:sup></m:sSup>");
+    expect(M("(x+1)^2")).toContain("<m:sSup><m:e><m:r><m:t xml:space=\"preserve\">(x+1)</m:t></m:r></m:e><m:sup><m:r><m:t xml:space=\"preserve\">2</m:t></m:r></m:sup></m:sSup>");
+  });
+
+  // FIX 6: summation / product nary.
+  test("sum from i=1 to n [of EXPR] → ∑ nary with limits (+ body)", () => {
+    const bare = M("sum from i=1 to n");
+    expect(bare).toContain('<m:chr m:val="∑"/>');
+    expect(bare).toContain('<m:limLoc m:val="undOvr"/>');
+    expect(bare).toContain("<m:sub><m:r><m:t xml:space=\"preserve\">i=1</m:t></m:r></m:sub>");
+    expect(bare).toContain("<m:sup><m:r><m:t xml:space=\"preserve\">n</m:t></m:r></m:sup>");
+    const withBody = M("sum from i=1 to n of (1)/(n^2)");
+    expect(withBody).toMatch(/<m:e><m:f><m:num>.*<\/m:f><\/m:e><\/m:nary>/); // fraction in the body
+    expect(M("product from k=1 to n of k")).toContain('<m:chr m:val="∏"/>');
+  });
+});
+
+// Drift-net: every pattern the audit marked CORRECT, pinned to exact output.
+describe("OMML regression pins (audit CORRECT patterns)", () => {
+  const M = (s) => mathToOmml(s);
+  test("fraction + nested-denominator", () => {
+    expect(M("(x+1)/(x-2)")).toBe('<m:oMath><m:f><m:num><m:r><m:t xml:space="preserve">x+1</m:t></m:r></m:num><m:den><m:r><m:t xml:space="preserve">x-2</m:t></m:r></m:den></m:f></m:oMath>');
+    expect(M("(1)/((s-3)^2)")).toBe('<m:oMath><m:f><m:num><m:r><m:t xml:space="preserve">1</m:t></m:r></m:num><m:den><m:sSup><m:e><m:r><m:t xml:space="preserve">(s-3)</m:t></m:r></m:e><m:sup><m:r><m:t xml:space="preserve">2</m:t></m:r></m:sup></m:sSup></m:den></m:f></m:oMath>');
+  });
+  test("exponents: x^2, x^(1/2), 2^x, sigma^2", () => {
+    expect(M("x^2")).toBe('<m:oMath><m:sSup><m:e><m:r><m:t xml:space="preserve">x</m:t></m:r></m:e><m:sup><m:r><m:t xml:space="preserve">2</m:t></m:r></m:sup></m:sSup></m:oMath>');
+    expect(M("x^(1/2)")).toContain('<m:sup><m:r><m:t xml:space="preserve">1/2</m:t></m:r></m:sup>');
+    expect(M("2^x")).toBe('<m:oMath><m:sSup><m:e><m:r><m:t xml:space="preserve">2</m:t></m:r></m:e><m:sup><m:r><m:t xml:space="preserve">x</m:t></m:r></m:sup></m:sSup></m:oMath>');
+    expect(M("sigma^2")).toBe('<m:oMath><m:sSup><m:e><m:r><m:t xml:space="preserve">σ</m:t></m:r></m:e><m:sup><m:r><m:t xml:space="preserve">2</m:t></m:r></m:sup></m:sSup></m:oMath>');
+  });
+  test("sqrt, Laplace, inequalities, greek glyph, infinity, abs", () => {
+    expect(M("sqrt(x+1)")).toBe('<m:oMath><m:rad><m:radPr><m:degHide m:val="1"/></m:radPr><m:deg/><m:e><m:r><m:t xml:space="preserve">x+1</m:t></m:r></m:e></m:rad></m:oMath>');
+    expect(M("L^{-1}{F(s)}")).toContain('<m:sSup><m:e><m:r><m:t xml:space="preserve">L</m:t></m:r></m:e><m:sup><m:r><m:t xml:space="preserve">-1</m:t></m:r></m:sup></m:sSup>');
+    expect(M("x <= 5")).toBe('<m:oMath><m:r><m:t xml:space="preserve">x ≤ 5</m:t></m:r></m:oMath>');
+    expect(M("x != 0")).toBe('<m:oMath><m:r><m:t xml:space="preserve">x ≠ 0</m:t></m:r></m:oMath>');
+    expect(M("theta")).toBe('<m:oMath><m:r><m:t xml:space="preserve">θ</m:t></m:r></m:oMath>');
+    expect(M("infinity")).toBe('<m:oMath><m:r><m:t xml:space="preserve">∞</m:t></m:r></m:oMath>');
+    expect(M("|x-2|")).toBe('<m:oMath><m:r><m:t xml:space="preserve">|x-2|</m:t></m:r></m:oMath>');
+  });
+  test("two-sided limit with fraction operand", () => {
+    expect(M("lim x→2 (x^2-4)/(x-2)")).toContain('<m:limLow><m:e><m:r><m:rPr><m:sty m:val="p"/></m:rPr><m:t xml:space="preserve">lim</m:t></m:r></m:e><m:lim><m:r><m:t xml:space="preserve">x→2</m:t></m:r></m:lim></m:limLow>');
+  });
+});
