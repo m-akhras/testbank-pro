@@ -69,6 +69,18 @@ describe("calc1_2_3 — graph_limit_laws dual-spec contract", () => {
     expect(gll).not.toContain("f(-1) + lim");
     expect(gll).toContain("OUT OF SCOPE"); // explicitly forbids value+limit / composition
   });
+
+  test("MC contract uses the INJECTION model, not phrase-matching", () => {
+    const mixed = build({ question_style: "mixed" });
+    for (const p of [gll, mixed]) {
+      // new injection language
+      expect(p).toContain("the SYSTEM composes the correct answer text");
+      expect(p).toContain("INJECTS it as the answer key");
+      expect(p).toMatch(/Author ALL choices as plausible WRONG distractors/);
+      // old phrase-matching language is gone
+      expect(p).not.toContain("MUST appear VERBATIM");
+    }
+  });
 });
 
 describe("calc1_2_3 — symbolic styles carry no limitSpec contract", () => {

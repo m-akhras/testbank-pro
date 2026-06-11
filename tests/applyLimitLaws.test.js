@@ -93,21 +93,43 @@ describe("applyLimitLaws — xPolyTimesF (k = p(a) evaluated by the caller)", ()
   });
 });
 
-describe("applyLimitLaws — MC hard-fail + malformed asks", () => {
-  test("MC whose choices omit the derived value is rejected", () => {
-    expect(() =>
-      applyLimitLaws({
-        type: "Multiple Choice",
-        limitSpecF: specF,
-        limitSpecG: specG,
-        choices: ["1", "2", "3"], // derived sum at 3 is "4" — absent
-        answer: "2",
-        lawAsks: [{ law: "sum", at: 3 }],
-      })
-    ).toThrow(/not among the choices/);
+describe("applyLimitLaws — MC injection (no phrase-matching) + malformed asks", () => {
+  test("system composes + INJECTS the correct text; wrong-phrasing choices NOT rejected", () => {
+    const q = applyLimitLaws({
+      type: "Multiple Choice",
+      limitSpecF: specF,
+      limitSpecG: specG,
+      // all distractors — wrong values AND differently-worded; none equals "4"
+      choices: ["lim (f+g) at 3 is 5", "the sum equals 4 here", "placeholder distractor"],
+      answer: "the sum equals 4 here", // model's marked answer — IGNORED
+      lawAsks: [{ law: "sum", at: 3 }],
+    });
+    expect(q.answer).toBe("4"); // system-composed, single-ask value
+    expect(q.choices).toContain("4");
+    expect(q.choices).toHaveLength(3);
+    expect(q.choices[2]).toBe("4"); // last distractor replaced (mirrors §2.5)
   });
 
-  test("MC matches the derived value when present", () => {
+  test("multi-ask: compound system text injected, model wording ignored, NO reject", () => {
+    const q = applyLimitLaws({
+      type: "Multiple Choice",
+      limitSpecF: specF,
+      limitSpecG: specG,
+      choices: [
+        "the limit of (f + g) as x approaches 3 = 5; the limit of f/g as x approaches 1 = 0",
+        "f+g is 4 and f/g is undefined", // different phrasing — would have failed the old matcher
+        "third distractor",
+      ],
+      answer: "f+g is 4 and f/g is undefined",
+      lawAsks: [{ law: "sum", at: 3 }, { law: "quotient", at: 1 }],
+    });
+    const expected =
+      "the limit of (f + g) as x approaches 3 = 4; the limit of f/g as x approaches 1 = does not exist (DNE)";
+    expect(q.answer).toBe(expected);
+    expect(q.choices).toContain(expected);
+  });
+
+  test("reuses a model choice if it already equals the system text", () => {
     const q = applyLimitLaws({
       type: "Multiple Choice",
       limitSpecF: specF,
@@ -117,6 +139,19 @@ describe("applyLimitLaws — MC hard-fail + malformed asks", () => {
       lawAsks: [{ law: "sum", at: 3 }],
     });
     expect(q.answer).toBe("4");
+    expect(q.choices).toEqual(["3", "4", "does not exist (DNE)", "infinity"]); // unchanged
+  });
+
+  test("MC with fewer than 2 choices → structural hard-fail", () => {
+    expect(() =>
+      applyLimitLaws({
+        type: "Multiple Choice",
+        limitSpecF: specF,
+        limitSpecG: specG,
+        choices: ["only one"],
+        lawAsks: [{ law: "sum", at: 3 }],
+      })
+    ).toThrow(/at least 2 distractor/);
   });
 
   test("unknown law → hard-fail", () => {
@@ -243,5 +278,26 @@ describe("isLimitTemplateSection — guard scoping", () => {
     expect(isLimitTemplateSection("Calculus 1", "1.3 New Functions from Old Functions")).toBe(false);
     expect(isLimitTemplateSection("Quantitative Methods I", "3.1 Whatever")).toBe(false);
     expect(isLimitTemplateSection("Calculus 1", undefined)).toBe(false);
+  });
+});
+
+describe("applyLimitLaws — n-th root phrasing (never '#-th')", () => {
+  const expl = (n, at) =>
+    applyLimitLaws({
+      type: "Free Response",
+      limitSpecF: { segments: [{ fn: "x", from: 0, to: 20 }] }, // f(a)=a
+      limitSpecG: { segments: [{ fn: "x", from: 0, to: 20 }] },
+      lawAsks: [{ law: "root", at, params: { n } }],
+    }).explanation;
+
+  test("n=2 → 'square root of f', n=3 → 'cube root of f', n=4 → '4th root of f'", () => {
+    expect(expl(2, 4)).toContain("square root of f");   // sqrt(4) = 2
+    expect(expl(3, 8)).toContain("cube root of f");     // cbrt(8) = 2
+    expect(expl(4, 16)).toContain("4th root of f");     // 16^(1/4) = 2
+  });
+
+  test("never emits the '#-th root' bug", () => {
+    const all = expl(2, 4) + expl(3, 8) + expl(4, 16) + expl(5, 1);
+    expect(all).not.toMatch(/-th root/);
   });
 });
