@@ -78,12 +78,19 @@ export default function VariantsScreen({
   const totalVersions = versionCount * numClassSections;
   const totalItems = numQ * totalVersions;
   // Auto-generate calls the model once per SECTION×VERSION, so its real per-call
-  // budget is ONE version = numQ items. The paste stepper sends one prompt per
-  // SECTION = numQ × versionCount items.
-  const perVersionItems = numQ;                         // auto-generate chunk
-  const perSectionItems = numQ * versionCount;          // paste-stepper chunk
+  // budget is ONE version = numQ items (fully general, no master-size assumption).
+  // The paste stepper sends one prompt per SECTION: section 1 = numQ × versionCount
+  // (variants of the master); sections ≥ 2 = numQ × (versionCount + 1) (their own
+  // anchor A + variants) — use the larger for the budget check.
+  const perVersionItems = numQ;                                  // auto chunk
+  const perSectionItems = numQ * (versionCount + (numClassSections > 1 ? 1 : 0)); // paste chunk
   const autoOverBudget = perVersionItems > PER_CHUNK_WARN;
   const pasteOverBudget = perSectionItems > PER_CHUNK_WARN;
+  // How many auto requests will run: section 1 = versionCount; each s ≥ 2 = 1 anchor
+  // + versionCount variants.
+  const autoChunkCount = numClassSections > 1
+    ? versionCount + (numClassSections - 1) * (versionCount + 1)
+    : versionCount;
   const estTokens = Math.round(totalItems * 400 + 1500);
   const estCost = ((totalItems * 400 * 3) / 1_000_000 + (totalItems * 350 * 15) / 1_000_000).toFixed(3);
   const variantLabels = VERSIONS.slice(1, 1 + versionCount);
@@ -146,6 +153,13 @@ export default function VariantsScreen({
           </div>
         </div>
 
+        {numClassSections > 1 && (
+          <div style={{ marginTop: "0.75rem", fontSize: "0.72rem", color: text3, padding: "0.5rem 0.7rem", background: bg2, borderRadius: "6px", border: "1px solid " + border }}>
+            ℹ Section 1's version A is your master; other sections' A is a function variation of it. Within each section, B, C, … keep that section's A's functions and change only the numbers.
+          </div>
+        )}
+
+        {numClassSections === 1 && (
         <div style={{ marginTop: "0.9rem" }}>
           <div style={S.lbl}>Mutation type per variant</div>
           <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginTop: "0.3rem" }}>
@@ -171,6 +185,7 @@ export default function VariantsScreen({
             })}
           </div>
         </div>
+        )}
 
         <div style={{ marginTop: "1rem", padding: "0.75rem 0.9rem", background: bg2, borderRadius: "8px", border: "1px solid " + border }}>
           <div style={{ fontSize: "0.78rem", color: text1, fontWeight: "600", marginBottom: "0.3rem" }}>Estimated cost</div>
@@ -182,7 +197,7 @@ export default function VariantsScreen({
             ~{estTokens.toLocaleString()} tokens · ~${estCost}
           </div>
           <div style={{ fontSize: "0.72rem", color: text3, marginTop: "0.3rem" }}>
-            Auto-generate runs {numClassSections > 1 ? `${totalVersions} requests (one per section × version)` : `${versionCount} request${versionCount > 1 ? "s" : ""}`} of {numQ} question{numQ !== 1 ? "s" : ""} each.
+            Auto-generate runs {autoChunkCount} request{autoChunkCount !== 1 ? "s" : ""} (one per section × version) of {numQ} question{numQ !== 1 ? "s" : ""} each{numClassSections > 1 ? ` — each section ≥ 2 starts with a function-mutated anchor (A), then numbers variants` : ""}.
           </div>
           {autoOverBudget && (
             <div style={{ fontSize: "0.75rem", color: "#fca5a5", marginTop: "0.45rem", padding: "0.5rem 0.7rem", background: "#7f1d1d33", borderRadius: "6px", border: "1px solid #ef444466" }}>
@@ -190,9 +205,9 @@ export default function VariantsScreen({
               Even a single version is {numQ} questions (~{Math.round(numQ * 400 / 1000)}k tokens) — close to the model's output limit. Reduce the master's question count; if a version is cut off, generation stops with a clear error naming the version (e.g. "S4_B failed") and you can retry.
             </div>
           )}
-          {!autoOverBudget && pasteOverBudget && (
+          {!autoOverBudget && pasteOverBudget && numClassSections > 1 && (
             <div style={{ fontSize: "0.75rem", color: "#f59e0b", marginTop: "0.45rem", padding: "0.5rem 0.7rem", background: "#451a0322", borderRadius: "6px", border: "1px solid #f59e0b66" }}>
-              ⚠ A per-section paste prompt is {perSectionItems} items ({versionCount} versions × {numQ} questions) — likely too large to paste in one go. Use <b>Auto-generate</b> (it splits to one version per request), or reduce versions.
+              ⚠ A per-section paste prompt is up to {perSectionItems} items ({numQ} questions × {versionCount + 1} versions incl. the anchor) — too large to paste reliably. This job size needs <b>Auto-generate</b> (it splits to one version per request), or reduce the master's questions/versions.
             </div>
           )}
         </div>
@@ -216,7 +231,9 @@ export default function VariantsScreen({
           </button>
           {numClassSections > 1 && (
             <button
-              style={{ ...S.oBtn(accent), fontSize: "0.82rem", padding: "0.55rem 1rem" }}
+              style={{ ...S.oBtn(accent), fontSize: "0.82rem", padding: "0.55rem 1rem", opacity: pasteOverBudget ? 0.5 : 1 }}
+              disabled={pasteOverBudget}
+              title={pasteOverBudget ? "This job is too large to paste per section — use Auto-generate." : ""}
               onClick={() => triggerSectionPrompt && triggerSectionPrompt(1)}
             >
               Paste section-by-section →
@@ -230,16 +247,24 @@ export default function VariantsScreen({
       {pendingType === "version_one_section" && !!generatedPrompt && (() => {
         const s = pendingMeta?.sectionNum || 1;
         const ncs = pendingMeta?.numClassSections || numClassSections;
+        const anchorLabel = pendingMeta?.anchorLabel || "A";
+        const vlabels = pendingMeta?.variantLabels || pendingMeta?.labels || [];
+        // Keys this section asks for: section 1 = variants (A is the master); s ≥ 2
+        // = its own anchor A + variants.
+        const genLabels = (pendingMeta?.anchorMode && s >= 2) ? [anchorLabel, ...vlabels] : vlabels;
         const sectionDone = Array.isArray(classSectionVersions?.[s]) && classSectionVersions[s].length > 0;
         const isLast = s >= ncs;
         return (
           <div style={{ marginTop: "1.5rem" }}>
             <hr style={S.divider} />
             <div style={{ fontSize: "0.82rem", color: accent, fontWeight: "700", marginBottom: "0.4rem" }}>
-              📋 Section {s} of {ncs} — paste this section's {pendingMeta?.labels?.length} version{(pendingMeta?.labels?.length || 0) > 1 ? "s" : ""} ({pendingMeta?.labels?.join(", ")})
+              📋 Section {s} of {ncs} — paste keys {genLabels.map(l => `S${s}_${l}`).join(", ")}
             </div>
             <div style={{ fontSize: "0.72rem", color: text3, marginBottom: "0.5rem" }}>
-              Generates keys {pendingMeta?.labels?.map(l => `S${s}_${l}`).join(", ")}. Paste this section's result; sections you've already merged stay intact.
+              {s === 1
+                ? `Version A is your master (kept as-is). The model returns ${genLabels.map(l => `S${s}_${l}`).join(", ")}.`
+                : `The model generates this section's anchor S${s}_${anchorLabel} (function variation) then S${s}_${vlabels.join(", S" + s + "_")} (numbers).`}
+              {" "}Sections you've already merged stay intact.
             </div>
             <div style={S.promptBox}>{generatedPrompt}</div>
             <div style={{ display: "flex", gap: "0.75rem", marginBottom: "1rem", flexWrap: "wrap" }}>
@@ -249,7 +274,7 @@ export default function VariantsScreen({
             </div>
             {!sectionDone && (
               <PastePanel
-                label={`Paste the JSON for Section ${s} (keys ${pendingMeta?.labels?.map(l => `S${s}_${l}`).join(", ")}).`}
+                label={`Paste the JSON for Section ${s} (keys ${genLabels.map(l => `S${s}_${l}`).join(", ")}).`}
                 S={S} text2={text2}
                 pasteInput={pasteInput} setPasteInput={setPasteInput}
                 pasteError={pasteError} handlePaste={handlePaste}
@@ -279,13 +304,13 @@ export default function VariantsScreen({
           <div style={{ fontSize: "0.78rem", color: accent, fontWeight: "600", marginBottom: "0.5rem" }}>
             📋 Generate Variants
             {pendingType === "version_all_sections" && (
-              <> — all {pendingMeta?.numClassSections} sections × {pendingMeta?.labels?.join(", ")}</>
+              <> — {pendingMeta?.numClassSections} sections (auto-generates per section × version)</>
             )}
           </div>
           <div style={S.promptBox}>{generatedPrompt}</div>
           {(() => {
             const nq = pendingMeta?.selected?.length || 0;
-            const nv = pendingMeta?.labels?.length || 0;
+            const nv = (pendingMeta?.variantLabels || pendingMeta?.labels || []).length;
             const ncs = pendingMeta?.numClassSections || 1;
             const totalV = nv * ncs;
             const cost = ((nq * totalV * 400 * 3) / 1_000_000 + (nq * totalV * 350 * 15) / 1_000_000).toFixed(3);
@@ -307,7 +332,7 @@ export default function VariantsScreen({
             >
               {autoGenLoading
                 ? (genProgress && genProgress.total > 1
-                    ? `⏳ Generating section ${genProgress.current} of ${genProgress.total}…`
+                    ? `⏳ Generating S${genProgress.sectionNum} version ${genProgress.label} — ${genProgress.current} of ${genProgress.total}…`
                     : "⏳ Generating…")
                 : "⚡ Generate Variants"}
             </button>

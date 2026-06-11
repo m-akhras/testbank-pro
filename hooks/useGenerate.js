@@ -9,7 +9,7 @@ import {
   findIncompleteKeys,
   formatVersionCompletenessError,
   buildSectionVersions,
-  buildOneSectionVariants,
+  assembleSection,
   mergeSection,
 } from "../lib/exams/versionMerge.js";
 import { answerMatchesAChoice } from "../lib/exports/index.js";
@@ -189,22 +189,26 @@ export function useGenerate({
         if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
           throw new Error("Expected a JSON object keyed by version label.");
         }
-        const { selected, labels, sectionNum } = pendingMeta;
-        const expected = labels.map((l) => `S${sectionNum}_${l}`);
+        const { selected, sectionNum } = pendingMeta;
+        const variantLabels = pendingMeta.variantLabels || pendingMeta.labels || [];
+        const anchorMode = !!pendingMeta.anchorMode;
+        const anchorLabel = pendingMeta.anchorLabel || "A";
+        // Keys this section actually generates: anchor model section ≥ 2 also
+        // generates its own A; section 1 (A = master) generates only the variants.
+        const genLabels = (anchorMode && sectionNum >= 2) ? [anchorLabel, ...variantLabels] : variantLabels;
+        const expected = genLabels.map((l) => `S${sectionNum}_${l}`);
         const { missing, short } = findIncompleteKeys(parsed, expected, selected.length);
         if (missing.length || short.length) {
           throw new Error(
             formatVersionCompletenessError(expected, { missing, short }, looksTruncated(raw))
           );
         }
-        const sectionVariants = buildOneSectionVariants({
-          parsed, sectionNum, multi: true, labels, selected, course,
+        const sectionVariants = assembleSection({
+          parsed, sectionNum, multi: true, variantLabels, anchorLabel, selected, course,
+          masterLocked, masterVersion: versions[0], anchorMode,
           sanitizeFn: sanitize, mergeGraphFn: mergeVariantGraphConfig, makeId: uid,
         });
-        const withMaster = (masterLocked && versions[0])
-          ? [{ ...versions[0], classSection: sectionNum }, ...sectionVariants]
-          : sectionVariants;
-        const merged = mergeSection(classSectionVersions, sectionNum, withMaster);
+        const merged = mergeSection(classSectionVersions, sectionNum, sectionVariants);
         const answerWarnings = collectAnswerWarnings(Object.values(merged.classSectionVersions).flat());
         flushSync(() => {
           setClassSectionVersions(merged.classSectionVersions);
@@ -225,14 +229,17 @@ export function useGenerate({
         if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
           throw new Error("Expected a JSON object keyed by version label.");
         }
-        const { selected, labels } = pendingMeta;
+        const { selected } = pendingMeta;
+        const variantLabels = pendingMeta.variantLabels || pendingMeta.labels || [];
         const sections = pendingType === "version_all_sections"
           ? (pendingMeta.numClassSections || 1)
           : 1;
+        const anchorMode = pendingType === "version_all_sections" && !!pendingMeta.anchorMode;
+        const anchorLabel = pendingMeta.anchorLabel || "A";
 
         // LOUD completeness guard — every expected version set must be present
         // with the full question count, else fail by NAME (no silent empties).
-        const expected = expectedVersionKeys(sections, labels);
+        const expected = expectedVersionKeys(sections, variantLabels, { anchorMode, anchorLabel });
         const { missing, short } = findIncompleteKeys(parsed, expected, selected.length);
         if (missing.length || short.length) {
           throw new Error(
@@ -244,11 +251,13 @@ export function useGenerate({
         const { classSectionVersions, versions: vers } = buildSectionVersions({
           parsed,
           numClassSections: sections,
-          labels,
+          variantLabels,
+          anchorLabel,
           selected,
           course,
           masterLocked,
           masterVersion: versions[0],
+          anchorMode,
           sanitizeFn: sanitize,
           mergeGraphFn: mergeVariantGraphConfig,
           makeId: uid,

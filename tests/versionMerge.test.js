@@ -3,196 +3,145 @@ import {
   findIncompleteKeys,
   formatVersionCompletenessError,
   buildSectionVersions,
-  buildOneSectionVariants,
+  assembleSection,
   mergeSection,
 } from "../lib/exams/versionMerge.js";
+import { buildVersionChunkPrompt } from "../lib/prompts/index.js";
 
-describe("expectedVersionKeys", () => {
-  test("multi-section: S{s}_{label} for every section × label", () => {
-    expect(expectedVersionKeys(3, ["A", "B", "C"])).toEqual([
-      "S1_A", "S1_B", "S1_C", "S2_A", "S2_B", "S2_C", "S3_A", "S3_B", "S3_C",
+describe("expectedVersionKeys — anchor model", () => {
+  test("anchorMode: S1_A absent (master), S{s}_A present for s ≥ 2", () => {
+    expect(expectedVersionKeys(3, ["B", "C"], { anchorMode: true })).toEqual([
+      "S1_B", "S1_C",
+      "S2_A", "S2_B", "S2_C",
+      "S3_A", "S3_B", "S3_C",
     ]);
   });
-  test("single-section (version_all): bare labels", () => {
+  test("non-anchor multi: only the variant labels every section", () => {
+    expect(expectedVersionKeys(3, ["B", "C"])).toEqual([
+      "S1_B", "S1_C", "S2_B", "S2_C", "S3_B", "S3_C",
+    ]);
+  });
+  test("single-section: bare variant labels", () => {
     expect(expectedVersionKeys(1, ["A", "B"])).toEqual(["A", "B"]);
   });
 });
 
-describe("findIncompleteKeys — completeness guard core", () => {
-  const expected = ["S1_A", "S1_B"];
-  test("complete response → nothing missing or short", () => {
-    const parsed = { S1_A: [1, 2], S1_B: [1, 2] };
-    expect(findIncompleteKeys(parsed, expected, 2)).toEqual({ missing: [], short: [] });
+describe("findIncompleteKeys / formatVersionCompletenessError", () => {
+  test("complete / missing / short", () => {
+    expect(findIncompleteKeys({ S2_A: [1, 2] }, ["S2_A"], 2)).toEqual({ missing: [], short: [] });
+    expect(findIncompleteKeys({}, ["S2_A"], 2)).toEqual({ missing: ["S2_A"], short: [] });
+    expect(findIncompleteKeys({ S2_A: [1] }, ["S2_A"], 2)).toEqual({ missing: [], short: ["S2_A"] });
   });
-  test("absent / empty key → missing", () => {
-    expect(findIncompleteKeys({ S1_A: [1, 2] }, expected, 2)).toEqual({ missing: ["S1_B"], short: [] });
-    expect(findIncompleteKeys({ S1_A: [1, 2], S1_B: [] }, expected, 2)).toEqual({ missing: ["S1_B"], short: [] });
-  });
-  test("too-few-questions key → short", () => {
-    expect(findIncompleteKeys({ S1_A: [1, 2], S1_B: [1] }, expected, 2)).toEqual({ missing: [], short: ["S1_B"] });
-  });
-});
-
-describe("formatVersionCompletenessError — loud, names exactly what's missing", () => {
-  test("names missing keys and the expected total + range", () => {
-    const expected = expectedVersionKeys(5, ["A", "B", "C"]); // 15 keys S1_A…S5_C
-    const msg = formatVersionCompletenessError(
-      expected,
-      { missing: ["S4_B", "S5_A", "S5_B", "S5_C"], short: [] },
-      true
-    );
-    expect(msg).toContain("Expected 15 version sets (S1_A…S5_C)");
-    expect(msg).toContain("missing S4_B, S5_A, S5_B, S5_C");
-    expect(msg).toContain("likely cut off");
-    expect(msg).toContain("Regenerate the missing sections.");
-  });
-  test("reports short keys too", () => {
-    const msg = formatVersionCompletenessError(["S1_A", "S1_B"], { missing: [], short: ["S1_B"] }, false);
-    expect(msg).toContain("incomplete (too few questions): S1_B");
-    expect(msg).not.toContain("cut off");
-  });
-});
-
-describe("buildSectionVersions — dual-write invariant", () => {
-  const selected = [{ id: "q1" }, { id: "q2" }];
-  const labels = ["A", "B"];
-  let n;
-  const makeId = () => `id${++n}`;
-  beforeEach(() => { n = 0; });
-
-  test("2 simulated chunk merges → classSectionVersions per section AND versions === section 1", () => {
-    // Two section chunks accumulated into one object (the chunked-generation flow).
-    const combined = {};
-    Object.assign(combined, {
-      S1_A: [{ question: "1A1" }, { question: "1A2" }],
-      S1_B: [{ question: "1B1" }, { question: "1B2" }],
-    });
-    Object.assign(combined, {
-      S2_A: [{ question: "2A1" }, { question: "2A2" }],
-      S2_B: [{ question: "2B1" }, { question: "2B2" }],
-    });
-    const { classSectionVersions, versions } = buildSectionVersions({
-      parsed: combined, numClassSections: 2, labels, selected,
-      sanitizeFn: (q) => q, makeId, now: 1000,
-    });
-    // dual-write: both sections present, active versions === section 1 (same ref)
-    expect(Object.keys(classSectionVersions).sort()).toEqual(["1", "2"]);
-    expect(versions).toBe(classSectionVersions[1]);
-    expect(classSectionVersions[1].map((v) => v.label)).toEqual(["A", "B"]);
-    expect(classSectionVersions[2].map((v) => v.label)).toEqual(["A", "B"]);
-    // each version mutated both selected questions, tagged with classSection
-    expect(classSectionVersions[2][0].questions).toHaveLength(2);
-    expect(classSectionVersions[2][0].questions[0].classSection).toBe(2);
-    expect(classSectionVersions[2][0].questions[0].originalId).toBe("q1");
-    expect(classSectionVersions[2][0].questions[1].originalId).toBe("q2");
-  });
-
-  test("masterLocked prepends Version A (the master) into every section", () => {
-    const master = { label: "A", questions: [{ question: "master" }] };
-    const { classSectionVersions } = buildSectionVersions({
-      parsed: { S1_B: [{ question: "1B" }], S2_B: [{ question: "2B" }] },
-      numClassSections: 2, labels: ["B"], selected, masterLocked: true, masterVersion: master,
-      sanitizeFn: (q) => q, makeId, now: 1,
-    });
-    expect(classSectionVersions[1][0].label).toBe("A");
-    expect(classSectionVersions[1][0].classSection).toBe(1);
-    expect(classSectionVersions[2][0].label).toBe("A");
-    expect(classSectionVersions[1][1].label).toBe("B");
-  });
-
-  test("single-section (version_all): bare-label keys, classSectionVersions[1] only", () => {
-    const { classSectionVersions, versions } = buildSectionVersions({
-      parsed: { A: [{ question: "a" }, { question: "b" }], B: [{ question: "c" }, { question: "d" }] },
-      numClassSections: 1, labels, selected,
-      sanitizeFn: (q) => q, makeId, now: 1,
-    });
-    expect(Object.keys(classSectionVersions)).toEqual(["1"]);
-    expect(versions).toBe(classSectionVersions[1]);
-    expect(versions.map((v) => v.label)).toEqual(["A", "B"]);
-  });
-
-  test("graph questions: graphConfig merged from the master via mergeGraphFn", () => {
-    const sel = [{ id: "q1", hasGraph: true, graphConfig: { type: "single", fn: "x^2" } }];
-    const { classSectionVersions } = buildSectionVersions({
-      parsed: { S1_A: [{ question: "v", graphConfig: { fn: "x^3" } }] },
-      numClassSections: 1, labels: ["A"], selected: sel,
-      sanitizeFn: (q) => q,
-      mergeGraphFn: (orig, next) => ({ ...orig, ...next }),
-      makeId, now: 1,
-    });
-    // numClassSections:1 uses bare labels — here parsed has S1_A, so it reads "A" → empty.
-    // Re-run as multi to exercise the graph merge path with the S-key:
-    const multi = buildSectionVersions({
-      parsed: { S1_A: [{ question: "v", graphConfig: { fn: "x^3" } }] },
-      numClassSections: 2, labels: ["A"], selected: sel,
-      sanitizeFn: (q) => q,
-      mergeGraphFn: (orig, next) => ({ ...orig, ...next }),
-      makeId, now: 1,
-    });
-    const q = multi.classSectionVersions[1][0].questions[0];
-    expect(q.hasGraph).toBe(true);
-    expect(q.graphConfig).toEqual({ type: "single", fn: "x^3" });
-    void classSectionVersions;
-  });
-});
-
-describe("per section×version auto chunk — single-key validation", () => {
-  test("a one-key chunk validates like any other (complete / missing / short)", () => {
-    const key = "S2_B";
-    expect(findIncompleteKeys({ S2_B: [1, 2] }, [key], 2)).toEqual({ missing: [], short: [] });
-    expect(findIncompleteKeys({}, [key], 2)).toEqual({ missing: ["S2_B"], short: [] });
-    expect(findIncompleteKeys({ S2_B: [1] }, [key], 2)).toEqual({ missing: [], short: ["S2_B"] });
-  });
-  test("single-key completeness error names the exact key", () => {
+  test("error names the exact key + truncation note", () => {
     const msg = formatVersionCompletenessError(["S4_B"], { missing: ["S4_B"], short: [] }, true);
     expect(msg).toContain("S4_B");
     expect(msg).toContain("likely cut off");
   });
 });
 
-describe("buildOneSectionVariants + mergeSection — incremental per-section paste", () => {
+describe("assembleSection / buildSectionVersions — per-section anchor", () => {
+  const master = { label: "A", questions: [{ question: "m1" }, { question: "m2" }] };
   const selected = [{ id: "q1" }, { id: "q2" }];
-  const labels = ["A", "B"];
+  const variantLabels = ["B", "C"];
   let n;
   const makeId = () => `id${++n}`;
-  const opts = (parsed, sectionNum) => ({
-    parsed, sectionNum, multi: true, labels, selected, sanitizeFn: (q) => q, makeId, now: 1,
-  });
   beforeEach(() => { n = 0; });
 
-  test("buildOneSectionVariants tags label / classSection / originalId per section", () => {
-    const variants = buildOneSectionVariants(opts({ S2_A: [{ q: "a1" }, { q: "a2" }], S2_B: [{ q: "b1" }, { q: "b2" }] }, 2));
-    expect(variants.map((v) => v.label)).toEqual(["A", "B"]);
-    expect(variants[0].classSection).toBe(2);
-    expect(variants[0].questions[0].originalId).toBe("q1");
-    expect(variants[0].questions[1].originalId).toBe("q2");
+  const parsed = {
+    S1_B: [{ question: "1B1" }, { question: "1B2" }],
+    S1_C: [{ question: "1C1" }, { question: "1C2" }],
+    S2_A: [{ question: "2A1" }, { question: "2A2" }], // section 2's GENERATED anchor
+    S2_B: [{ question: "2B1" }, { question: "2B2" }],
+    S2_C: [{ question: "2C1" }, { question: "2C2" }],
+  };
+
+  test("section 1 anchors on the MASTER; section 2 anchors on parsed S2_A", () => {
+    const { classSectionVersions, versions } = buildSectionVersions({
+      parsed, numClassSections: 2, variantLabels, selected,
+      masterLocked: true, masterVersion: master, anchorMode: true,
+      sanitizeFn: (q) => q, makeId, now: 1,
+    });
+    // both sections are A,B,C
+    expect(classSectionVersions[1].map((v) => v.label)).toEqual(["A", "B", "C"]);
+    expect(classSectionVersions[2].map((v) => v.label)).toEqual(["A", "B", "C"]);
+    // section 1 A === the master (verbatim questions)
+    expect(classSectionVersions[1][0].questions).toEqual(master.questions);
+    // section 2 A === GENERATED (from parsed S2_A), NOT the master
+    expect(classSectionVersions[2][0].label).toBe("A");
+    expect(classSectionVersions[2][0].questions[0].question).toBe("2A1");
+    expect(classSectionVersions[2][0].questions[0].originalId).toBe("q1"); // still maps to master slot
+    // dual-write: active versions === section 1
+    expect(versions).toBe(classSectionVersions[1]);
   });
 
-  test("two sequential section pastes leave BOTH sections populated (no wipe) + dual-write", () => {
-    // Paste 1 → section 1 merges into an empty map.
-    const s1 = buildOneSectionVariants(opts({ S1_A: [{ q: "1A" }], S1_B: [{ q: "1B" }] }, 1));
-    let state = mergeSection({}, 1, s1);
-    expect(Object.keys(state.classSectionVersions)).toEqual(["1"]);
-    expect(state.versions).toBe(state.classSectionVersions[1]); // active = section 1
+  test("S1_A is NOT read from parsed (master is verbatim)", () => {
+    const withFakeS1A = { ...parsed, S1_A: [{ question: "SHOULD_BE_IGNORED" }] };
+    const { classSectionVersions } = buildSectionVersions({
+      parsed: withFakeS1A, numClassSections: 2, variantLabels, selected,
+      masterLocked: true, masterVersion: master, anchorMode: true,
+      sanitizeFn: (q) => q, makeId, now: 1,
+    });
+    expect(classSectionVersions[1][0].questions).toEqual(master.questions); // master, not parsed S1_A
+  });
+});
 
-    // Paste 2 → section 2 merges into the EXISTING map; section 1 must survive.
-    const s2 = buildOneSectionVariants(opts({ S2_A: [{ q: "2A" }], S2_B: [{ q: "2B" }] }, 2));
+describe("incremental per-section paste merge (anchor model)", () => {
+  const master = { label: "A", questions: [{ question: "m1" }] };
+  const selected = [{ id: "q1" }];
+  const variantLabels = ["B", "C"];
+  let n;
+  const makeId = () => `id${++n}`;
+  beforeEach(() => { n = 0; });
+  const aOpts = (parsed, sectionNum) => ({
+    parsed, sectionNum, multi: true, variantLabels, anchorLabel: "A", selected,
+    masterLocked: true, masterVersion: master, anchorMode: true,
+    sanitizeFn: (q) => q, makeId, now: 1,
+  });
+
+  test("two sequential section pastes leave BOTH sections populated + dual-write", () => {
+    // Section 1 paste (model returns S1_B, S1_C; A = master).
+    const s1 = assembleSection(aOpts({ S1_B: [{ question: "1B" }], S1_C: [{ question: "1C" }] }, 1));
+    let state = mergeSection({}, 1, s1);
+    expect(state.classSectionVersions[1].map((v) => v.label)).toEqual(["A", "B", "C"]);
+    expect(state.classSectionVersions[1][0].questions).toEqual(master.questions);
+    expect(state.versions).toBe(state.classSectionVersions[1]);
+
+    // Section 2 paste (model returns S2_A, S2_B, S2_C). Must NOT wipe section 1.
+    const s2 = assembleSection(aOpts({ S2_A: [{ question: "2A" }], S2_B: [{ question: "2B" }], S2_C: [{ question: "2C" }] }, 2));
     state = mergeSection(state.classSectionVersions, 2, s2);
     expect(Object.keys(state.classSectionVersions).sort()).toEqual(["1", "2"]);
-    expect(state.classSectionVersions[1]).toBe(s1);     // section 1 NOT wiped
-    expect(state.classSectionVersions[2]).toBe(s2);
-    expect(state.versions).toBe(state.classSectionVersions[1]); // dual-write: still section 1
-    expect(state.classSectionVersions[1].map((v) => v.label)).toEqual(["A", "B"]);
-    expect(state.classSectionVersions[2].map((v) => v.label)).toEqual(["A", "B"]);
+    expect(state.classSectionVersions[1]).toBe(s1);                 // section 1 preserved
+    expect(state.classSectionVersions[2].map((v) => v.label)).toEqual(["A", "B", "C"]);
+    expect(state.classSectionVersions[2][0].questions[0].question).toBe("2A"); // section 2 A generated
+    expect(state.versions).toBe(state.classSectionVersions[1]);     // dual-write: still section 1
+  });
+});
+
+describe("buildVersionChunkPrompt — base threading + mutation mode", () => {
+  const master = [
+    { type: "Free Response", section: "1.1", question: "Differentiate x^2." },
+    { type: "Multiple Choice", section: "1.1", question: "Limit of (x^2-1)/(x-1)?", choices: ["1", "2", "3", "4"] },
+  ];
+
+  test("A-chunk (s=3): master is the base, FUNCTION mutation + cross-section rule", () => {
+    const p = buildVersionChunkPrompt({ baseQuestions: master, sectionNum: 3, label: "A", mutation: "function", course: "Calculus 1" });
+    expect(p).toContain("ONE version key: S3_A");
+    expect(p).toContain("FUNCTION mutation");
+    expect(p).toContain("Differentiate x^2.");           // master question as base
+    expect(p).toMatch(/Must differ from Section 1/i);    // cross-section differentiation
+    expect(p).toContain('"S3_A"');
   });
 
-  test("re-pasting a section replaces only that section", () => {
-    const s1 = buildOneSectionVariants(opts({ S1_A: [{ q: "1A" }], S1_B: [{ q: "1B" }] }, 1));
-    const s2 = buildOneSectionVariants(opts({ S2_A: [{ q: "2A" }], S2_B: [{ q: "2B" }] }, 2));
-    let state = mergeSection(mergeSection({}, 1, s1).classSectionVersions, 2, s2);
-    const s2b = buildOneSectionVariants(opts({ S2_A: [{ q: "2A2" }], S2_B: [{ q: "2B2" }] }, 2));
-    state = mergeSection(state.classSectionVersions, 2, s2b);
-    expect(state.classSectionVersions[1]).toBe(s1);  // section 1 untouched
-    expect(state.classSectionVersions[2]).toBe(s2b); // section 2 replaced
+  test("B-chunk (s=2): the section's anchor questions are the base, NUMBERS mutation", () => {
+    const anchorQs = [
+      { type: "Free Response", section: "1.1", question: "Integrate e^x." }, // S2_A's generated functions
+      { type: "Multiple Choice", section: "1.1", question: "Limit of sin(x)/x?", choices: ["0", "1", "2", "3"] },
+    ];
+    const p = buildVersionChunkPrompt({ baseQuestions: anchorQs, sectionNum: 2, label: "B", mutation: "numbers", course: "Calculus 1" });
+    expect(p).toContain("ONE version key: S2_B");
+    expect(p).toContain("NUMBERS mutation");
+    expect(p).toContain("change ONLY the numbers");
+    expect(p).toContain("Integrate e^x.");               // base = the section's anchor, not the master
+    expect(p).not.toContain("Differentiate x^2.");        // NOT the master
   });
 });

@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import { sectionSortKey } from "../lib/utils/questions.js";
-import { buildAllVersionsPrompt, buildAllSectionsPrompt } from "../lib/prompts/index.js";
+import { buildAllVersionsPrompt, buildAllSectionsPrompt, buildVersionChunkPrompt, buildSectionPastePrompt } from "../lib/prompts/index.js";
 import { parseAiJson, looksTruncated } from "../lib/utils/sanitizeJsonPaste.js";
 import { findIncompleteKeys, formatVersionCompletenessError } from "../lib/exams/versionMerge.js";
 
@@ -160,8 +160,9 @@ export function useExamBuilder({
     showToast(`Loaded "${master.name}" ✓`);
   }
 
-  // Shared resolution of which questions to mutate + which version labels — used by
-  // both the combined trigger and the per-section paste stepper so they never drift.
+  // Shared resolution of which questions to mutate + the VARIANT labels (the labels
+  // generated after the anchor A). For a locked master, A is the anchor and the
+  // generated variants are B,C,…; the anchor model prepends/derives A per section.
   function _resolveSelectedAndLabels() {
     const selected = masterLocked
       ? versions[0].questions
@@ -172,31 +173,35 @@ export function useExamBuilder({
             const [bMaj, bMin] = sectionSortKey(b.section);
             return aMaj !== bMaj ? aMaj - bMaj : aMin - bMin;
           });
-    const labels = masterLocked ? VERSIONS.slice(1, 1 + versionCount) : VERSIONS.slice(0, versionCount);
-    return { selected, labels };
+    // variantLabels = the non-anchor labels (B, C, …). For a non-master build there
+    // is no separate anchor, so labels start at A.
+    const variantLabels = masterLocked ? VERSIONS.slice(1, 1 + versionCount) : VERSIONS.slice(0, versionCount);
+    return { selected, variantLabels, anchorMode: masterLocked, anchorLabel: "A" };
   }
 
-  // Per-section paste STEPPER: build the prompt for ONE section (all its versions)
-  // and arm handlePaste's incremental-merge branch. The screen advances section by
-  // section; each paste merges into classSectionVersions without wiping the rest.
+  // Per-section paste STEPPER: build ONE section's prompt (the anchor model asks the
+  // model to generate that section's A first then mutate B,C from it within the same
+  // response) and arm handlePaste's incremental-merge branch. The screen advances
+  // section by section; each paste merges into classSectionVersions without wiping it.
   function triggerSectionPrompt(sectionNum) {
-    const { selected, labels } = _resolveSelectedAndLabels();
-    const prompt = buildAllSectionsPrompt(selected, labels, numClassSections, course, versionMutationType, courseObject, [sectionNum]);
+    const { selected, variantLabels, anchorMode, anchorLabel } = _resolveSelectedAndLabels();
+    const prompt = buildSectionPastePrompt({ baseQuestions: selected, sectionNum, variantLabels, anchorLabel, course, courseObject });
     setGeneratedPrompt(prompt);
     setPendingType("version_one_section");
-    setPendingMeta({ selected, labels, sectionNum, numClassSections, versionMutationType });
+    setPendingMeta({ selected, variantLabels, sectionNum, numClassSections, anchorMode, anchorLabel, versionMutationType });
     setPasteInput("");
     setPasteError("");
   }
 
   function triggerVersions() {
-    const { selected, labels } = _resolveSelectedAndLabels();
+    const { selected, variantLabels, anchorMode, anchorLabel } = _resolveSelectedAndLabels();
     if (numClassSections > 1) {
-      const prompt = buildAllSectionsPrompt(selected, labels, numClassSections, course, versionMutationType, courseObject);
+      const prompt = buildAllSectionsPrompt(selected, variantLabels, numClassSections, course, versionMutationType, courseObject);
       setGeneratedPrompt(prompt);
       setPendingType("version_all_sections");
-      setPendingMeta({ selected, labels, numClassSections, versionMutationType });
+      setPendingMeta({ selected, variantLabels, numClassSections, anchorMode, anchorLabel, versionMutationType });
     } else {
+      const labels = variantLabels;
       const prompt = buildAllVersionsPrompt(selected, mutationType, labels, 1, 1, course, versionMutationType, courseObject);
       setGeneratedPrompt(prompt);
       setPendingType("version_all");
@@ -222,42 +227,53 @@ export function useExamBuilder({
     setAutoGenLoading(true);
     setAutoGenError("");
     try {
-      // MULTI-SECTION: one API call per SECTION×VERSION (each request generates
-      // ONE version of ONE section — e.g. 27 questions ≈ 11k tokens, well under
-      // the cap; a per-SECTION chunk of 27×3 ≈ 32k would still truncate).
-      // 3×5 → 15 sequential calls. Accumulate every key into one object, then
-      // hand it to the shared merge path (handlePaste via the auto-submit button),
-      // which re-runs the LOUD completeness guard and the single dual-write. A
-      // failed/truncated chunk fails loudly NAMING the exact key (S4_B); completed
-      // chunks are not committed (retry re-runs).
-      if (pendingTypeVal === "version_all_sections" && (pendingMetaVal?.numClassSections || 1) > 1) {
-        const { selected, labels, numClassSections: ncs } = pendingMetaVal;
-        const vmt = pendingMetaVal.versionMutationType || versionMutationType;
+      // MULTI-SECTION (ANCHOR MODEL): one API call per SECTION×VERSION (always
+      // masterCount items, fits the cap for any master up to ~35 questions).
+      //   - S1_A = the master (prepended on merge, never generated).
+      //   - S{s}_A for s ≥ 2 = a FUNCTION mutation of the master (the section's
+      //     anchor) — generated FIRST in that section.
+      //   - S{s}_B/C = NUMBERS mutations of THAT section's A (the master for s=1,
+      //     the just-generated S{s}_A for s ≥ 2) — base-threaded.
+      // Accumulate every generated key, then hand to the shared merge (handlePaste
+      // auto-submit) for the LOUD completeness guard + single dual-write. A failed
+      // chunk fails loudly NAMING the exact key (e.g. "S4_B failed").
+      if (pendingTypeVal === "version_all_sections" && (pendingMetaVal?.numClassSections || 1) > 1
+          && pendingMetaVal.anchorMode) {
+        const { selected, variantLabels, numClassSections: ncs, anchorLabel = "A" } = pendingMetaVal;
+        const master = selected;
         const combined = {};
-        const total = ncs * labels.length;
+        // total chunks: section 1 = variants only; each s ≥ 2 = anchor + variants.
+        const total = variantLabels.length + (ncs - 1) * (1 + variantLabels.length);
         let idx = 0;
+        const genChunk = async (baseQuestions, s, label, mutation) => {
+          const key = `S${s}_${label}`;
+          idx += 1;
+          setGenProgress({ current: idx, total, sectionNum: s, label });
+          const chunkPrompt = buildVersionChunkPrompt({ baseQuestions, sectionNum: s, label, mutation, course, courseObject });
+          const { text, stopReason, warning } = await _callGenerate(chunkPrompt);
+          if (warning) showToast(warning, "error");
+          if (stopReason === "max_tokens") {
+            throw new Error(`${key} failed — cut off by the model's token limit (reduce the master's question count). Retry.`);
+          }
+          if (!text) throw new Error(`${key} failed — empty response from the model. Retry.`);
+          let chunk;
+          try { chunk = parseAiJson(text); }
+          catch (e) { throw new Error(`${key} failed — ${e.message}`); }
+          const { missing, short } = findIncompleteKeys(chunk, [key], master.length);
+          if (missing.length || short.length) {
+            throw new Error(`${key} failed — ` + formatVersionCompletenessError([key], { missing, short }, looksTruncated(text)));
+          }
+          combined[key] = chunk[key];
+          return chunk[key];
+        };
         for (let s = 1; s <= ncs; s++) {
-          for (const label of labels) {
-            idx += 1;
-            setGenProgress({ current: idx, total, sectionNum: s, label });
-            const key = `S${s}_${label}`;
-            // One key only: section s, version `label`.
-            const chunkPrompt = buildAllSectionsPrompt(selected, [label], ncs, course, vmt, courseObject, [s]);
-            const { text, stopReason, warning } = await _callGenerate(chunkPrompt);
-            if (warning) showToast(warning, "error");
-            // FIX 2: max_tokens is ALWAYS a hard error (not only when empty).
-            if (stopReason === "max_tokens") {
-              throw new Error(`${key} was cut off by the model's token limit (too many questions in one version — reduce the question count). Retry.`);
-            }
-            if (!text) throw new Error(`${key} failed — empty response from the model. Retry.`);
-            let chunk;
-            try { chunk = parseAiJson(text); }
-            catch (e) { throw new Error(`${key} failed — ${e.message}`); }
-            const { missing, short } = findIncompleteKeys(chunk, [key], selected.length);
-            if (missing.length || short.length) {
-              throw new Error(`${key} failed — ` + formatVersionCompletenessError([key], { missing, short }, looksTruncated(text)));
-            }
-            combined[key] = chunk[key];
+          let sectionBase = master; // section 1 mutates from the master
+          if (s >= 2) {
+            // Anchor first: function mutation of the master → this section's A.
+            sectionBase = await genChunk(master, s, anchorLabel, "function");
+          }
+          for (const label of variantLabels) {
+            await genChunk(sectionBase, s, label, "numbers");
           }
         }
         setGenProgress(null);
