@@ -339,3 +339,70 @@ describe("toLatex — lim: upright inline lim with tight subscripts (§2.x graph
     expect(toLatex("d/dx[x^2]")).toContain("\\dfrac{d}{dx}\\left[x^{2}\\right]");
   });
 });
+
+describe("toLatex — audit fixes (repo-wide notation pass)", () => {
+  // FIX A: greek word + exponent — the generic exponent pass used to grab the last
+  // letter of the spelled-out word ("sigma^2" -> "sigm" + "a^{2}").
+  test("greek word + exponent stays a single unit", () => {
+    expect(toLatex("sigma^2")).toBe("\\(\\sigma^{2}\\)");
+    expect(toLatex("theta^2")).toBe("\\(\\theta^{2}\\)");
+    expect(toLatex("lambda^2")).toBe("\\(\\lambda^{2}\\)");
+    expect(toLatex("alpha^n")).toBe("\\(\\alpha^{n}\\)");
+    expect(toLatex("mu^2")).toBe("\\(\\mu^{2}\\)");
+    expect(toLatex("sigma^{2}")).toBe("\\(\\sigma^{2}\\)");
+    expect(toLatex("pi^2")).toBe("\\(\\pi^{2}\\)");
+    // not split mid-word:
+    expect(toLatex("sigma^2")).not.toMatch(/sigm\\\(/);
+  });
+
+  // FIX B: parenthesized base + exponent used to leak as a literal caret.
+  test("parenthesized base + exponent is wrapped (no literal caret)", () => {
+    expect(toLatex("(x+1)^2")).toBe("\\((x+1)^{2}\\)");
+    expect(toLatex("(2x-3)^2")).toBe("\\((2x-3)^{2}\\)");
+    expect(toLatex("(x-1)^3")).toBe("\\((x-1)^{3}\\)");
+    expect(toLatex("(a+b)^n")).toBe("\\((a+b)^{n}\\)");
+    expect(toLatex("(x+1)^{10}")).toBe("\\((x+1)^{10}\\)");
+  });
+
+  // FIX C: d/dx(...) with a nested-paren operand produced a mismatched \left(\right).
+  test("d/dx(...) with nested parens balances delimiters", () => {
+    expect(toLatex("d/dx(sin(x))")).toBe("\\(\\dfrac{d}{dx}\\left(\\sin(x)\\right)\\)");
+    expect(toLatex("d/dx(e^(x))")).toBe("\\(\\dfrac{d}{dx}\\left(e^{x}\\right)\\)");
+    expect(toLatex("d/dx(x^2)")).toBe("\\(\\dfrac{d}{dx}\\left(x^{2}\\right)\\)");
+    // no mismatched delimiter:
+    expect(toLatex("d/dx(sin(x))")).not.toContain("\\left(\\sin(x\\right)");
+  });
+
+  // Regression pins: one per major family — these MUST NOT shift (lib/math serves
+  // every course, so the fixes above must be surgical).
+  test("PIN: fraction / nested-fraction", () => {
+    expect(toLatex("(x+1)/(x-2)")).toBe("\\(\\dfrac{x+1}{x-2}\\)");
+    expect(toLatex("(x^2-4)/(x-2)")).toBe("\\(\\dfrac{x^{2}-4}{x-2}\\)");
+  });
+  test("PIN: integral (definite)", () => {
+    expect(toLatex("integral from 0 to 1 of x^2 dx")).toBe("\\(\\int_{0}^{1} x^{2}\\,dx\\)");
+  });
+  test("PIN: derivatives (dy/dx, second, bracket form)", () => {
+    expect(toLatex("dy/dx")).toBe("\\(\\dfrac{dy}{dx}\\)");
+    expect(toLatex("d^2y/dx^2")).toBe("\\(\\dfrac{d^{2}y}{dx^{2}}\\)");
+    expect(toLatex("d/dx[sin(x)]")).toBe("\\(\\dfrac{d}{dx}\\left[\\sin(x)\\right]\\)");
+  });
+  test("PIN: Laplace transform", () => {
+    expect(toLatex("L{f(t)}")).toBe("\\(\\mathcal{L}\\{f(t)\\}\\)");
+    expect(toLatex("L^{-1}{F(s)}")).toBe("\\(\\mathcal{L}^{-1}\\{F(s)\\}\\)");
+  });
+  test("PIN: inequalities", () => {
+    expect(toLatex("x <= 5")).toBe("x \\(\\leq\\) 5");
+    expect(toLatex("x != 0")).toBe("x \\(\\neq\\) 0");
+  });
+  test("PIN: roots, trig powers, exponents, greek, infinity, piecewise, sum", () => {
+    expect(toLatex("sqrt(x+1)")).toBe("\\(\\sqrt{x+1}\\)");
+    expect(toLatex("sin^2(x)")).toBe("\\(\\sin^{2}(x)\\)");
+    expect(toLatex("e^(x)")).toBe("\\(e^{x}\\)");
+    expect(toLatex("x^(1/2)")).toBe("\\(x^{\\frac{1}{2}}\\)");
+    expect(toLatex("2^x")).toBe("\\(2^{x}\\)");
+    expect(toLatex("theta")).toBe("\\(\\theta\\)");
+    expect(toLatex("infinity")).toBe("\\(\\infty\\)");
+    expect(toLatex("sum from i=1 to n")).toBe("\\(\\sum_{i=1}^{n}\\)");
+  });
+});

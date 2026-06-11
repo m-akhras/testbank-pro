@@ -800,6 +800,27 @@ describe("compileToFunctionPairConfig — §2.3 two specs → one functionPair c
     expect(cfg.yTickStep).toBe(1); // span 10 ≤ 12 → integer ticks
   });
 
+  test("yTickStep LABELS the feature values: y = 1, 3, 5 each land on a tick", () => {
+    // Features: f endpoints 1 and 5 (x on [1,5]) + a declared point at y=3; g within.
+    const cfg = compileToFunctionPairConfig(
+      { segments: [{ fn: "x", from: 1, to: 5 }], points: [{ x: 3, y: 3 }] },
+      { segments: [{ fn: "x", from: 1, to: 5 }] }
+    );
+    // Replicate the renderer's stepTicks(min,max,step): start at ceil(min/step)*step.
+    const stepTicks = (min, max, step) => {
+      const out = [];
+      const start = Math.ceil(min / step - 1e-9) * step;
+      for (let t = start; t <= max + step * 1e-9; t += step) out.push(Math.round(t * 1e6) / 1e6);
+      return out;
+    };
+    const ticks = stepTicks(cfg.yDomain[0], cfg.yDomain[1], cfg.yTickStep);
+    for (const feature of [1, 3, 5]) {
+      expect(feature).toBeGreaterThanOrEqual(cfg.yDomain[0]);
+      expect(feature).toBeLessThanOrEqual(cfg.yDomain[1]);
+      expect(ticks).toContain(feature); // feature value gets a labeled tick
+    }
+  });
+
   test("rejects a functionPair whose feature span exceeds the readable cap (16)", () => {
     // 2^x on [0,5] has endpoint 2^5 = 32 — a feature span ~31, unreadable (CASE 1).
     expect(() =>
