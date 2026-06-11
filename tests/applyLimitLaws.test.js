@@ -275,22 +275,24 @@ describe("isLimitTemplateSection — guard scoping", () => {
 });
 
 describe("applyLimitLaws — n-th root phrasing (never '#-th')", () => {
-  const expl = (n, at) =>
+  // Small, readable spec (endpoints 0..4 → feature span well under the cap). The
+  // root LABEL phrasing is what we assert, not the value, so a fixed at=4 suffices.
+  const expl = (n) =>
     applyLimitLaws({
       type: "Free Response",
-      limitSpecF: { segments: [{ fn: "x", from: 0, to: 20 }] }, // f(a)=a
-      limitSpecG: { segments: [{ fn: "x", from: 0, to: 20 }] },
-      lawAsks: [{ law: "root", at, params: { n } }],
+      limitSpecF: { segments: [{ fn: "x", from: 0, to: 4 }] }, // f(4)=4
+      limitSpecG: { segments: [{ fn: "x", from: 0, to: 4 }] },
+      lawAsks: [{ law: "root", at: 4, params: { n } }],
     }).explanation;
 
   test("n=2 → 'square root of f', n=3 → 'cube root of f', n=4 → '4th root of f'", () => {
-    expect(expl(2, 4)).toContain("square root of f");   // sqrt(4) = 2
-    expect(expl(3, 8)).toContain("cube root of f");     // cbrt(8) = 2
-    expect(expl(4, 16)).toContain("4th root of f");     // 16^(1/4) = 2
+    expect(expl(2)).toContain("square root of f");
+    expect(expl(3)).toContain("cube root of f");
+    expect(expl(4)).toContain("4th root of f");
   });
 
   test("never emits the '#-th root' bug", () => {
-    const all = expl(2, 4) + expl(3, 8) + expl(4, 16) + expl(5, 1);
+    const all = expl(2) + expl(3) + expl(4) + expl(5);
     expect(all).not.toMatch(/-th root/);
   });
 });

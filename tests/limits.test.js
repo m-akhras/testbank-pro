@@ -727,4 +727,40 @@ describe("compileToFunctionPairConfig — §2.3 two specs → one functionPair c
     const interiorPole = { segments: [{ fn: "1/(x-1)", from: 0, to: 2 }] };
     expect(() => compileToFunctionPairConfig(interiorPole, vaSpec)).toThrow();
   });
+
+  test("feature-driven shared yDomain (+ yTickStep), NOT curve max", () => {
+    // f peaks at 9 in the interior, but its ENDPOINT features are 9-(0-2)^2 = 5 and
+    // 9-(4-2)^2 = 5; g endpoints are -1 and 3. So the shared yDomain scales to the
+    // features (lo=-1, hi=5 → [-3, 7]); the interior peak (9) runs off the top and
+    // is clipped by the renderer — yDomain must NOT reach 9.
+    const cfg = compileToFunctionPairConfig(
+      { segments: [{ fn: "9-(x-2)^2", from: 0, to: 4 }] },
+      { segments: [{ fn: "x-1", from: 0, to: 4 }] }
+    );
+    expect(cfg.yDomain).toEqual([-3, 7]);
+    expect(cfg.yDomain[1]).toBeLessThan(9); // bounded by features, not the curve max
+    expect(cfg.yTickStep).toBe(1); // span 10 ≤ 12 → integer ticks
+  });
+
+  test("rejects a functionPair whose feature span exceeds the readable cap", () => {
+    // 2^x on [0,5] has endpoint 2^5 = 32 — a feature span ~31, unreadable (CASE 1).
+    expect(() =>
+      compileToFunctionPairConfig(
+        { segments: [{ fn: "2^x", from: 0, to: 5 }] },
+        { segments: [{ fn: "x", from: 0, to: 4 }] }
+      )
+    ).toThrow(/feature values span|unreadable/);
+  });
+
+  test("declared holes/points drive the scale; VA endpoints do not blow it up", () => {
+    // A removable hole at (2,3) + a VA in a gap: features are just the finite
+    // hole/point/endpoint values, never ±infinity from the asymptote.
+    const cfg = compileToFunctionPairConfig(
+      { segments: [{ fn: "x", from: 0, to: 4 }], holes: [{ x: 2, y: 3 }] },
+      { segments: [], verticalAsymptotes: [{ x: 9, leftSign: "+inf", rightSign: "-inf" }] }
+    );
+    expect(Number.isFinite(cfg.yDomain[0])).toBe(true);
+    expect(Number.isFinite(cfg.yDomain[1])).toBe(true);
+    expect(cfg.yDomain).toEqual([-2, 6]); // f endpoints 0,4 + hole 3 → lo 0, hi 4 → [-2,6]
+  });
 });
