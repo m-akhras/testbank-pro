@@ -315,11 +315,11 @@ describe("compileToGraphConfig — §2.2 → existing piecewise graphConfig", ()
     expect(cfg.type).toBe("piecewise");
     expect(cfg.pieces).toEqual([{ fn: "x+2", domain: [0, 4] }]);
     expect(cfg.holes).toEqual([[2, 4]]);
-    expect(cfg.points).toEqual([]);
+    expect(cfg.points).toEqual([[0, 2], [4, 6]]); // closed segment-end dots
     expect(cfg.verticalAsymptotes).toEqual([]);
   });
 
-  // 2. limit ≠ f(a): hole carried AND the filled override.
+  // 2. limit ≠ f(a): hole carried AND the filled override (+ closed end dots).
   test("removable with override: hole [2,4] + point [2,6]", () => {
     const cfg = compileToGraphConfig({
       segments: [{ fn: "x+2", from: 0, to: 4 }],
@@ -327,7 +327,7 @@ describe("compileToGraphConfig — §2.2 → existing piecewise graphConfig", ()
       points: [{ x: 2, y: 6 }],
     });
     expect(cfg.holes).toEqual([[2, 4]]);
-    expect(cfg.points).toEqual([[2, 6]]);
+    expect(cfg.points).toEqual([[2, 6], [0, 2], [4, 6]]); // declared + endpoint dots
   });
 
   // 3. Jump: open circle at the LEFT-LIMIT endpoint (from the open segment end)
@@ -361,12 +361,12 @@ describe("compileToGraphConfig — §2.2 → existing piecewise graphConfig", ()
     expect(cfg.points).toEqual([]);
   });
 
-  // 5. Continuous: no holes, no points.
-  test("continuous: piece only, no holes/points", () => {
+  // 5. Continuous single piece: no holes; closed ends get endpoint dots.
+  test("continuous: piece only, endpoint dots at the closed ends", () => {
     const cfg = compileToGraphConfig({ segments: [{ fn: "x+2", from: 0, to: 4 }] });
     expect(cfg.pieces).toEqual([{ fn: "x+2", domain: [0, 4] }]);
     expect(cfg.holes).toEqual([]);
-    expect(cfg.points).toEqual([]);
+    expect(cfg.points).toEqual([[0, 2], [4, 6]]); // closed endpoints (no join, none declared)
     expect(cfg.xDomain).toEqual([-0.5, 4.5]); // span 4 → pad 0.5
   });
 
@@ -395,10 +395,11 @@ describe("compileToGraphConfig — §2.2 → existing piecewise graphConfig", ()
     });
     expect(cfg.pieces).toEqual([{ fn: "(x^2-4)/(x-2)", domain: [0, 4] }]);
     expect(cfg.holes).toEqual([[2, 4]]);
-    expect(cfg.points).toEqual([]);
+    expect(cfg.points).toEqual([[0, 2], [4, 6]]); // closed segment-end dots (fn finite there)
   });
 
-  // 8. Exponential open endpoint → open circle y computed via compileExpression.
+  // 8. Exponential open endpoint → open circle; closed ends → dots; the open/closed
+  //    join at x=2 (same value 4) is suppressed (seamless), leaving the open circle.
   test("exponential: open right endpoint yields hole [2,4] (2^2)", () => {
     const cfg = compileToGraphConfig({
       segments: [
@@ -407,7 +408,7 @@ describe("compileToGraphConfig — §2.2 → existing piecewise graphConfig", ()
       ],
     });
     expect(cfg.holes).toEqual([[2, 4]]);
-    expect(cfg.points).toEqual([]);
+    expect(cfg.points).toEqual([[0, 1], [4, 16]]); // closed ends; the (2,4) join dot suppressed
   });
 
   // Dedupe: an open endpoint whose coordinate equals a declared hole isn't doubled.
@@ -421,6 +422,37 @@ describe("compileToGraphConfig — §2.2 → existing piecewise graphConfig", ()
 
   test("rejects a malformed spec before compiling", () => {
     expect(() => compileToGraphConfig({})).toThrow(/`segments` must be an array/);
+  });
+
+  // ── FIX B: endpoint dots + diverging-end arrows (compiler-emitted) ──
+  test("seamless continuous join → NO dot at the join (dots only at outer ends)", () => {
+    const cfg = compileToGraphConfig({
+      segments: [
+        { fn: "x+1", from: 0, to: 2 }, // meets next at (2,3)
+        { fn: "x+1", from: 2, to: 4 }, // same value at 2 → seamless join
+      ],
+    });
+    expect(cfg.points).toEqual([[0, 1], [4, 5]]); // (2,3) join suppressed
+    expect(cfg.holes).toEqual([]);
+  });
+
+  test("VA-bordering end → extends arrow flag; finite end → endpoint dot", () => {
+    const cfg = compileToGraphConfig({
+      segments: [{ fn: "1/(x-1)", from: 1, to: 3 }], // diverges at x=1
+      verticalAsymptotes: [{ x: 1, leftSign: "-inf", rightSign: "+inf" }],
+    });
+    expect(cfg.pieces[0].extendsLeft).toBe(true);   // runs off to ±inf at x=1 → arrow
+    expect(cfg.pieces[0].extendsRight).toBeUndefined(); // x=3 is finite
+    expect(cfg.points).toEqual([[3, 0.5]]); // closed finite right end → filled dot
+    expect(cfg.holes).toEqual([]);
+  });
+
+  test("open endpoint → open circle (not a filled dot)", () => {
+    const cfg = compileToGraphConfig({
+      segments: [{ fn: "x+1", from: 0, to: 2, openRight: true }],
+    });
+    expect(cfg.holes).toContainEqual([2, 3]); // open right end → open circle
+    expect(cfg.points).toEqual([[0, 1]]); // closed left end → filled dot
   });
 });
 
@@ -446,7 +478,7 @@ describe("applyLimitSpec — §2.2 spec → derived answer key + graph", () => {
       type: "piecewise",
       pieces: [{ fn: "x+2", domain: [0, 4] }],
       holes: [[2, 4]],
-      points: [],
+      points: [[0, 2], [4, 6]], // closed segment-end dots
       verticalAsymptotes: [],
       xDomain: [-0.5, 4.5],
       xTickStep: 1, // span 5 ≤ 12 → integer step
@@ -578,9 +610,12 @@ describe("§2.5 continuity — enumeration, statements, point + global asks", ()
     expect(composeContinuityStatement(three, "continuous_except")).toBe(
       "f is continuous except at x = 1, x = 2 and x = 3"
     );
+    // KIND-FREE: even "with_reasons" no longer appends (removable)/(jump)/(infinite)
+    // — composed answers are always bare x-values.
     expect(composeContinuityStatement(three, "with_reasons")).toBe(
-      "f is discontinuous at x = 1 (removable), x = 2 (jump) and x = 3 (infinite)"
+      "f is discontinuous at x = 1, x = 2 and x = 3"
     );
+    expect(composeContinuityStatement(three, "with_reasons")).not.toMatch(/\((removable|jump|infinite)\)/);
     expect(composeContinuityStatement([1], "discontinuous_at")).toBe(
       "f is discontinuous at x = 1"
     );
@@ -612,9 +647,32 @@ describe("§2.5 continuity — enumeration, statements, point + global asks", ()
       asks: [{ quantity: "discontinuitySet", mode: "discontinuous_at" }],
     });
     expect(q.answer).toBe("f is discontinuous at x = 1, x = 2 and x = 3");
+    // explanation may EXPLAIN kinds in prose (pedagogy) ...
     expect(q.explanation).toMatch(/removable/);
     expect(q.explanation).toMatch(/jump/);
     expect(q.explanation).toMatch(/infinite/);
+    // ... but the ANSWER statement is kind-free (no parenthesized annotations).
+    expect(q.answer).not.toMatch(/\((removable|jump|infinite)\)/);
+  });
+
+  test("global ask answer stays KIND-FREE even when the model passes mode='with_reasons'", () => {
+    // FR
+    const fr = applyLimitSpec({
+      type: "Free Response",
+      limitSpec: spec,
+      asks: [{ quantity: "discontinuitySet", mode: "with_reasons" }],
+    });
+    expect(fr.answer).toBe("f is discontinuous at x = 1, x = 2 and x = 3");
+    expect(fr.answer).not.toMatch(/\((removable|jump|infinite)\)/);
+    // MC: the injected correct choice is also kind-free
+    const mc = applyLimitSpec({
+      type: "Multiple Choice",
+      limitSpec: spec,
+      choices: ["f is continuous everywhere", "f is discontinuous at x = 2 only"],
+      asks: [{ quantity: "discontinuitySet", mode: "with_reasons" }],
+    });
+    expect(mc.answer).toBe("f is discontinuous at x = 1, x = 2 and x = 3");
+    mc.choices.forEach((c) => expect(c).not.toMatch(/\((removable|jump|infinite)\)/));
   });
 
   test("global MC ask: system injects the correct statement among distractors", () => {
