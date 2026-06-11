@@ -113,15 +113,16 @@ describe("calc1_2_3 — symbolic styles are SINGLE-ASK MCQs (batch-level variety
     }
   });
 
-  test("piecewise_eval: SPEC-BACKED (no graph), single-ask, value-only MC", () => {
+  test("piecewise_eval: SPEC-BACKED (no graph), single-ask, system-composed value+reason MC", () => {
     for (const p of [build({ question_style: "piecewise_eval" }), mixed]) {
       expect(p).toContain(CONTRACT_MARK);                       // now spec-backed
       expect(p).toContain('"noGraph": true');
       expect(p).toContain("SPEC IS THE ANSWER'S SOURCE OF TRUTH");
       expect(p).toContain("EXACTLY ONE ask");
       expect(p).toContain("BATCH-LEVEL VARIETY");
-      expect(p).toContain("BARE SCALARS");
-      // old model-computed / per-boundary multi-part instructions removed
+      // MC is now system-composed value+reason (no model-written reasons/values)
+      expect(p).toContain('"value, because reason"');
+      expect(p).toContain("PLACEHOLDER choices");
       expect(p).not.toContain("ask BOTH one-sided limits");
     }
   });

@@ -934,33 +934,40 @@ describe("applyLimitSpec — analyze_piecewise/piecewise_eval spec-backed, NO gr
       choices: ["2", "4", "does not exist (DNE)", "0"],
       answer: "2", // the model's WRONG guess — must be ignored
     });
-    expect(q.answer).toBe("does not exist (DNE)"); // derived two-sided limit
-    expect(q.choices).toContain("does not exist (DNE)");
+    // MC choices are now system-composed value+reason (Part C); the answer keys the
+    // derived two-sided DNE with the one-sided limits stated.
+    expect(q.answer).toContain("does not exist (DNE), because the one-sided limits differ");
+    expect(q.answer).toContain("lim x→1^- = 2");
+    expect(q.answer).toContain("lim x→1^+ = 4");
+    expect(q.choices).toHaveLength(4);
+    expect(q.choices).not.toContain("2"); // bare model placeholders replaced
+    expect(q.choices).toContain(q.answer);
     expect(q.hasGraph).toBeFalsy();
     expect(q.graphConfig).toBeUndefined();
   });
 
-  test("noGraph isContinuous ask → 'discontinuous', still no graph", () => {
+  test("noGraph isContinuous ask → composed 'discontinuous, because …', still no graph", () => {
     const q = applyLimitSpec({
       type: "Multiple Choice",
       noGraph: true,
       question: "Is f continuous at x = 1?",
       limitSpec: spec,
       asks: [{ quantity: "isContinuous", at: 1 }],
-      choices: ["continuous", "discontinuous"],
+      choices: ["continuous", "discontinuous", "p3", "p4"],
     });
-    expect(q.answer).toBe("discontinuous");
+    expect(q.answer).toBe("discontinuous, because the two-sided limit does not exist");
+    expect(q.choices).toHaveLength(4);
     expect(q.hasGraph).toBeFalsy();
     expect(q.graphConfig).toBeUndefined();
   });
 
-  test("noGraph one-sided asks derive 2 and 4", () => {
+  test("noGraph one-sided asks → composed choices keyed 2 and 4", () => {
     const left = applyLimitSpec({ type: "Multiple Choice", noGraph: true, limitSpec: spec,
-      asks: [{ quantity: "leftLimit", at: 1 }], choices: ["2", "4", "0"] });
-    expect(left.answer).toBe("2");
+      asks: [{ quantity: "leftLimit", at: 1 }], choices: ["2", "4", "0", "1"] });
+    expect(left.answer).toBe("2, from the branch covering x < 1");
     const right = applyLimitSpec({ type: "Multiple Choice", noGraph: true, limitSpec: spec,
-      asks: [{ quantity: "rightLimit", at: 1 }], choices: ["2", "4", "0"] });
-    expect(right.answer).toBe("4");
+      asks: [{ quantity: "rightLimit", at: 1 }], choices: ["2", "4", "0", "1"] });
+    expect(right.answer).toBe("4, from the branch covering x > 1");
   });
 
   test("graph styles UNCHANGED: without noGraph, a graph IS attached", () => {
