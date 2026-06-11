@@ -832,3 +832,49 @@ describe("compileToFunctionPairConfig — §2.3 two specs → one functionPair c
     expect(cfg.yDomain).toEqual([-2, 6]); // f endpoints 0,4 + hole 3 → lo 0, hi 4 → [-2,6]
   });
 });
+
+describe("applyLimitSpec — function-letter consistency guard (single-spec)", () => {
+  const spec = { segments: [{ fn: "x+2", from: 0, to: 4 }], holes: [{ x: 2, y: 4 }] };
+
+  test("accepts a question that calls the function f", () => {
+    const q = applyLimitSpec({
+      type: "Free Response",
+      question: "For the function f whose graph is given, find lim x->2 f(x).",
+      limitSpec: spec,
+      asks: [{ quantity: "limit", at: 2 }],
+    });
+    expect(q.answer).toBe("4");
+  });
+
+  test("rejects a single-spec question whose text uses h(x)", () => {
+    expect(() =>
+      applyLimitSpec({
+        type: "Free Response",
+        question: "For the function h whose graph is given, find lim x->2 h(x).",
+        limitSpec: spec,
+        asks: [{ quantity: "limit", at: 2 }],
+      })
+    ).toThrow(/must call the function f.*"h"/);
+  });
+
+  test("rejects a single-spec question whose text uses g(x)", () => {
+    expect(() =>
+      applyLimitSpec({
+        type: "Free Response",
+        question: "State lim x->2 g(x) from the graph of g.",
+        limitSpec: spec,
+        asks: [{ quantity: "limit", at: 2 }],
+      })
+    ).toThrow(/must call the function f/);
+  });
+
+  test("does not false-positive on trig calls or y = f(x) notation", () => {
+    const q = applyLimitSpec({
+      type: "Free Response",
+      question: "The graph of y = f(x) is shown; using sin(x) as a guide, find lim x->2 f(x).",
+      limitSpec: spec,
+      asks: [{ quantity: "limit", at: 2 }],
+    });
+    expect(q.answer).toBe("4"); // "sin(x)" and "y = f(x)" are fine
+  });
+});

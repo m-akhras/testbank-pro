@@ -289,3 +289,53 @@ describe("paren-exponent rationals (fix B)", () => {
     expect(toLatex("(e^{2x} - e^{-2x})/(e^{2x} + e^{-2x})")).toContain("\\dfrac");
   });
 });
+
+describe("toLatex — lim: upright inline lim with tight subscripts (§2.x graph questions)", () => {
+  // ISSUE 2 + 3: must emit a SINGLE-backslash \lim (upright, inline) — never
+  // "\\lim" (a line break + italic l·i·m).
+  const noDoubleLim = (out) => {
+    expect(out).toContain("\\lim_{");
+    expect(out).not.toMatch(/\\\\lim/); // no double backslash before lim
+  };
+
+  test("lim x->2^+ h(x) -> upright inline lim, one-sided superscript", () => {
+    const out = toLatex("lim x→2^+ h(x)");
+    noDoubleLim(out);
+    expect(out).toContain("\\lim_{x\\to2^+}");
+  });
+
+  test("lim x->1 [f(x) + g(x)] -> upright inline lim", () => {
+    const out = toLatex("lim x→1 [f(x) + g(x)]");
+    noDoubleLim(out);
+    expect(out).toContain("\\lim_{x\\to1}");
+  });
+
+  test("ISSUE 4 — negative target subscript is TIGHT: to-1 (no stray space)", () => {
+    const out = toLatex("lim x→-1 (f(x))/(g(x))");
+    noDoubleLim(out);
+    expect(out).toContain("\\lim_{x\\to-1}");
+    expect(out).not.toContain("\\to -1"); // no literal space before the negative
+  });
+
+  test("letter target KEEPS a space so to a is not lexed as toa", () => {
+    expect(toLatex("lim x→a^- f(x)")).toContain("\\lim_{x\\to a^-}");
+  });
+
+  test("ISSUE 3 — limit flows INLINE within a sentence (no line break)", () => {
+    const out = toLatex("Determine lim x→2^+ f(x).");
+    expect(out).not.toContain("\\\\"); // no LaTeX line break anywhere
+    expect(out).toContain("Determine \\(\\lim_{x\\to2^+}\\)");
+  });
+
+  // Regressions: OTHER patterns must be byte-for-byte unchanged by the lim edits.
+  test("regression: fraction unchanged", () => {
+    expect(toLatex("(1)/(2)")).toContain("\\(\\dfrac{1}{2}\\)");
+  });
+  test("regression: integral unchanged", () => {
+    expect(toLatex("integral from 0 to 1 of x^2 dx")).toContain("\\int_{0}^{1} x^{2}\\,dx");
+  });
+  test("regression: derivative unchanged", () => {
+    expect(toLatex("dy/dx")).toContain("\\(\\dfrac{dy}{dx}\\)");
+    expect(toLatex("d/dx[x^2]")).toContain("\\dfrac{d}{dx}\\left[x^{2}\\right]");
+  });
+});
