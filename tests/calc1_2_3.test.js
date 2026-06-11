@@ -96,3 +96,35 @@ describe("calc1_2_3 — symbolic styles carry no limitSpec contract", () => {
     });
   }
 });
+
+describe("calc1_2_3 — symbolic styles are SINGLE-ASK MCQs (batch-level variety)", () => {
+  // Per-question multi-part requirements must be gone; variety moves batch-level.
+  const mixed = build({ question_style: "mixed" });
+
+  test("limit_laws_given: single-ask + batch variety, no multi-part requirement", () => {
+    for (const p of [build({ question_style: "limit_laws_given" }), mixed]) {
+      expect(p).toContain("EXACTLY ONE limit per question");
+      expect(p).toContain("BATCH-LEVEL VARIETY");
+      expect(p).toContain("BARE SCALARS");
+      // old per-question multi-part instructions removed
+      expect(p).not.toContain("evaluate several combinations");
+      expect(p).not.toContain("REQUIRED in every variant");
+    }
+  });
+
+  test("piecewise_eval: single-ask + batch variety, no per-boundary multi-part requirement", () => {
+    for (const p of [build({ question_style: "piecewise_eval" }), mixed]) {
+      expect(p).toContain("EXACTLY ONE ask per question");
+      expect(p).toContain("BATCH-LEVEL VARIETY");
+      expect(p).toContain("BARE SCALARS");
+      // old per-question "ask BOTH one-sided limits AND the conclusion" removed
+      expect(p).not.toContain("ask BOTH one-sided limits");
+      expect(p).not.toContain("at each boundary point, ask BOTH");
+    }
+  });
+
+  test("algebraic and squeeze_theorem state ONE limit per question", () => {
+    expect(build({ question_style: "algebraic" })).toContain("EXACTLY ONE limit per question");
+    expect(build({ question_style: "squeeze_theorem" })).toContain("EXACTLY ONE limit per question");
+  });
+});
