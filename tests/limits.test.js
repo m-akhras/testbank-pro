@@ -899,3 +899,79 @@ describe("applyLimitSpec — function-letter consistency guard (single-spec)", (
     expect(q.answer).toBe("4"); // "sin(x)" and "y = f(x)" are fine
   });
 });
+
+describe("applyLimitSpec — analyze_piecewise/piecewise_eval spec-backed, NO graph (Part B)", () => {
+  // LIVE FAILURE: f(x) = (x^2-1)/(x-1) for x<1, f(x)=4 for x>=1. Left limit 2,
+  // right limit 4, two-sided DNE; the model wrongly keyed "lim=2 but f(1)=4" and
+  // its own explanation admitted the key was wrong. The spec is now the source of
+  // truth. Encoded: left branch x+1 (the rational off its removable hole) with a
+  // hole at (1,2); f(1)=4 via points; right branch constant 4.
+  const spec = {
+    segments: [
+      { fn: "x+1", from: -2, to: 1, openRight: true },
+      { fn: "4", from: 1, to: 4, openLeft: true },
+    ],
+    holes: [{ x: 1, y: 2 }],
+    points: [{ x: 1, y: 4 }],
+  };
+
+  test("derived truth: leftLimit 2, rightLimit 4, two-sided DNE, discontinuous", () => {
+    const d = deriveLimits(spec, 1);
+    expect(d.leftLimit).toBe(2);
+    expect(d.rightLimit).toBe(4);
+    expect(d.twoSided).toBeNull();      // two-sided limit does NOT exist
+    expect(d.fValue).toBe(4);
+    expect(d.continuous).toBe(false);
+  });
+
+  test("noGraph MC: system keys the DERIVED value (DNE), NOT the model's wrong guess; no graphConfig", () => {
+    const q = applyLimitSpec({
+      type: "Multiple Choice",
+      noGraph: true,
+      question: "f(x) = { (x^2-1)/(x-1) if x < 1 ; 4 if x >= 1 }. Evaluate lim x->1 f(x).",
+      limitSpec: spec,
+      asks: [{ quantity: "limit", at: 1 }],
+      choices: ["2", "4", "does not exist (DNE)", "0"],
+      answer: "2", // the model's WRONG guess — must be ignored
+    });
+    expect(q.answer).toBe("does not exist (DNE)"); // derived two-sided limit
+    expect(q.choices).toContain("does not exist (DNE)");
+    expect(q.hasGraph).toBeFalsy();
+    expect(q.graphConfig).toBeUndefined();
+  });
+
+  test("noGraph isContinuous ask → 'discontinuous', still no graph", () => {
+    const q = applyLimitSpec({
+      type: "Multiple Choice",
+      noGraph: true,
+      question: "Is f continuous at x = 1?",
+      limitSpec: spec,
+      asks: [{ quantity: "isContinuous", at: 1 }],
+      choices: ["continuous", "discontinuous"],
+    });
+    expect(q.answer).toBe("discontinuous");
+    expect(q.hasGraph).toBeFalsy();
+    expect(q.graphConfig).toBeUndefined();
+  });
+
+  test("noGraph one-sided asks derive 2 and 4", () => {
+    const left = applyLimitSpec({ type: "Multiple Choice", noGraph: true, limitSpec: spec,
+      asks: [{ quantity: "leftLimit", at: 1 }], choices: ["2", "4", "0"] });
+    expect(left.answer).toBe("2");
+    const right = applyLimitSpec({ type: "Multiple Choice", noGraph: true, limitSpec: spec,
+      asks: [{ quantity: "rightLimit", at: 1 }], choices: ["2", "4", "0"] });
+    expect(right.answer).toBe("4");
+  });
+
+  test("graph styles UNCHANGED: without noGraph, a graph IS attached", () => {
+    const q = applyLimitSpec({
+      type: "Free Response",
+      question: "From the graph of f, find lim x->1 f(x).",
+      limitSpec: spec,
+      asks: [{ quantity: "limit", at: 1 }],
+    });
+    expect(q.hasGraph).toBe(true);
+    expect(q.graphConfig).toBeDefined();
+    expect(q.graphConfig.type).toBe("piecewise");
+  });
+});

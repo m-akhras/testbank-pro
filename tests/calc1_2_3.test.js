@@ -87,8 +87,9 @@ describe("calc1_2_3 — graph_limit_laws dual-spec contract", () => {
   });
 });
 
-describe("calc1_2_3 — symbolic styles carry no limitSpec contract", () => {
-  for (const style of ["algebraic", "limit_laws_given", "squeeze_theorem", "piecewise_eval"]) {
+describe("calc1_2_3 — model-computed symbolic styles carry no limitSpec contract", () => {
+  // piecewise_eval is now SPEC-BACKED (Part B), so it is excluded here.
+  for (const style of ["algebraic", "limit_laws_given", "squeeze_theorem"]) {
     test(`${style}: no LIMIT_SPEC_CONTRACT, has its symbolic block`, () => {
       const p = build({ question_style: style });
       expect(p).not.toContain(CONTRACT_MARK);
@@ -112,14 +113,16 @@ describe("calc1_2_3 — symbolic styles are SINGLE-ASK MCQs (batch-level variety
     }
   });
 
-  test("piecewise_eval: single-ask + batch variety, no per-boundary multi-part requirement", () => {
+  test("piecewise_eval: SPEC-BACKED (no graph), single-ask, value-only MC", () => {
     for (const p of [build({ question_style: "piecewise_eval" }), mixed]) {
-      expect(p).toContain("EXACTLY ONE ask per question");
+      expect(p).toContain(CONTRACT_MARK);                       // now spec-backed
+      expect(p).toContain('"noGraph": true');
+      expect(p).toContain("SPEC IS THE ANSWER'S SOURCE OF TRUTH");
+      expect(p).toContain("EXACTLY ONE ask");
       expect(p).toContain("BATCH-LEVEL VARIETY");
       expect(p).toContain("BARE SCALARS");
-      // old per-question "ask BOTH one-sided limits AND the conclusion" removed
+      // old model-computed / per-boundary multi-part instructions removed
       expect(p).not.toContain("ask BOTH one-sided limits");
-      expect(p).not.toContain("at each boundary point, ask BOTH");
     }
   });
 
