@@ -53,16 +53,18 @@ describe("calc1_2_3 — graph_limit_laws dual-spec contract", () => {
     }
   });
 
-  test("states the required ask-mix (quotient-by-0, DNE jump, xPoly/power/root)", () => {
-    expect(gll).toContain("REQUIRED ask mix in EVERY question");
+  test("single-ask rule + BATCH-level mix (per-question mix language gone)", () => {
+    expect(gll).toContain("EXACTLY ONE ask per question");
+    expect(gll).toContain("BATCH-LEVEL MIX");
     expect(gll).toMatch(/quotient.*g's two-sided limit is 0/);
-    expect(gll).toMatch(/two-sided limit does not exist/);
     expect(gll).toMatch(/xPolyTimesF.*power.*root/);
+    expect(gll).not.toContain("REQUIRED ask mix in EVERY question");
+    expect(gll).not.toContain("3-6 asks per question");
   });
 
-  test("tells the model the system overwrites answers (do not compute)", () => {
+  test("tells the model the system overwrites the answer (do not compute)", () => {
     expect(gll).toContain("OVERWRITES");
-    expect(gll).toContain("DO NOT STATE THE ANSWERS");
+    expect(gll).toContain("DO NOT STATE THE ANSWER");
   });
 
   test("does NOT contain a part-(f)-style value-plus-limit ask", () => {
@@ -70,16 +72,17 @@ describe("calc1_2_3 — graph_limit_laws dual-spec contract", () => {
     expect(gll).toContain("OUT OF SCOPE"); // explicitly forbids value+limit / composition
   });
 
-  test("MC contract: system composes ALL choices (placeholders), not phrase-matching", () => {
+  test("MC contract: §2.5-style scalar injection, not compound / phrase-matching", () => {
     const mixed = build({ question_style: "mixed" });
     for (const p of [gll, mixed]) {
-      // new system-composes-everything language
-      expect(p).toContain("the SYSTEM composes BOTH the correct answer AND all distractors");
-      expect(p).toMatch(/placeholder choices/);
-      expect(p).toContain("OVERWRITES all of them");
-      // old phrase-matching / inject-one language is gone
+      // new scalar-injection language
+      expect(p).toContain("the system DERIVES the correct scalar answer");
+      expect(p).toContain("INJECTS it among your choices");
+      expect(p).toMatch(/Author 4 plausible WRONG distractors as bare scalar values/);
+      // old language gone
       expect(p).not.toContain("MUST appear VERBATIM");
-      expect(p).not.toContain("INJECTS it as the answer key");
+      expect(p).not.toContain("composes BOTH the correct answer AND all distractors");
+      expect(p).not.toContain("uniform compound format");
     }
   });
 });
