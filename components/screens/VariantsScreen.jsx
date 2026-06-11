@@ -12,6 +12,7 @@ const PER_CHUNK_WARN = 35;
 
 export default function VariantsScreen({
   versions,
+  classSectionVersions = {},
   masterLocked,
   versionCount,
   setVersionCount,
@@ -23,6 +24,7 @@ export default function VariantsScreen({
   autoGenError,
   genProgress,
   triggerVersions,
+  triggerSectionPrompt,
   autoGenerateVersions,
   pendingType,
   setPendingType,
@@ -75,9 +77,13 @@ export default function VariantsScreen({
   const numQ = master.questions.length;
   const totalVersions = versionCount * numClassSections;
   const totalItems = numQ * totalVersions;
-  // What one section's request actually has to produce (the real per-call budget).
-  const perChunkItems = numQ * versionCount;
-  const chunkOverBudget = perChunkItems > PER_CHUNK_WARN;
+  // Auto-generate calls the model once per SECTION×VERSION, so its real per-call
+  // budget is ONE version = numQ items. The paste stepper sends one prompt per
+  // SECTION = numQ × versionCount items.
+  const perVersionItems = numQ;                         // auto-generate chunk
+  const perSectionItems = numQ * versionCount;          // paste-stepper chunk
+  const autoOverBudget = perVersionItems > PER_CHUNK_WARN;
+  const pasteOverBudget = perSectionItems > PER_CHUNK_WARN;
   const estTokens = Math.round(totalItems * 400 + 1500);
   const estCost = ((totalItems * 400 * 3) / 1_000_000 + (totalItems * 350 * 15) / 1_000_000).toFixed(3);
   const variantLabels = VERSIONS.slice(1, 1 + versionCount);
@@ -176,12 +182,17 @@ export default function VariantsScreen({
             ~{estTokens.toLocaleString()} tokens · ~${estCost}
           </div>
           <div style={{ fontSize: "0.72rem", color: text3, marginTop: "0.3rem" }}>
-            Generated as {numClassSections > 1 ? `${numClassSections} requests (one per section)` : "1 request"} of {versionCount} version{versionCount > 1 ? "s" : ""} × {numQ} question{numQ !== 1 ? "s" : ""} = {perChunkItems} items each.
+            Auto-generate runs {numClassSections > 1 ? `${totalVersions} requests (one per section × version)` : `${versionCount} request${versionCount > 1 ? "s" : ""}`} of {numQ} question{numQ !== 1 ? "s" : ""} each.
           </div>
-          {chunkOverBudget && (
+          {autoOverBudget && (
+            <div style={{ fontSize: "0.75rem", color: "#fca5a5", marginTop: "0.45rem", padding: "0.5rem 0.7rem", background: "#7f1d1d33", borderRadius: "6px", border: "1px solid #ef444466" }}>
+              <div style={{ fontWeight: 700, marginBottom: "0.2rem" }}>⛔ {numQ} questions per version may be cut off</div>
+              Even a single version is {numQ} questions (~{Math.round(numQ * 400 / 1000)}k tokens) — close to the model's output limit. Reduce the master's question count; if a version is cut off, generation stops with a clear error naming the version (e.g. "S4_B failed") and you can retry.
+            </div>
+          )}
+          {!autoOverBudget && pasteOverBudget && (
             <div style={{ fontSize: "0.75rem", color: "#f59e0b", marginTop: "0.45rem", padding: "0.5rem 0.7rem", background: "#451a0322", borderRadius: "6px", border: "1px solid #f59e0b66" }}>
-              <div style={{ fontWeight: 700, marginBottom: "0.2rem" }}>⚠ {perChunkItems} items per section may be cut off by the model</div>
-              Each section is generated in its own request. A request this large ({versionCount} versions × {numQ} questions) can hit the model's output limit and come back incomplete — reduce the number of questions or versions. If a section is cut off, generation stops with a clear error and you can retry.
+              ⚠ A per-section paste prompt is {perSectionItems} items ({versionCount} versions × {numQ} questions) — likely too large to paste in one go. Use <b>Auto-generate</b> (it splits to one version per request), or reduce versions.
             </div>
           )}
         </div>
@@ -196,13 +207,70 @@ export default function VariantsScreen({
             {numClassSections > 1 ? ` × ${numClassSections} classroom sections` : ""} from this master.
           </div>
         </div>
-        <button
-          style={{ ...S.btn("#8b5cf6", false), fontSize: "0.88rem", padding: "0.55rem 1.4rem" }}
-          onClick={() => triggerVersions && triggerVersions()}
-        >
-          📋 Build Prompt →
-        </button>
+        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+          <button
+            style={{ ...S.btn("#8b5cf6", false), fontSize: "0.88rem", padding: "0.55rem 1.4rem" }}
+            onClick={() => triggerVersions && triggerVersions()}
+          >
+            📋 Build Prompt →
+          </button>
+          {numClassSections > 1 && (
+            <button
+              style={{ ...S.oBtn(accent), fontSize: "0.82rem", padding: "0.55rem 1rem" }}
+              onClick={() => triggerSectionPrompt && triggerSectionPrompt(1)}
+            >
+              Paste section-by-section →
+            </button>
+          )}
+        </div>
       </div>
+
+      {/* PER-SECTION PASTE STEPPER (version_one_section) — one section's prompt at a
+          time; each paste MERGES into classSectionVersions without wiping the rest. */}
+      {pendingType === "version_one_section" && !!generatedPrompt && (() => {
+        const s = pendingMeta?.sectionNum || 1;
+        const ncs = pendingMeta?.numClassSections || numClassSections;
+        const sectionDone = Array.isArray(classSectionVersions?.[s]) && classSectionVersions[s].length > 0;
+        const isLast = s >= ncs;
+        return (
+          <div style={{ marginTop: "1.5rem" }}>
+            <hr style={S.divider} />
+            <div style={{ fontSize: "0.82rem", color: accent, fontWeight: "700", marginBottom: "0.4rem" }}>
+              📋 Section {s} of {ncs} — paste this section's {pendingMeta?.labels?.length} version{(pendingMeta?.labels?.length || 0) > 1 ? "s" : ""} ({pendingMeta?.labels?.join(", ")})
+            </div>
+            <div style={{ fontSize: "0.72rem", color: text3, marginBottom: "0.5rem" }}>
+              Generates keys {pendingMeta?.labels?.map(l => `S${s}_${l}`).join(", ")}. Paste this section's result; sections you've already merged stay intact.
+            </div>
+            <div style={S.promptBox}>{generatedPrompt}</div>
+            <div style={{ display: "flex", gap: "0.75rem", marginBottom: "1rem", flexWrap: "wrap" }}>
+              {isAdmin && (
+                <button style={S.oBtn(accent)} onClick={() => navigator.clipboard.writeText(generatedPrompt)}>Copy Section {s} Prompt</button>
+              )}
+            </div>
+            {!sectionDone && (
+              <PastePanel
+                label={`Paste the JSON for Section ${s} (keys ${pendingMeta?.labels?.map(l => `S${s}_${l}`).join(", ")}).`}
+                S={S} text2={text2}
+                pasteInput={pasteInput} setPasteInput={setPasteInput}
+                pasteError={pasteError} handlePaste={handlePaste}
+                onCancel={() => { setPendingType(null); setPasteInput(""); setGeneratedPrompt(""); }}
+              />
+            )}
+            {sectionDone && (
+              <div style={{ padding: "0.75rem 1rem", background: "#052e1688", borderRadius: "8px", border: "1px solid #22c55e44", display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
+                <span style={{ fontSize: "0.82rem", color: "#4ade80", fontWeight: 600, flex: 1 }}>✅ Section {s} merged ({classSectionVersions[s].length} version set{classSectionVersions[s].length !== 1 ? "s" : ""}).</span>
+                {isLast ? (
+                  <button style={S.btn("#10b981", false)} onClick={() => setScreen && setScreen("export")}>Finish → Export</button>
+                ) : (
+                  <button style={S.btn("#8b5cf6", false)} onClick={() => triggerSectionPrompt && triggerSectionPrompt(s + 1)}>Next: Section {s + 1} →</button>
+                )}
+              </div>
+            )}
+            {pasteError && <div style={{ color: "#f87171", fontSize: "0.78rem", marginTop: "0.5rem" }}>{pasteError}</div>}
+            <button id="auto-submit-paste" style={{ display: "none" }} onClick={handlePaste} />
+          </div>
+        );
+      })()}
 
       {/* Prompt preview + auto-generate + paste panel */}
       {promptReady && (

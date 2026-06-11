@@ -3,6 +3,8 @@ import {
   findIncompleteKeys,
   formatVersionCompletenessError,
   buildSectionVersions,
+  buildOneSectionVariants,
+  mergeSection,
 } from "../lib/exams/versionMerge.js";
 
 describe("expectedVersionKeys", () => {
@@ -131,5 +133,66 @@ describe("buildSectionVersions — dual-write invariant", () => {
     expect(q.hasGraph).toBe(true);
     expect(q.graphConfig).toEqual({ type: "single", fn: "x^3" });
     void classSectionVersions;
+  });
+});
+
+describe("per section×version auto chunk — single-key validation", () => {
+  test("a one-key chunk validates like any other (complete / missing / short)", () => {
+    const key = "S2_B";
+    expect(findIncompleteKeys({ S2_B: [1, 2] }, [key], 2)).toEqual({ missing: [], short: [] });
+    expect(findIncompleteKeys({}, [key], 2)).toEqual({ missing: ["S2_B"], short: [] });
+    expect(findIncompleteKeys({ S2_B: [1] }, [key], 2)).toEqual({ missing: [], short: ["S2_B"] });
+  });
+  test("single-key completeness error names the exact key", () => {
+    const msg = formatVersionCompletenessError(["S4_B"], { missing: ["S4_B"], short: [] }, true);
+    expect(msg).toContain("S4_B");
+    expect(msg).toContain("likely cut off");
+  });
+});
+
+describe("buildOneSectionVariants + mergeSection — incremental per-section paste", () => {
+  const selected = [{ id: "q1" }, { id: "q2" }];
+  const labels = ["A", "B"];
+  let n;
+  const makeId = () => `id${++n}`;
+  const opts = (parsed, sectionNum) => ({
+    parsed, sectionNum, multi: true, labels, selected, sanitizeFn: (q) => q, makeId, now: 1,
+  });
+  beforeEach(() => { n = 0; });
+
+  test("buildOneSectionVariants tags label / classSection / originalId per section", () => {
+    const variants = buildOneSectionVariants(opts({ S2_A: [{ q: "a1" }, { q: "a2" }], S2_B: [{ q: "b1" }, { q: "b2" }] }, 2));
+    expect(variants.map((v) => v.label)).toEqual(["A", "B"]);
+    expect(variants[0].classSection).toBe(2);
+    expect(variants[0].questions[0].originalId).toBe("q1");
+    expect(variants[0].questions[1].originalId).toBe("q2");
+  });
+
+  test("two sequential section pastes leave BOTH sections populated (no wipe) + dual-write", () => {
+    // Paste 1 → section 1 merges into an empty map.
+    const s1 = buildOneSectionVariants(opts({ S1_A: [{ q: "1A" }], S1_B: [{ q: "1B" }] }, 1));
+    let state = mergeSection({}, 1, s1);
+    expect(Object.keys(state.classSectionVersions)).toEqual(["1"]);
+    expect(state.versions).toBe(state.classSectionVersions[1]); // active = section 1
+
+    // Paste 2 → section 2 merges into the EXISTING map; section 1 must survive.
+    const s2 = buildOneSectionVariants(opts({ S2_A: [{ q: "2A" }], S2_B: [{ q: "2B" }] }, 2));
+    state = mergeSection(state.classSectionVersions, 2, s2);
+    expect(Object.keys(state.classSectionVersions).sort()).toEqual(["1", "2"]);
+    expect(state.classSectionVersions[1]).toBe(s1);     // section 1 NOT wiped
+    expect(state.classSectionVersions[2]).toBe(s2);
+    expect(state.versions).toBe(state.classSectionVersions[1]); // dual-write: still section 1
+    expect(state.classSectionVersions[1].map((v) => v.label)).toEqual(["A", "B"]);
+    expect(state.classSectionVersions[2].map((v) => v.label)).toEqual(["A", "B"]);
+  });
+
+  test("re-pasting a section replaces only that section", () => {
+    const s1 = buildOneSectionVariants(opts({ S1_A: [{ q: "1A" }], S1_B: [{ q: "1B" }] }, 1));
+    const s2 = buildOneSectionVariants(opts({ S2_A: [{ q: "2A" }], S2_B: [{ q: "2B" }] }, 2));
+    let state = mergeSection(mergeSection({}, 1, s1).classSectionVersions, 2, s2);
+    const s2b = buildOneSectionVariants(opts({ S2_A: [{ q: "2A2" }], S2_B: [{ q: "2B2" }] }, 2));
+    state = mergeSection(state.classSectionVersions, 2, s2b);
+    expect(state.classSectionVersions[1]).toBe(s1);  // section 1 untouched
+    expect(state.classSectionVersions[2]).toBe(s2b); // section 2 replaced
   });
 });

@@ -160,7 +160,9 @@ export function useExamBuilder({
     showToast(`Loaded "${master.name}" ✓`);
   }
 
-  function triggerVersions() {
+  // Shared resolution of which questions to mutate + which version labels — used by
+  // both the combined trigger and the per-section paste stepper so they never drift.
+  function _resolveSelectedAndLabels() {
     const selected = masterLocked
       ? versions[0].questions
       : bank
@@ -171,6 +173,24 @@ export function useExamBuilder({
             return aMaj !== bMaj ? aMaj - bMaj : aMin - bMin;
           });
     const labels = masterLocked ? VERSIONS.slice(1, 1 + versionCount) : VERSIONS.slice(0, versionCount);
+    return { selected, labels };
+  }
+
+  // Per-section paste STEPPER: build the prompt for ONE section (all its versions)
+  // and arm handlePaste's incremental-merge branch. The screen advances section by
+  // section; each paste merges into classSectionVersions without wiping the rest.
+  function triggerSectionPrompt(sectionNum) {
+    const { selected, labels } = _resolveSelectedAndLabels();
+    const prompt = buildAllSectionsPrompt(selected, labels, numClassSections, course, versionMutationType, courseObject, [sectionNum]);
+    setGeneratedPrompt(prompt);
+    setPendingType("version_one_section");
+    setPendingMeta({ selected, labels, sectionNum, numClassSections, versionMutationType });
+    setPasteInput("");
+    setPasteError("");
+  }
+
+  function triggerVersions() {
+    const { selected, labels } = _resolveSelectedAndLabels();
     if (numClassSections > 1) {
       const prompt = buildAllSectionsPrompt(selected, labels, numClassSections, course, versionMutationType, courseObject);
       setGeneratedPrompt(prompt);
@@ -202,36 +222,43 @@ export function useExamBuilder({
     setAutoGenLoading(true);
     setAutoGenError("");
     try {
-      // MULTI-SECTION: one API call PER CLASS SECTION (each carries only that
-      // section's versions), so a request can never approach the model's output
-      // cap the way "all sections at once" did. Accumulate every section's keys
-      // into one object, then hand it to the shared merge path (handlePaste via
-      // the auto-submit button), which re-runs the LOUD completeness guard and
-      // performs the single dual-write. A failed/truncated chunk fails loudly,
-      // NAMING the section; completed chunks are not committed (retry re-runs).
+      // MULTI-SECTION: one API call per SECTION×VERSION (each request generates
+      // ONE version of ONE section — e.g. 27 questions ≈ 11k tokens, well under
+      // the cap; a per-SECTION chunk of 27×3 ≈ 32k would still truncate).
+      // 3×5 → 15 sequential calls. Accumulate every key into one object, then
+      // hand it to the shared merge path (handlePaste via the auto-submit button),
+      // which re-runs the LOUD completeness guard and the single dual-write. A
+      // failed/truncated chunk fails loudly NAMING the exact key (S4_B); completed
+      // chunks are not committed (retry re-runs).
       if (pendingTypeVal === "version_all_sections" && (pendingMetaVal?.numClassSections || 1) > 1) {
         const { selected, labels, numClassSections: ncs } = pendingMetaVal;
         const vmt = pendingMetaVal.versionMutationType || versionMutationType;
         const combined = {};
+        const total = ncs * labels.length;
+        let idx = 0;
         for (let s = 1; s <= ncs; s++) {
-          setGenProgress({ current: s, total: ncs });
-          const chunkPrompt = buildAllSectionsPrompt(selected, labels, ncs, course, vmt, courseObject, [s]);
-          const { text, stopReason, warning } = await _callGenerate(chunkPrompt);
-          if (warning) showToast(warning, "error");
-          // FIX 2: max_tokens is ALWAYS a hard error now (not only when empty).
-          if (stopReason === "max_tokens") {
-            throw new Error(`Section ${s} of ${ncs} was cut off by the model's token limit (too many questions × versions in one section). Reduce questions or versions, then retry.`);
+          for (const label of labels) {
+            idx += 1;
+            setGenProgress({ current: idx, total, sectionNum: s, label });
+            const key = `S${s}_${label}`;
+            // One key only: section s, version `label`.
+            const chunkPrompt = buildAllSectionsPrompt(selected, [label], ncs, course, vmt, courseObject, [s]);
+            const { text, stopReason, warning } = await _callGenerate(chunkPrompt);
+            if (warning) showToast(warning, "error");
+            // FIX 2: max_tokens is ALWAYS a hard error (not only when empty).
+            if (stopReason === "max_tokens") {
+              throw new Error(`${key} was cut off by the model's token limit (too many questions in one version — reduce the question count). Retry.`);
+            }
+            if (!text) throw new Error(`${key} failed — empty response from the model. Retry.`);
+            let chunk;
+            try { chunk = parseAiJson(text); }
+            catch (e) { throw new Error(`${key} failed — ${e.message}`); }
+            const { missing, short } = findIncompleteKeys(chunk, [key], selected.length);
+            if (missing.length || short.length) {
+              throw new Error(`${key} failed — ` + formatVersionCompletenessError([key], { missing, short }, looksTruncated(text)));
+            }
+            combined[key] = chunk[key];
           }
-          if (!text) throw new Error(`Section ${s} of ${ncs}: empty response from the model. Retry.`);
-          let chunk;
-          try { chunk = parseAiJson(text); }
-          catch (e) { throw new Error(`Section ${s} of ${ncs}: ${e.message}`); }
-          const expected = labels.map(l => `S${s}_${l}`);
-          const { missing, short } = findIncompleteKeys(chunk, expected, selected.length);
-          if (missing.length || short.length) {
-            throw new Error(`Section ${s} of ${ncs} — ` + formatVersionCompletenessError(expected, { missing, short }, looksTruncated(text)));
-          }
-          for (const l of labels) combined[`S${s}_${l}`] = chunk[`S${s}_${l}`];
         }
         setGenProgress(null);
         setPasteInput(JSON.stringify(combined));
@@ -304,6 +331,7 @@ export function useExamBuilder({
     deleteSavedMaster,
     loadMaster,
     triggerVersions,
+    triggerSectionPrompt,
     autoGenerateVersions,
   };
 }

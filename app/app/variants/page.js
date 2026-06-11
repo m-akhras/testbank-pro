@@ -24,6 +24,7 @@ export default function VariantsPage() {
   return (
     <VariantsScreen
       versions={examBuilder.versions}
+      classSectionVersions={examBuilder.classSectionVersions}
       masterLocked={examBuilder.masterLocked}
       versionCount={examBuilder.versionCount} setVersionCount={examBuilder.setVersionCount}
       numClassSections={examBuilder.numClassSections} setNumClassSections={examBuilder.setNumClassSections}
@@ -32,6 +33,7 @@ export default function VariantsPage() {
       autoGenError={examBuilder.autoGenError}
       genProgress={examBuilder.genProgress}
       triggerVersions={examBuilder.triggerVersions}
+      triggerSectionPrompt={examBuilder.triggerSectionPrompt}
       autoGenerateVersions={examBuilder.autoGenerateVersions}
       pendingType={generate.pendingType} setPendingType={generate.setPendingType}
       pendingMeta={generate.pendingMeta}

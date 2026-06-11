@@ -9,6 +9,8 @@ import {
   findIncompleteKeys,
   formatVersionCompletenessError,
   buildSectionVersions,
+  buildOneSectionVariants,
+  mergeSection,
 } from "../lib/exams/versionMerge.js";
 import { answerMatchesAChoice } from "../lib/exports/index.js";
 import { applyLimitDerivation } from "../lib/limits/applyLimitLaws.js";
@@ -60,6 +62,7 @@ export function useGenerate({
   setBank = () => {},
   versions = [],
   masterLocked = false,
+  classSectionVersions = {},
   setVersions = () => {},
   setClassSectionVersions = () => {},
   setActiveVersion = () => {},
@@ -177,6 +180,45 @@ export function useGenerate({
     console.log("handlePaste pendingMeta.selected", pendingMeta?.selected?.map(q => ({ id: q.id, hasGraph: q.hasGraph })));
     try {
       const raw = pasteInput.trim();
+
+      if (pendingType === "version_one_section") {
+        // Per-section paste STEPPER: merge ONE section's versions into the
+        // existing classSectionVersions WITHOUT wiping the others. No navigation
+        // — the user stays on VariantsScreen and advances to the next section.
+        const parsed = parseAiJson(raw);
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+          throw new Error("Expected a JSON object keyed by version label.");
+        }
+        const { selected, labels, sectionNum } = pendingMeta;
+        const expected = labels.map((l) => `S${sectionNum}_${l}`);
+        const { missing, short } = findIncompleteKeys(parsed, expected, selected.length);
+        if (missing.length || short.length) {
+          throw new Error(
+            formatVersionCompletenessError(expected, { missing, short }, looksTruncated(raw))
+          );
+        }
+        const sectionVariants = buildOneSectionVariants({
+          parsed, sectionNum, multi: true, labels, selected, course,
+          sanitizeFn: sanitize, mergeGraphFn: mergeVariantGraphConfig, makeId: uid,
+        });
+        const withMaster = (masterLocked && versions[0])
+          ? [{ ...versions[0], classSection: sectionNum }, ...sectionVariants]
+          : sectionVariants;
+        const merged = mergeSection(classSectionVersions, sectionNum, withMaster);
+        const answerWarnings = collectAnswerWarnings(Object.values(merged.classSectionVersions).flat());
+        flushSync(() => {
+          setClassSectionVersions(merged.classSectionVersions);
+          setVersions(merged.versions);
+          setActiveVersion(0);
+          setActiveClassSection(1);
+          setPasteInput("");
+          setExamSaved(false); setSaveExamName("");
+          setBuiltStale(false);
+          setDupWarnings(answerWarnings);
+        });
+        showToast(`Section ${sectionNum} merged ✓`);
+        return;
+      }
 
       if (pendingType === "version_all" || pendingType === "version_all_sections") {
         const parsed = parseAiJson(raw);

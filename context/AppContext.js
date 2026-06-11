@@ -87,6 +87,7 @@ export function AppProvider({ children }) {
     setBank: bankHook.setBank,
     versions: examBuilderHook.versions,
     masterLocked: examBuilderHook.masterLocked,
+    classSectionVersions:    examBuilderHook.classSectionVersions,
     setVersions:             examBuilderHook.setVersions,
     setClassSectionVersions: examBuilderHook.setClassSectionVersions,
     setActiveVersion:        examBuilderHook.setActiveVersion,
