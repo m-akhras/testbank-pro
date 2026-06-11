@@ -742,7 +742,7 @@ describe("compileToFunctionPairConfig — §2.3 two specs → one functionPair c
     expect(cfg.yTickStep).toBe(1); // span 10 ≤ 12 → integer ticks
   });
 
-  test("rejects a functionPair whose feature span exceeds the readable cap", () => {
+  test("rejects a functionPair whose feature span exceeds the readable cap (16)", () => {
     // 2^x on [0,5] has endpoint 2^5 = 32 — a feature span ~31, unreadable (CASE 1).
     expect(() =>
       compileToFunctionPairConfig(
@@ -750,6 +750,16 @@ describe("compileToFunctionPairConfig — §2.3 two specs → one functionPair c
         { segments: [{ fn: "x", from: 0, to: 4 }] }
       )
     ).toThrow(/feature values span|unreadable/);
+  });
+
+  test("a contract-obeying span of exactly 16 PASSES (cap aligned to [-8,8])", () => {
+    // f endpoints -8, 8 (span 16 == cap) — must NOT be rejected.
+    const cfg = compileToFunctionPairConfig(
+      { segments: [{ fn: "x", from: -8, to: 8 }] },
+      { segments: [{ fn: "x", from: -2, to: 2 }] }
+    );
+    expect(cfg.yDomain).toEqual([-10, 10]); // [floor(-8)-2, ceil(8)+2]
+    expect(cfg.yTickStep).toBe(2); // span 20 > 12 → ceil(20/12) = 2, ticks stay readable
   });
 
   test("declared holes/points drive the scale; VA endpoints do not blow it up", () => {
