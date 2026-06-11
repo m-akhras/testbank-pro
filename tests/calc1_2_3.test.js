@@ -70,15 +70,16 @@ describe("calc1_2_3 — graph_limit_laws dual-spec contract", () => {
     expect(gll).toContain("OUT OF SCOPE"); // explicitly forbids value+limit / composition
   });
 
-  test("MC contract uses the INJECTION model, not phrase-matching", () => {
+  test("MC contract: system composes ALL choices (placeholders), not phrase-matching", () => {
     const mixed = build({ question_style: "mixed" });
     for (const p of [gll, mixed]) {
-      // new injection language
-      expect(p).toContain("the SYSTEM composes the correct answer text");
-      expect(p).toContain("INJECTS it as the answer key");
-      expect(p).toMatch(/Author ALL choices as plausible WRONG distractors/);
-      // old phrase-matching language is gone
+      // new system-composes-everything language
+      expect(p).toContain("the SYSTEM composes BOTH the correct answer AND all distractors");
+      expect(p).toMatch(/placeholder choices/);
+      expect(p).toContain("OVERWRITES all of them");
+      // old phrase-matching / inject-one language is gone
       expect(p).not.toContain("MUST appear VERBATIM");
+      expect(p).not.toContain("INJECTS it as the answer key");
     }
   });
 });

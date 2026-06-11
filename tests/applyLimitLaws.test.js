@@ -93,65 +93,71 @@ describe("applyLimitLaws — xPolyTimesF (k = p(a) evaluated by the caller)", ()
   });
 });
 
-describe("applyLimitLaws — MC injection (no phrase-matching) + malformed asks", () => {
-  test("system composes + INJECTS the correct text; wrong-phrasing choices NOT rejected", () => {
+describe("applyLimitLaws — MC system-composed uniform distractors", () => {
+  test("multi-ask: 4 choices, exactly one correct, all share the compound format", () => {
     const q = applyLimitLaws({
       type: "Multiple Choice",
       limitSpecF: specF,
       limitSpecG: specG,
-      // all distractors — wrong values AND differently-worded; none equals "4"
-      choices: ["lim (f+g) at 3 is 5", "the sum equals 4 here", "placeholder distractor"],
-      answer: "the sum equals 4 here", // model's marked answer — IGNORED
-      lawAsks: [{ law: "sum", at: 3 }],
+      choices: ["A", "B", "C", "D"], // placeholders — system overwrites all
+      lawAsks: [{ law: "sum", at: 3 }, { law: "quotient", at: 1 }, { law: "difference", at: 2 }],
     });
-    expect(q.answer).toBe("4"); // system-composed, single-ask value
-    expect(q.choices).toContain("4");
-    expect(q.choices).toHaveLength(3);
-    expect(q.choices[2]).toBe("4"); // last distractor replaced (mirrors §2.5)
+    const correct =
+      "the limit of (f + g) as x approaches 3 = 4; " +
+      "the limit of f/g as x approaches 1 = does not exist (DNE); " +
+      "the limit of (f - g) as x approaches 2 = does not exist (DNE)";
+    expect(q.choices).toHaveLength(4);
+    expect(q.answer).toBe(correct);
+    expect(q.choices.filter((c) => c === correct)).toHaveLength(1); // exactly one correct
+
+    const distractors = q.choices.filter((c) => c !== correct);
+    expect(distractors).toHaveLength(3);
+    for (const d of distractors) {
+      // same uniform compound format (every labeled part present)
+      expect(d).toContain("the limit of (f + g) as x approaches 3 =");
+      expect(d).toContain("the limit of f/g as x approaches 1 =");
+      expect(d).toContain("the limit of (f - g) as x approaches 2 =");
+      expect(d).not.toBe(correct); // genuinely wrong
+    }
   });
 
-  test("multi-ask: compound system text injected, model wording ignored, NO reject", () => {
+  test("DNE-part distractor uses a REAL one-sided value from the spec", () => {
+    // difference at 2: f jumps (left 3, right 1), g(2)=1 → two-sided DNE, but the
+    // LEFT one-sided difference is 3-1 = 2. A distractor should use that.
     const q = applyLimitLaws({
       type: "Multiple Choice",
       limitSpecF: specF,
       limitSpecG: specG,
-      choices: [
-        "the limit of (f + g) as x approaches 3 = 5; the limit of f/g as x approaches 1 = 0",
-        "f+g is 4 and f/g is undefined", // different phrasing — would have failed the old matcher
-        "third distractor",
-      ],
-      answer: "f+g is 4 and f/g is undefined",
-      lawAsks: [{ law: "sum", at: 3 }, { law: "quotient", at: 1 }],
+      choices: ["A", "B", "C", "D"],
+      lawAsks: [{ law: "sum", at: 3 }, { law: "quotient", at: 1 }, { law: "difference", at: 2 }],
     });
-    const expected =
-      "the limit of (f + g) as x approaches 3 = 4; the limit of f/g as x approaches 1 = does not exist (DNE)";
-    expect(q.answer).toBe(expected);
-    expect(q.choices).toContain(expected);
+    expect(
+      q.choices.some((c) => c.includes("the limit of (f - g) as x approaches 2 = 2"))
+    ).toBe(true);
   });
 
-  test("reuses a model choice if it already equals the system text", () => {
+  test("single ask: 4 bare-value choices, exactly one correct, none duplicates it", () => {
     const q = applyLimitLaws({
       type: "Multiple Choice",
       limitSpecF: specF,
       limitSpecG: specG,
-      choices: ["3", "4", "does not exist (DNE)", "infinity"],
-      answer: "3",
       lawAsks: [{ law: "sum", at: 3 }],
     });
+    expect(q.choices).toHaveLength(4);
     expect(q.answer).toBe("4");
-    expect(q.choices).toEqual(["3", "4", "does not exist (DNE)", "infinity"]); // unchanged
+    expect(q.choices.filter((c) => c === "4")).toHaveLength(1);
+    q.choices.filter((c) => c !== "4").forEach((d) => expect(d).not.toBe("4"));
   });
 
-  test("MC with fewer than 2 choices → structural hard-fail", () => {
-    expect(() =>
-      applyLimitLaws({
-        type: "Multiple Choice",
-        limitSpecF: specF,
-        limitSpecG: specG,
-        choices: ["only one"],
-        lawAsks: [{ law: "sum", at: 3 }],
-      })
-    ).toThrow(/at least 2 distractor/);
+  test("system builds 4 choices even with NO model choices", () => {
+    const q = applyLimitLaws({
+      type: "Multiple Choice",
+      limitSpecF: specF,
+      limitSpecG: specG,
+      lawAsks: [{ law: "sum", at: 3 }],
+    });
+    expect(q.choices).toHaveLength(4);
+    expect(q.answer).toBe("4");
   });
 
   test("unknown law → hard-fail", () => {
