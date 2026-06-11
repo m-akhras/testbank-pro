@@ -6,6 +6,7 @@ import { uid, questionSimilarity, stripChoiceLabel, isGraphChoice } from "../lib
 import { parseAiJson } from "../lib/utils/sanitizeJsonPaste.js";
 import { answerMatchesAChoice } from "../lib/exports/index.js";
 import { applyLimitDerivation } from "../lib/limits/applyLimitLaws.js";
+import { isLimitTemplateSection } from "../lib/templates/registry.js";
 import {
   buildGeneratePrompt,
   buildVersionPrompt,
@@ -261,7 +262,13 @@ export function useGenerate({
         // shape (ambiguous both-shapes → throw). A throw — e.g. a hard-failed MC
         // whose derived answer isn't among its choices — surfaces via pasteError
         // below. No-op for every question without any limit spec.
-        const tagged = sanitized.map(q => ({ ...applyLimitDerivation(q), id: uid(), course: pendingMeta.course, createdAt: Date.now() }));
+        const tagged = sanitized.map(q => {
+          // In a limit-template section, a graph question MUST carry a spec
+          // (the "mixed" hard rule). Gate the guard so non-limit sections that
+          // legitimately ship a hand-authored graphConfig are never affected.
+          const requireSpecForGraph = isLimitTemplateSection(pendingMeta.course, q.section);
+          return { ...applyLimitDerivation(q, { requireSpecForGraph }), id: uid(), course: pendingMeta.course, createdAt: Date.now() };
+        });
         const warnings = [];
         tagged.forEach((newQ, i) => {
           if (newQ.hasGraph) return;

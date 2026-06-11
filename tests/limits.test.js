@@ -595,16 +595,14 @@ describe("§2.5 continuity — enumeration, statements, point + global asks", ()
     );
   });
 
-  test("point asks: isContinuous / classifyDiscontinuity", () => {
+  test("point ask: isContinuous", () => {
     const ask = (quantity, at) =>
       applyLimitSpec({ type: "Free Response", limitSpec: spec, asks: [{ quantity, at }] }).answer;
 
     expect(ask("isContinuous", 0.5)).toBe("continuous"); // the continuous join
     expect(ask("isContinuous", 1)).toBe("discontinuous"); // the removable hole
-    expect(ask("classifyDiscontinuity", 1)).toBe("removable");
-    expect(ask("classifyDiscontinuity", 2)).toBe("jump");
-    expect(ask("classifyDiscontinuity", 3)).toBe("infinite");
-    expect(ask("classifyDiscontinuity", 0.5)).toBe("continuous");
+    expect(ask("isContinuous", 2)).toBe("discontinuous"); // the jump
+    expect(ask("isContinuous", 3)).toBe("discontinuous"); // the infinite VA
   });
 
   test("global FR ask: system composes the canonical answer", () => {
@@ -673,9 +671,9 @@ describe("§2.5 continuity — enumeration, statements, point + global asks", ()
       applyLimitSpec({
         type: "Multiple Choice",
         limitSpec: spec,
-        choices: ["continuous", "jump", "infinite", "none"], // missing "removable"
-        answer: "jump",
-        asks: [{ quantity: "classifyDiscontinuity", at: 1 }],
+        choices: ["continuous", "yes", "no", "none"], // missing derived "discontinuous"
+        answer: "continuous",
+        asks: [{ quantity: "isContinuous", at: 1 }], // x=1 is a removable hole → discontinuous
       })
     ).toThrow(/not among the choices/);
   });

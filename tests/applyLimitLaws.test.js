@@ -3,6 +3,7 @@
 
 import { applyLimitLaws, applyLimitDerivation } from "../lib/limits/applyLimitLaws.js";
 import { applyLimitSpec } from "../lib/limits/applyLimitSpec.js";
+import { isLimitTemplateSection } from "../lib/templates/registry.js";
 
 // f: jump at x=2 (left-limit 3, right-limit 1, f(2)=1); finite elsewhere on (2,10).
 const specF = {
@@ -184,5 +185,63 @@ describe("applyLimitDerivation — dispatch by question shape", () => {
   test("plain question (no specs) is a no-op pass-through", () => {
     const plain = { type: "Multiple Choice", question: "Q", choices: ["a", "b"], answer: "a" };
     expect(applyLimitDerivation(plain)).toBe(plain);
+  });
+});
+
+describe("applyLimitDerivation — graph-without-spec guard (mixed hard rule)", () => {
+  // A no-spec graph question as the model would emit it (hasGraph + graphConfig,
+  // no limitSpec/limitSpecF/G).
+  const graphNoSpec = {
+    type: "Free Response",
+    section: "2.2 The Limit of a Function",
+    hasGraph: true,
+    graphConfig: { type: "single", fn: "x^2", xDomain: [-3, 3] },
+  };
+
+  test("limit-section graph-without-spec → throws", () => {
+    expect(() =>
+      applyLimitDerivation(graphNoSpec, { requireSpecForGraph: true })
+    ).toThrow(/graph but no spec|graph-without-spec rejected/);
+  });
+
+  test("non-limit-section graph question → passes through untouched", () => {
+    const out = applyLimitDerivation(graphNoSpec, { requireSpecForGraph: false });
+    expect(out).toBe(graphNoSpec); // same reference, no-op
+  });
+
+  test("default (no opts) does not fire the guard — back-compat", () => {
+    expect(applyLimitDerivation(graphNoSpec)).toBe(graphNoSpec);
+  });
+
+  test("a spec-backed graph question passes the guard", () => {
+    const q = {
+      type: "Free Response",
+      section: "2.2 The Limit of a Function",
+      limitSpec: { segments: [{ fn: "x+2", from: 0, to: 4 }], holes: [{ x: 2, y: 4 }] },
+      asks: [{ quantity: "limit", at: 2 }],
+    };
+    const out = applyLimitDerivation(q, { requireSpecForGraph: true });
+    expect(out.answer).toBe("4");
+    expect(out.hasGraph).toBe(true);
+  });
+
+  test("a symbolic (no-graph, no-spec) question passes even in a limit section", () => {
+    const q = { type: "Free Response", section: "2.3 ...", question: "Evaluate lim x->2 (3x-7)", answer: "-1" };
+    const out = applyLimitDerivation(q, { requireSpecForGraph: true });
+    expect(out).toBe(q); // no graph payload → not flagged
+  });
+});
+
+describe("isLimitTemplateSection — guard scoping", () => {
+  test("true for the three limit-template sections", () => {
+    expect(isLimitTemplateSection("Calculus 1", "2.2 The Limit of a Function")).toBe(true);
+    expect(isLimitTemplateSection("Calculus 1", "2.3 Calculating Limits Using the Limit Laws")).toBe(true);
+    expect(isLimitTemplateSection("Calculus 1", "2.5 Continuity")).toBe(true);
+  });
+
+  test("false for non-limit sections / courses", () => {
+    expect(isLimitTemplateSection("Calculus 1", "1.3 New Functions from Old Functions")).toBe(false);
+    expect(isLimitTemplateSection("Quantitative Methods I", "3.1 Whatever")).toBe(false);
+    expect(isLimitTemplateSection("Calculus 1", undefined)).toBe(false);
   });
 });
