@@ -143,3 +143,53 @@ describe("OMML regression pins (audit CORRECT patterns)", () => {
     expect(M("lim x→2 (x^2-4)/(x-2)")).toContain('<m:limLow><m:e><m:r><m:rPr><m:sty m:val="p"/></m:rPr><m:t xml:space="preserve">lim</m:t></m:r></m:e><m:lim><m:r><m:t xml:space="preserve">x→2</m:t></m:r></m:lim></m:limLow>');
   });
 });
+
+// ── OMML piecewise big-brace cases (Part A) ──
+describe("OMML piecewise cases (m:d + m:eqArr)", () => {
+  const M = (s) => mathToOmml(s);
+  // tag-balance + escape well-formedness check
+  function wf(xml) {
+    const st = []; const re = /<(\/?)([a-zA-Z:]+)([^<>]*?)(\/?)>/g; let m, li = 0;
+    while ((m = re.exec(xml))) {
+      const t = xml.slice(li, m.index);
+      if (/&(?!amp;|lt;|gt;|quot;|#\d+;)/.test(t) || /[<>]/.test(t)) return "BAD-ESC";
+      li = re.lastIndex; const [, c, n, , sc] = m;
+      if (sc) continue;
+      if (c) { if (st.pop() !== n) return "UNBAL:" + n; } else st.push(n);
+    }
+    return st.length ? "UNCLOSED" : "OK";
+  }
+
+  test("2-branch → big left brace + eqArr, sSup in a row, ≥ condition glyph", () => {
+    const out = M("{ x^2 if x < 0 ; 2x if x >= 0 }");
+    expect(wf(out)).toBe("OK");
+    expect(out).toContain('<m:begChr m:val="{"/><m:endChr m:val=""/>'); // only a left brace
+    expect(out).toContain("<m:eqArr>");
+    expect((out.match(/<m:e>/g) || []).length).toBeGreaterThanOrEqual(2); // ≥2 rows
+    expect(out).toContain("<m:sSup>");      // x^2 rendered
+    expect(out).toContain("x ≥ 0");          // condition glyph
+    expect(out).toContain("  if  ");
+  });
+
+  test("4-branch well-formed with =, <, >, ≥ conditions", () => {
+    const out = M("{ -x if x < 0 ; 0 if x = 0 ; x if x > 0 ; 5 if x >= 10 }");
+    expect(wf(out)).toBe("OK");
+    expect(out).toContain("<m:eqArr>");
+    const rows = (out.match(/  if  /g) || []).length;
+    expect(rows).toBe(4);
+    expect(out).toContain("x = 0");
+    expect(out).toContain("x ≥ 10");
+  });
+
+  test("GUARDRAIL: Laplace L{f(t)} / L^{-1}{F(s)} are NOT cases", () => {
+    expect(M("L{f(t)}")).not.toContain("<m:eqArr>");
+    expect(M("L{f(t)}")).toContain("\\mathcal".length ? "<m:r>" : ""); // still a script run
+    expect(M("L^{-1}{F(s)}")).not.toContain("<m:eqArr>");
+  });
+
+  test("GUARDRAIL: set-builder / ordinary braces are NOT cases", () => {
+    expect(M("{x | x > 0}")).not.toContain("<m:eqArr>");
+    expect(M("the set {1, 2, 3}")).not.toContain("<m:eqArr>");
+    expect(wf(M("the set {1, 2, 3}"))).toBe("OK");
+  });
+});

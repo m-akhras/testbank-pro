@@ -174,3 +174,44 @@ describe("_emitChoiceParagraph — letter prefix is upright prose, not all-math"
     expect(count(out, "</w:p>")).toBe(1);
   });
 });
+
+// ── Atomic multi-word math phrases (Part A2) ──
+describe("_segmentProseMath — atomic math phrases (sum/integral/piecewise)", () => {
+  const seg = (s) => _segmentProseMath(s);
+  const mathTexts = (s) => seg(s).filter((x) => x.type === "math").map((x) => x.text);
+
+  test("sum-with-body is ONE math segment", () => {
+    expect(mathTexts("Evaluate sum from i=1 to n of (1)/(n^2).")).toContain("sum from i=1 to n of (1)/(n^2)");
+  });
+  test("definite integral is ONE math segment", () => {
+    expect(mathTexts("Compute integral from 0 to 1 of x^2 dx now.")).toContain("integral from 0 to 1 of x^2 dx");
+  });
+  test("piecewise braces are ONE math segment", () => {
+    expect(mathTexts("Let f = { x^2 if x < 0 ; 2x if x >= 0 } here.")).toContain("{ x^2 if x < 0 ; 2x if x >= 0 }");
+  });
+  test("product-with-body is ONE math segment", () => {
+    expect(mathTexts("The product from k=1 to n of k matters.")).toContain("product from k=1 to n of k");
+  });
+
+  // Prose safety: the pre-pass must NOT grab these as atomic math formulas.
+  test("PROSE-SAFE: 'ranging from 1 to 10' is not captured as a math phrase", () => {
+    const m = mathTexts("Values ranging from 1 to 10 are allowed.");
+    expect(m.some((t) => /from/.test(t))).toBe(false); // no atomic phrase swallowed 'from'
+    // connective 'from'/'to' stay in prose runs
+    const prose = seg("Values ranging from 1 to 10 are allowed.").filter((x) => x.type === "prose").map((x) => x.text).join("");
+    expect(prose).toContain("from");
+    expect(prose).toContain("to");
+  });
+  test("PROSE-SAFE: ordinary set '{1, 2, 3}' is not captured as a piecewise phrase", () => {
+    const m = mathTexts("Consider the set {1, 2, 3} of integers.");
+    // No math segment is an atomic piecewise span (none contains ' if '), and the
+    // connective 'of' stays prose — i.e. the pre-pass did not fire on plain braces.
+    expect(m.some((t) => /\sif\s/.test(t))).toBe(false);
+    const prose = seg("Consider the set {1, 2, 3} of integers.").filter((x) => x.type === "prose").map((x) => x.text).join("");
+    expect(prose).toContain("of");
+  });
+  test("PROSE-SAFE: 'from 2 to 8' (no sum/integral keyword) not captured", () => {
+    const m = mathTexts("Pick a number from 2 to 8.");
+    expect(m.some((t) => /from/.test(t))).toBe(false);
+  });
+});
