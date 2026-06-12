@@ -9,7 +9,7 @@ import {
   assembleSection,
   mergeSection,
 } from "../lib/exams/versionMerge.js";
-import { buildVersionChunkPrompt, buildAllSectionsPrompt } from "../lib/prompts/index.js";
+import { buildVersionChunkPrompt, buildAllSectionsPrompt, buildReplacePrompt } from "../lib/prompts/index.js";
 import { sectionTopicConstraints } from "../lib/courses/_calcPrompt.js";
 
 describe("expectedVersionKeys — anchor model", () => {
@@ -228,6 +228,40 @@ describe("buildVersionChunkPrompt — topic-aware function mutation wording", ()
     expect(p).toContain("change the FUNCTION FAMILY");                  // still allowed to change family
     expect(p).toMatch(/NO limits at x → ±∞/);                          // but stay in §2.2 techniques
     expect(p).toMatch(/answerable using ONLY the section's own techniques/); // global rule
+  });
+});
+
+// Per-question Regenerate menu (buildReplacePrompt) must apply the SAME topic-aware
+// function-mutation scope as the version/section path — it previously used a
+// topic-blind "use a different function type" rule.
+describe("buildReplacePrompt — topic-aware function mutation", () => {
+  test("§1.4 'function' regenerate: stay-in-class rule, NOT the generic change-type lead-in", () => {
+    const q = { course: "Calculus 1", section: "1.4 Exponential Functions", type: "Free Response", difficulty: "Medium", question: "Sketch f(x) = 2^x." };
+    const p = buildReplacePrompt(q, "function");
+    expect(p).toContain("TOPIC-BOUND");
+    expect(p).toMatch(/KEEP the exponential\/logarithmic family/);     // stay-in-class scope
+    expect(p).not.toContain("Use a DIFFERENT function type");           // generic lead-in dropped
+  });
+
+  test("§2.2 'function' regenerate: keeps change-type lead-in + no-infinity-limits scope", () => {
+    const q = { course: "Calculus 1", section: "2.2 The Limit of a Function", type: "Free Response", difficulty: "Medium", question: "Find lim x→3 of f." };
+    const p = buildReplacePrompt(q, "function");
+    expect(p).toContain("Use a DIFFERENT function type");
+    expect(p).toMatch(/NO limits at x → ±∞/);
+    expect(p).toMatch(/answerable using ONLY the section's own techniques/);
+  });
+
+  test("graph-bearing 'function' regenerate blocks ln/log", () => {
+    const q = { course: "Calculus 1", section: "2.5 Continuity", type: "Free Response", difficulty: "Medium", hasGraph: true, graphConfig: { type: "single", fn: "x^2", xDomain: [-3, 3] }, question: "Where is f discontinuous?" };
+    const p = buildReplacePrompt(q, "function");
+    expect(p).toMatch(/do NOT mutate into logarithmic \(ln\/log\) functions/);
+  });
+
+  test("'numbers' regenerate is unchanged (no topic scope injected)", () => {
+    const q = { course: "Calculus 1", section: "1.4 Exponential Functions", type: "Free Response", difficulty: "Medium", question: "Sketch f(x) = 2^x." };
+    const p = buildReplacePrompt(q, "numbers");
+    expect(p).toContain("Keep the same function type, change only the numbers/coefficients.");
+    expect(p).not.toContain("TOPIC-BOUND");
   });
 });
 
