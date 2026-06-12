@@ -2,11 +2,15 @@ import {
   expectedVersionKeys,
   findIncompleteKeys,
   formatVersionCompletenessError,
+  findMissingGraphs,
+  formatMissingGraphError,
+  clampGraphYDomainToFeatures,
   buildSectionVersions,
   assembleSection,
   mergeSection,
 } from "../lib/exams/versionMerge.js";
 import { buildVersionChunkPrompt, buildAllSectionsPrompt } from "../lib/prompts/index.js";
+import { sectionTopicConstraints } from "../lib/courses/_calcPrompt.js";
 
 describe("expectedVersionKeys — anchor model", () => {
   test("anchorMode: S1_A absent (master), S{s}_A present for s ≥ 2", () => {
@@ -177,5 +181,127 @@ describe("buildAllSectionsPrompt — combined prompt synced to anchor model", ()
     expect(p).toMatch(/THEN generate S2_B, S2_C as NUMBERS mutations/);
     expect(p).toMatch(/Section 1's version A IS the master/);
     expect(p).toMatch(/do NOT output S1_A/);
+  });
+});
+
+// FIX 1 — TOPIC-AWARE FUNCTION MUTATION. The section field defines the topic; a
+// "function mutation" must not wander off-topic (§1.4 Exponential → stay exp/log;
+// §2.2 limit → any family but NO limits at infinity, which is §2.6).
+describe("sectionTopicConstraints — topic scope by section", () => {
+  test("1.4 Exponential → topic-BOUND: stay in the exponential/log class", () => {
+    const tc = sectionTopicConstraints("1.4 Exponential Functions");
+    expect(tc.bound).toBe(true);
+    expect(tc.rule).toMatch(/KEEP the exponential\/logarithmic family/);
+    expect(tc.rule).toMatch(/Mutate WITHIN it/);
+    expect(tc.rule).toMatch(/Do NOT switch to polynomial/);
+  });
+  test("1.5 Inverse Functions and Logarithms → topic-BOUND", () => {
+    const tc = sectionTopicConstraints("1.5 Inverse Functions and Logarithms");
+    expect(tc.bound).toBe(true);
+    expect(tc.rule).toMatch(/inverse-function \/ logarithm \/ exponential/);
+  });
+  test("2.2 Limit → topic-AGNOSTIC: any family, but NO limits at infinity (that is §2.6)", () => {
+    const tc = sectionTopicConstraints("2.2 The Limit of a Function");
+    expect(tc.bound).toBe(false);
+    expect(tc.rule).toMatch(/Any function family is on-topic/);
+    expect(tc.rule).toMatch(/MAY change the family/);
+    expect(tc.rule).toMatch(/NO limits at x → ±∞/);
+    expect(tc.rule).toMatch(/§2\.6/);
+  });
+  test("unmapped section (1.1) → null (generic change-family behavior)", () => {
+    expect(sectionTopicConstraints("1.1 Four Ways to Represent a Function")).toBeNull();
+  });
+});
+
+describe("buildVersionChunkPrompt — topic-aware function mutation wording", () => {
+  test("§1.4 base (all topic-bound): stay-in-class wording, NOT the change-family lead-in", () => {
+    const base = [{ type: "Free Response", section: "1.4 Exponential Functions", question: "Sketch f(x) = 2^x." }];
+    const p = buildVersionChunkPrompt({ baseQuestions: base, sectionNum: 2, label: "A", mutation: "function", course: "Calculus 1" });
+    expect(p).toContain("TOPIC-BOUND mutation");
+    expect(p).toMatch(/KEEP the exponential\/logarithmic family/);     // stay-in-class scope
+    expect(p).not.toContain("change the FUNCTION FAMILY");              // generic lead-in dropped
+  });
+
+  test("§2.2 base (topic-agnostic): keeps change-family lead-in + no-infinity-limits scope", () => {
+    const base = [{ type: "Free Response", section: "2.2 The Limit of a Function", question: "Find lim x→3 of f." }];
+    const p = buildVersionChunkPrompt({ baseQuestions: base, sectionNum: 2, label: "A", mutation: "function", course: "Calculus 1" });
+    expect(p).toContain("change the FUNCTION FAMILY");                  // still allowed to change family
+    expect(p).toMatch(/NO limits at x → ±∞/);                          // but stay in §2.2 techniques
+    expect(p).toMatch(/answerable using ONLY the section's own techniques/); // global rule
+  });
+});
+
+// FIX 2 — LOUD MISSING-GRAPH GUARD. Completeness only counts keys/questions, so a
+// mutation that dropped a graph slipped through. Fail by NAME instead.
+describe("findMissingGraphs / formatMissingGraphError", () => {
+  const base = [
+    { question: "q1" },
+    { question: "q2" },
+    { question: "q3" },
+    { hasGraph: true, graphConfig: { type: "single", fn: "x^2-3", xDomain: [-4, 4] }, question: "q4 has a graph" },
+  ];
+
+  test("graph-bearing base + graphless variant → names the exact question", () => {
+    const parsed = { S3_B: [{ question: "m1" }, { question: "m2" }, { question: "m3" }, { question: "m4 — no graphConfig" }] };
+    const missing = findMissingGraphs(parsed, ["S3_B"], base);
+    expect(missing).toEqual(["S3_B question 4"]);
+    const msg = formatMissingGraphError(missing);
+    expect(msg).toContain("S3_B question 4");
+    expect(msg).toMatch(/base question has a graph but the mutation returned none/);
+  });
+
+  test("variant that kept a usable graphConfig passes", () => {
+    const parsed = { S3_B: [{}, {}, {}, { graphConfig: { type: "single", fn: "e^x", xDomain: [-2, 2] } }] };
+    expect(findMissingGraphs(parsed, ["S3_B"], base)).toEqual([]);
+  });
+
+  test("base without a graph is never flagged (e.g. graph-choice MCQ / plain text)", () => {
+    const textBase = [{ question: "plain" }];
+    expect(findMissingGraphs({ S1_B: [{ question: "x" }] }, ["S1_B"], textBase)).toEqual([]);
+  });
+});
+
+// FIX 3a — ln/log excluded from graph-question mutations (renderer ln is unclear).
+describe("graph-question mutation — ln/log blocklist", () => {
+  test("graph-bearing base function mutation forbids logarithmic family", () => {
+    const base = [{ type: "Free Response", section: "2.5 Continuity", hasGraph: true, graphConfig: { type: "single", fn: "x^2", xDomain: [-3, 3] }, question: "Where is f discontinuous?" }];
+    const p = buildVersionChunkPrompt({ baseQuestions: base, sectionNum: 2, label: "A", mutation: "function", course: "Calculus 1" });
+    expect(p).toMatch(/do NOT mutate into logarithmic \(ln\/log\) functions/);
+  });
+  test("graph-less base has no ln blocklist line", () => {
+    const base = [{ type: "Free Response", section: "2.5 Continuity", question: "Find lim." }];
+    const p = buildVersionChunkPrompt({ baseQuestions: base, sectionNum: 2, label: "A", mutation: "function", course: "Calculus 1" });
+    expect(p).not.toMatch(/do NOT mutate into logarithmic/);
+  });
+});
+
+// FIX 3b — yDomain feature clamp: variant configs skip compileToGraphConfig's
+// auto-scale, so a blown-up branch crushes discontinuity features flat (image 3).
+describe("clampGraphYDomainToFeatures", () => {
+  test("features span 3 but yDomain reaches 200 → clamp to the feature span padded", () => {
+    const cfg = { type: "single", fn: "e^(2x)", holes: [[1, 2], [2, 5]], yDomain: [0, 200] };
+    const out = clampGraphYDomainToFeatures(cfg);
+    expect(out.yDomain).not.toEqual([0, 200]);
+    const span = out.yDomain[1] - out.yDomain[0];
+    expect(span).toBeLessThan(12);          // ~ feature span (3) + padding, never 200
+    expect(out.yDomain[0]).toBeLessThanOrEqual(2);   // contains the lowest feature
+    expect(out.yDomain[1]).toBeGreaterThanOrEqual(5); // contains the highest feature
+  });
+
+  test("no explicit yDomain (renderer would auto-scale) → pin to feature span", () => {
+    const cfg = { type: "single", fn: "e^(2x)", points: [[0, 1], [1, 4]] };
+    const out = clampGraphYDomainToFeatures(cfg);
+    expect(Array.isArray(out.yDomain)).toBe(true);
+    expect(out.yDomain[1] - out.yDomain[0]).toBeLessThan(12);
+  });
+
+  test("already-sane explicit yDomain (within ~4× feature span) is left untouched", () => {
+    const cfg = { type: "single", fn: "x^2", holes: [[1, 2], [2, 5]], yDomain: [0, 10] };
+    expect(clampGraphYDomainToFeatures(cfg)).toBe(cfg);
+  });
+
+  test("config with no feature points is left untouched", () => {
+    const cfg = { type: "single", fn: "x^2", yDomain: [0, 500] };
+    expect(clampGraphYDomainToFeatures(cfg)).toBe(cfg);
   });
 });

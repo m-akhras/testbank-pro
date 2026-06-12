@@ -8,6 +8,9 @@ import {
   expectedVersionKeys,
   findIncompleteKeys,
   formatVersionCompletenessError,
+  findMissingGraphs,
+  formatMissingGraphError,
+  clampGraphYDomainToFeatures,
   buildSectionVersions,
   assembleSection,
   mergeSection,
@@ -172,7 +175,10 @@ export function useGenerate({
       if (typeof v === "string" && v.trim() === "") continue;
       overlay[k] = v;
     }
-    return { ...masterCfg, ...overlay };
+    // Post-merge yDomain sanity clamp: variant configs skip compileToGraphConfig's
+    // feature-driven auto-scale, so pin the y-range to the discontinuity features
+    // when a blown-up branch would otherwise crush them flat (audit image 3).
+    return clampGraphYDomainToFeatures({ ...masterCfg, ...overlay });
   };
 
   async function handlePaste() {
@@ -203,6 +209,8 @@ export function useGenerate({
             formatVersionCompletenessError(expected, { missing, short }, looksTruncated(raw))
           );
         }
+        const lostGraphs = findMissingGraphs(parsed, expected, selected);
+        if (lostGraphs.length) throw new Error(formatMissingGraphError(lostGraphs));
         const sectionVariants = assembleSection({
           parsed, sectionNum, multi: true, variantLabels, anchorLabel, selected, course,
           masterLocked, masterVersion: versions[0], anchorMode,
@@ -246,6 +254,8 @@ export function useGenerate({
             formatVersionCompletenessError(expected, { missing, short }, looksTruncated(raw))
           );
         }
+        const lostGraphs = findMissingGraphs(parsed, expected, selected);
+        if (lostGraphs.length) throw new Error(formatMissingGraphError(lostGraphs));
 
         // Single source for the dual-write (classSectionVersions + versions).
         const { classSectionVersions, versions: vers } = buildSectionVersions({

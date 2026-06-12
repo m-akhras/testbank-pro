@@ -4,7 +4,7 @@ import { createBrowserClient } from "@supabase/ssr";
 import { sectionSortKey } from "../lib/utils/questions.js";
 import { buildAllVersionsPrompt, buildAllSectionsPrompt, buildVersionChunkPrompt, buildSectionPastePrompt } from "../lib/prompts/index.js";
 import { parseAiJson, looksTruncated } from "../lib/utils/sanitizeJsonPaste.js";
-import { findIncompleteKeys, formatVersionCompletenessError } from "../lib/exams/versionMerge.js";
+import { findIncompleteKeys, formatVersionCompletenessError, findMissingGraphs, formatMissingGraphError } from "../lib/exams/versionMerge.js";
 
 // A is always the master; B–U are the 20 possible variant labels.
 const VERSIONS = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U"];
@@ -263,6 +263,10 @@ export function useExamBuilder({
           if (missing.length || short.length) {
             throw new Error(`${key} failed — ` + formatVersionCompletenessError([key], { missing, short }, looksTruncated(text)));
           }
+          // Ground-truth graph presence against the MASTER (every variant ultimately
+          // mutates it): a graph-bearing master question must come back with a graph.
+          const lostGraphs = findMissingGraphs(chunk, [key], master);
+          if (lostGraphs.length) throw new Error(`${key} failed — ` + formatMissingGraphError(lostGraphs));
           combined[key] = chunk[key];
           return chunk[key];
         };
