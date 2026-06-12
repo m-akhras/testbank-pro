@@ -6,7 +6,7 @@ import {
   assembleSection,
   mergeSection,
 } from "../lib/exams/versionMerge.js";
-import { buildVersionChunkPrompt } from "../lib/prompts/index.js";
+import { buildVersionChunkPrompt, buildAllSectionsPrompt } from "../lib/prompts/index.js";
 
 describe("expectedVersionKeys — anchor model", () => {
   test("anchorMode: S1_A absent (master), S{s}_A present for s ≥ 2", () => {
@@ -143,5 +143,39 @@ describe("buildVersionChunkPrompt — base threading + mutation mode", () => {
     expect(p).toContain("change ONLY the numbers");
     expect(p).toContain("Integrate e^x.");               // base = the section's anchor, not the master
     expect(p).not.toContain("Differentiate x^2.");        // NOT the master
+  });
+});
+
+// REGRESSION (a905fd2 drift): the combined multi-section Copy Prompt asked only
+// for the variant keys (S{s}_B/C) while handlePaste's guard expects the anchor
+// keys S{s}_A for s ≥ 2. Pin the combined prompt's key set === the guard's so
+// they can never drift again.
+describe("buildAllSectionsPrompt — combined prompt synced to anchor model", () => {
+  const master = [
+    { type: "Free Response", section: "1.1", question: "Differentiate x^2." },
+    { type: "Multiple Choice", section: "1.1", question: "Limit of (x^2-1)/(x-1)?", choices: ["1", "2", "3", "4"] },
+  ];
+
+  test("prompt key set === guard expected keys (3 sections × [B,C] → 8 keys incl. S2_A, S3_A)", () => {
+    const p = buildAllSectionsPrompt(master, ["B", "C"], 3, "Calculus 1");
+    const expected = expectedVersionKeys(3, ["B", "C"], { anchorMode: true });
+    expect(expected).toHaveLength(8);                     // S1_B,S1_C,S2_A,S2_B,S2_C,S3_A,S3_B,S3_C
+    // the prompt's declared key list line equals the guard's expected keys, in order
+    const declared = p.match(/All version keys to generate: (.+)/)[1].split(",").map((s) => s.trim());
+    expect(declared).toEqual(expected);
+    // every expected key appears in the JSON output-shape example block too
+    for (const k of expected) expect(p).toContain(`"${k}":`);
+    // anchor present for s ≥ 2, absent for s = 1 (master)
+    expect(declared).toContain("S2_A");
+    expect(declared).toContain("S3_A");
+    expect(declared).not.toContain("S1_A");
+  });
+
+  test("anchor-first instruction for s ≥ 2; section 1 keeps the master as A (not regenerated)", () => {
+    const p = buildAllSectionsPrompt(master, ["B", "C"], 3, "Calculus 1");
+    expect(p).toMatch(/FIRST generate S2_A:/);
+    expect(p).toMatch(/THEN generate S2_B, S2_C as NUMBERS mutations/);
+    expect(p).toMatch(/Section 1's version A IS the master/);
+    expect(p).toMatch(/do NOT output S1_A/);
   });
 });
