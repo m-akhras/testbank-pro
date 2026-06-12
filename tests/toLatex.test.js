@@ -75,15 +75,18 @@ describe("toLatex — piecewise → \\begin{cases}", () => {
 });
 
 describe("toLatex — multiplication glyph: \\cdot inside LaTeX, · outside", () => {
-  test("piecewise coefficient 2*x becomes \\cdot, no Unicode middle-dot leaks into the cases", () => {
-    const out = toLatex("{ 2*x + 1 if x >= 1 ; x^2 - 3 if x < 1 }");
+  // After the implicit-mult cleanup (QTI audit) a number*VARIABLE coefficient
+  // juxtaposes (2*x → 2x), so the \cdot glyph only survives between two numeric
+  // literals (2*3). These tests use number*number to exercise the glyph choice.
+  test("piecewise number*number 2*3 becomes \\cdot, no Unicode middle-dot leaks into the cases", () => {
+    const out = toLatex("{ 2*3 + 1 if x >= 1 ; x^2 - 3 if x < 1 }");
     expect(out).toContain("\\begin{cases}");
     expect(out).toContain("\\cdot");
     expect(out).not.toContain("·"); // U+00B7 must never appear inside the cases LaTeX
   });
 
-  test("fraction with multiplication (2*x)/3 uses \\cdot, no middle-dot inside \\(...\\)", () => {
-    const out = toLatex("(2*x)/3");
+  test("fraction with number*number (2*3)/x uses \\cdot, no middle-dot inside \\(...\\)", () => {
+    const out = toLatex("(2*3)/x");
     expect(out).toContain("\\cdot");
     expect(out).not.toContain("·");
   });
@@ -92,6 +95,31 @@ describe("toLatex — multiplication glyph: \\cdot inside LaTeX, · outside", ()
     const out = toLatex("3*5");
     expect(out).toContain("·");
     expect(out).not.toContain("\\cdot");
+  });
+
+  // FIX B — implicit multiplication + degenerate-form cleanup on the LIVE strings.
+  test("2*x+1*y → 2x+y (coefficient juxtaposed, unit 1* dropped, no \\cdot)", () => {
+    const out = toLatex("2*x+1*y");
+    expect(out).toBe("2x+y");
+    expect(out).not.toContain("\\cdot");
+    expect(out).not.toContain("·");
+  });
+
+  test("x^1*y^2/z^1 → exponent ^1 dropped, coefficients juxtaposed (no ^{1}, no \\cdot)", () => {
+    const out = toLatex("x^1*y^2/z^1");
+    expect(out).not.toContain("^{1}");
+    expect(out).not.toContain("\\cdot");
+    expect(out).toMatch(/xy/);      // x·y juxtaposed
+  });
+
+  test("3*ln(x) → 3\\ln(x) (number*function juxtaposed, function still detected)", () => {
+    const out = toLatex("3*ln(x)");
+    expect(out).toBe("3\\(\\ln(x)\\)"); // the 3 sits directly on \ln, no \cdot
+    expect(out).not.toContain("\\cdot");
+  });
+
+  test("2.5*x → 2.5x (decimal coefficient juxtaposed)", () => {
+    expect(toLatex("2.5*x")).toBe("2.5x");
   });
 });
 

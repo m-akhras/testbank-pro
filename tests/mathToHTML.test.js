@@ -313,14 +313,23 @@ describe("piecewise cases — Canvas equation_image", () => {
 });
 
 describe("multiplication in Canvas equation_image uses \\cdot, never raw ·", () => {
-  test("piecewise with a 2*x coefficient → encoded \\cdot, no raw · or %C2%B7", () => {
-    const out = mathToCanvasHTML("{ 2*x + 1 if x >= 1 ; x^2 - 3 if x < 1 }");
+  // Post implicit-mult cleanup: number*number keeps the \cdot glyph; number*variable
+  // juxtaposes. Use 2*3 to exercise the glyph, and assert 2*x juxtaposes.
+  test("piecewise with a 2*3 product → encoded \\cdot, no raw · or %C2%B7", () => {
+    const out = mathToCanvasHTML("{ 2*3 + 1 if x >= 1 ; x^2 - 3 if x < 1 }");
     expect(out).toContain('<img class="equation_image"');
     expect(out).toContain("%255Ccdot");  // DOUBLE URL-encoded \cdot in the equation_image src
     expect(out).toMatch(/src="\/equation_images\/[^"]*\?scale=1"/);
     expect(out).toContain("data-ignore-a11y-check");
     expect(out).not.toMatch(/·/);        // no raw U+00B7 anywhere in the output
     expect(out).not.toMatch(/%C2%B7/);   // no single-encoded U+00B7 either
+  });
+
+  test("a 2*x coefficient juxtaposes (2x) — no \\cdot noise in the equation_image", () => {
+    const out = mathToCanvasHTML("{ 2*x + 1 if x >= 1 ; x^2 - 3 if x < 1 }");
+    expect(out).toContain("2x");          // juxtaposed coefficient
+    expect(out).not.toContain("%255Ccdot");
+    expect(out).not.toMatch(/·/);
   });
 });
 

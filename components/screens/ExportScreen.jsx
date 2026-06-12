@@ -8,7 +8,7 @@ import PastePanel from "../panels/PastePanel.js";
 import ExportTemplateModal from "../modals/ExportTemplateModal.jsx";
 import { useExportFunctions } from "../../context/ExportFunctionsContext.js";
 import { getCourse } from "../../lib/courses/index.js";
-import { collectUnkeyedMCQuestions } from "../../lib/exports/index.js";
+import { collectUnkeyedMCQuestions, buildExportFilename } from "../../lib/exports/index.js";
 import { stripChoiceLabel, isGraphChoice, resolveInheritedStatus } from "../../lib/utils/questions.js";
 import GraphChoice from "../display/GraphChoice.jsx";
 import RegenerateMenu from "../question/RegenerateMenu.jsx";
@@ -123,6 +123,18 @@ export default function ExportScreen({
   const buildQTIAllSectionsMerged = exportFns.buildQTIAllSectionsMerged || buildQTIAllSectionsMergedProp;
   const validateQTIExport         = exportFns.validateQTIExport         || validateQTIExportProp;
   const dlBlob                    = exportFns.dlBlob                    || dlBlobProp;
+
+  // Descriptive, Windows-safe download names for EVERY export button (QTI audit).
+  //   {course}_{examName|sectionRange}_{scope}_{YYYY-MM-DD}.{ext}
+  // examName uses the saved exam name when present (or the typed QTI name), else
+  // buildExportFilename falls back to the master's section range from `questions`.
+  const exportName = (scope, ext, questions) => buildExportFilename({
+    course: versions?.[0]?.questions?.[0]?.course || "Exam",
+    examName: (examSaved && saveExamName) ? saveExamName : (qtiExamName?.trim?.() || ""),
+    questions: questions || versions?.[0]?.questions || [],
+    scope,
+    ext,
+  });
 
   // Per-question inline edit key (e.g. `v${activeVersion}_${qi}`). Owned locally
   // like BuildScreen/BankScreen — the page wrapper previously passed dead stubs.
@@ -269,8 +281,8 @@ export default function ExportScreen({
       if (type === "single") {
         const cs = payload.questions[0]?.classSection || null;
         const blob = await buildDocx(payload.questions, payload.course, payload.label, cs, 1, fullConfig);
-        const secStr = cs ? `_S${cs}` : "";
-        dlBlob(blob, `Version_${payload.label}${secStr}_Exam.docx`);
+        const scope = `V${payload.label}${cs ? `-S${cs}` : ""}-Word`;
+        dlBlob(blob, exportName(scope, "docx", payload.questions));
         if (examSaved && saveExamName) await logExport(saveExamName, "Word", payload.label);
       } else if (type === "sections") {
         for (const [sec, secVers] of Object.entries(classSectionVersions)) {
@@ -281,12 +293,12 @@ export default function ExportScreen({
               ? { ...fullConfig, sectionLabel: `Section ${String(sec).padStart(2, "0")}` }
               : fullConfig;
             const blob = await buildDocx(ver.questions, ver.questions[0]?.course || "Calculus", ver.label, Number(sec), 1, perSecConfig);
-            dlBlob(blob, `S${sec}_Version_${ver.label}_Exam.docx`);
+            dlBlob(blob, exportName(`S${sec}-V${ver.label}-Word`, "docx", ver.questions));
           }
         }
       } else if (type === "compare") {
         const blob = await buildDocxCompare(versions, versions[0]?.questions[0]?.course || "Exam", fullConfig);
-        dlBlob(blob, "AllVersions_Grouped.docx");
+        dlBlob(blob, exportName("Compare-Word", "docx", versions[0]?.questions));
       } else if (type === "answerKey") {
         // Same code path as the Word button — only includeAnswers differs.
         // Loops every version (and section, if multi-section) so each gets its
@@ -298,8 +310,8 @@ export default function ExportScreen({
             ? { ...fullConfig, sectionLabel: `Section ${String(cs).padStart(2, "0")}` }
             : fullConfig;
           const blob = await buildDocx(ver.questions, ver.questions[0]?.course || "Exam", ver.label, cs, 1, perSecConfig, true);
-          const secStr = cs ? `_S${cs}` : "";
-          dlBlob(blob, `Version_${ver.label}${secStr}_Answer_Key.docx`);
+          const scope = `V${ver.label}${cs ? `-S${cs}` : ""}-AnswerKey`;
+          dlBlob(blob, exportName(scope, "docx", ver.questions));
         }
       }
       setTemplateModal({ open: false, type: null, payload: null });
@@ -600,8 +612,7 @@ export default function ExportScreen({
                         if (!softConfirmFlags(flattenSectionVersions({ [sec]: classSectionVersions[sec] }))) return;
                         const examTitle = qtiExamName.trim() || versions[0]?.questions[0]?.course || "Exam";
                         const blobs = await buildClassroomSectionsQTI({ [sec]: classSectionVersions[sec] }, examTitle, qtiUseGroups, qtiPointsPerQ, qtiIncludeExplanations);
-                        const safeName = (qtiExamName.trim() || "Section").replace(/[^a-zA-Z0-9]/g, "_");
-                        dlBlob(blobs[sec], `${safeName}_S${sec}_QTI.zip`);
+                        dlBlob(blobs[sec], exportName(`S${sec}`, "zip", classSectionVersions[sec]?.[0]?.questions));
                       }}
                     >
                       ⬇ Section {sec} QTI (.zip)
@@ -615,9 +626,8 @@ export default function ExportScreen({
                       if (!softConfirmFlags(flattenSectionVersions(classSectionVersions))) return;
                       const examTitle = qtiExamName.trim() || versions[0]?.questions[0]?.course || "Exam";
                       const blobs = await buildClassroomSectionsQTI(classSectionVersions, examTitle, qtiUseGroups, qtiPointsPerQ, qtiIncludeExplanations);
-                      const safeName = (qtiExamName.trim() || "Section").replace(/[^a-zA-Z0-9]/g, "_");
                       for (const [sec, blob] of Object.entries(blobs)) {
-                        dlBlob(blob, `${safeName}_S${sec}_QTI.zip`);
+                        dlBlob(blob, exportName(`S${sec}`, "zip", classSectionVersions[sec]?.[0]?.questions));
                       }
                     }}
                   >
@@ -665,7 +675,7 @@ export default function ExportScreen({
                         if (!softConfirmFlags([ver])) return;
                         const xml = buildQTI(ver.questions, ver.questions[0]?.course || "Exam", ver.label, qtiUseGroups, qtiPointsPerQ, qtiIncludeExplanations);
                         const blob = await buildQTIZip(xml, `Version_${ver.label}`);
-                        dlBlob(blob, `Version_${ver.label}_Canvas_QTI.zip`);
+                        dlBlob(blob, exportName(`V${ver.label}`, "zip", ver.questions));
                       }}
                     >
                       ⬇ V{ver.label} QTI (.zip)
@@ -679,7 +689,7 @@ export default function ExportScreen({
                       if (!softConfirmFlags(versions)) return;
                       const xml = buildQTICompare(versions, versions[0]?.questions[0]?.course || "Exam", qtiUseGroups, qtiPointsPerQ, qtiIncludeExplanations);
                       const blob = await buildQTIZip(xml, "AllVersions");
-                      dlBlob(blob, "AllVersions_Canvas_QTI.zip");
+                      dlBlob(blob, exportName("Compare", "zip", versions?.[0]?.questions));
                     }}
                   >
                     ⬇ All Versions QTI (.zip)
@@ -917,7 +927,7 @@ export default function ExportScreen({
                   if (!softConfirmFlags(versions)) return;
                   const xml = buildQTICompare(versions, versions[0]?.questions[0]?.course || "Exam", qtiUseGroups, qtiPointsPerQ, qtiIncludeExplanations);
                   const blob = await buildQTIZip(xml, "AllVersions");
-                  dlBlob(blob, "AllVersions_Canvas_QTI.zip");
+                  dlBlob(blob, exportName("Compare", "zip", versions?.[0]?.questions));
                 }}
               >
                 ⬇ Export to Canvas (QTI .zip)
@@ -932,7 +942,7 @@ export default function ExportScreen({
                     const course = versions[0]?.questions[0]?.course || "Exam";
                     const xml = buildQTIAllSectionsMerged(classSectionVersions, course, qtiPointsPerQ, qtiIncludeExplanations);
                     const blob = await buildQTIZip(xml, "AllSections_Merged");
-                    dlBlob(blob, "AllSections_Merged_QTI.zip");
+                    dlBlob(blob, exportName("AllSections-Merged", "zip", flattenSectionVersions(classSectionVersions)?.[0]?.questions));
                   }}
                 >
                   ⬇ All Sections Merged QTI

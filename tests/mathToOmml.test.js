@@ -193,3 +193,24 @@ describe("OMML piecewise cases (m:d + m:eqArr)", () => {
     expect(wf(M("the set {1, 2, 3}"))).toBe("OK");
   });
 });
+
+describe("OMML implicit multiplication + degenerate cleanup (QTI audit, FIX B)", () => {
+  test("2*x juxtaposes (no middle-dot ·)", () => {
+    const out = mathToOmml("2*x");
+    expect(out).not.toContain("·");
+    expect(out).toContain("2x");
+  });
+  test("number*number 2*3 KEEPS an explicit middle-dot", () => {
+    expect(mathToOmml("2*3")).toContain("·");
+  });
+  test("unit coefficient 1*y drops the 1 (renders y, no ·)", () => {
+    const out = mathToOmml("1*y");
+    expect(out).not.toContain("·");
+    expect(out).toContain("y");
+  });
+  test("z^1 drops the exponent (no superscript 1)", () => {
+    const out = mathToOmml("z^1");
+    expect(out).not.toContain("<m:sSup>");
+    expect(out).toContain("z");
+  });
+});

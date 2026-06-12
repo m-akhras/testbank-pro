@@ -72,3 +72,27 @@ describe("end-to-end: a limitSpec using -2^(x) validates and derives correctly",
     expect(deriveLimits(spec, 2).twoSided).toBe(-4);
   });
 });
+
+describe("evalFn — logarithm aliases (QTI audit FIX A: ln curves were blank)", () => {
+  // ROOT CAUSE: the old sequential chain did ln→Math.log, then a later \blog\b
+  // pass matched the "log" INSIDE "Math.log" → "Math.Math.log10" → threw → blank
+  // curve. log10/log2 were split by the digit-paren implicit-mult pass. Now a
+  // single longest-first pass + a number-only digit-paren guard fix both.
+  const finite = (f, xs) => xs.every((x) => { const v = evalFn(f, x); return typeof v === "number" && isFinite(v); });
+
+  test("ln(x+1) produces finite curve samples (natural log)", () => {
+    expect(finite("ln(x+1)", [1, 2, 4])).toBe(true);
+    expect(evalFn("ln(x+1)", 0)).toBeCloseTo(0, 6);              // ln(1) = 0
+    expect(evalFn("ln(x+1)", Math.E - 1)).toBeCloseTo(1, 6);     // ln(e) = 1
+  });
+  test("3ln(x) (implicit coefficient) evaluates", () => {
+    expect(evalFn("3ln(x)", Math.E)).toBeCloseTo(3, 6);          // 3·ln(e) = 3
+  });
+  test("log10(x) and log2(x) are no longer split into 'log10*(x)'", () => {
+    expect(evalFn("log10(x)", 1000)).toBeCloseTo(3, 6);
+    expect(evalFn("log2(x)", 8)).toBeCloseTo(3, 6);
+  });
+  test("log(x) semantics UNCHANGED: base-10 in this renderer", () => {
+    expect(evalFn("log(x)", 100)).toBeCloseTo(2, 6);             // log10(100) = 2
+  });
+});
