@@ -62,4 +62,23 @@ describe("sanitizeFilenamePart / sectionRangeLabel", () => {
     expect(sectionRangeLabel([{ section: "3.1 x" }])).toBe("Ch3.1");
     expect(sectionRangeLabel([])).toBe("");
   });
+
+  test("strips LEADING/TRAILING dots and spaces but keeps internal dots (Windows-safe)", () => {
+    expect(sanitizeFilenamePart("Final.")).toBe("Final");        // trailing dot gone
+    expect(sanitizeFilenamePart(".hidden")).toBe("hidden");      // leading dot gone
+    expect(sanitizeFilenamePart("Exam 2. ")).toBe("Exam-2");     // trailing ". " gone
+    expect(sanitizeFilenamePart("Ch1.4-2.5")).toBe("Ch1.4-2.5"); // internal dots kept
+    // no token ever ends in a dot or space
+    for (const raw of ["Final.", "ws ", "a..", "..", "name. "]) {
+      const out = sanitizeFilenamePart(raw);
+      expect(out).not.toMatch(/[. ]$/);
+    }
+  });
+
+  test("a name capped at the length limit never ends in a dot or dash", () => {
+    const f = buildExportFilename({ course: "C", examName: "A.".repeat(50), scope: "S1", ext: "zip", date: D });
+    const namePart = f.split("_")[1];
+    expect(namePart.length).toBeLessThanOrEqual(60);
+    expect(namePart).not.toMatch(/[-.]$/);
+  });
 });
