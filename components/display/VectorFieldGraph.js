@@ -22,6 +22,10 @@ function _escXml(s) {
 // vector fields produce.
 function _compileExpression(expr) {
   if (typeof expr !== "string" || !expr.trim()) return null;
+  // Convention: ln → natural log (Math.log). NOTE: bare "log" maps to Math.${m} =
+  // Math.log = NATURAL log here, which DIVERGES from the stem renderer
+  // (lib/exports/graphRendering.js), where log = base-10 (Math.log10). Left as-is
+  // to avoid silently changing existing vector-field behavior — see exprCompile.js.
   const safe = expr
     .replace(/\^/g, "**")
     .replace(/\b(sin|cos|tan|exp|log|ln|sqrt|abs|atan|asin|acos|sinh|cosh|tanh|min|max|pow|floor|ceil|round|sign)\b/g, m => m === "ln" ? "Math.log" : `Math.${m}`)
