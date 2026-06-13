@@ -431,3 +431,44 @@ describe("QTI stem coalescing — fragmented math merged into one equation_image
     expect(content(out)).toContain("\\cdot");
   });
 });
+
+// ── Glue-boundary guard ──────────────────────────────────────────────────────
+// The coalescer must merge math fragments connected by mathematical glue WITHOUT
+// swallowing standalone prose words (a lone-letter token only counts as glue when
+// it's flanked by operators/digits, never when it's a word with spaces both sides).
+describe("glue boundary — prose between math spans is never absorbed", () => {
+  const imgCount = (s) => (s.match(/<img class="equation_image"/g) || []).length;
+  const contents = (s) => [...s.matchAll(/data-equation-content="([^"]*)"/g)].map((m) => m[1]);
+  const skeleton = (s) => s.replace(/<img[^>]*\/>/g, "⟦IMG⟧"); // collapse images to a marker
+
+  test('#1 lone "a" word is never wrapped; whole prose stem stays text', () => {
+    const out = mathToCanvasHTML("Find a so that f(x) = a x + 1 passes through (0,3).");
+    expect(imgCount(out)).toBe(0);
+    // unchanged prose — the standalone-word boundary holds, nothing merged
+    expect(out).toBe("Find a so that f(x) = a x + 1 passes through (0,3).");
+  });
+
+  test('#2 " at " / " where " stay text; one image x^{2}', () => {
+    const out = mathToCanvasHTML("Evaluate f at x = 2 where f(x) = x^2.");
+    expect(imgCount(out)).toBe(1);
+    expect(contents(out)).toEqual(["x^{2}"]);
+    expect(skeleton(out)).toBe("Evaluate f at x = 2 where f(x) = ⟦IMG⟧.");
+    expect(out).toContain(" at ");
+    expect(out).toContain(" where ");
+  });
+
+  test("#3 inter-sentence prose and trailing f(x) stay text; one image \\lim_{x\\to1}", () => {
+    const out = mathToCanvasHTML("The function f is continuous. Determine lim_{x->1} f(x).");
+    expect(imgCount(out)).toBe(1);
+    expect(contents(out)).toEqual(["\\lim_{x\\to1}"]);
+    // prose before the math sentence AND the trailing " f(x)" are not absorbed
+    expect(skeleton(out)).toBe("The function f is continuous. Determine ⟦IMG⟧ f(x).");
+  });
+
+  test('#4 coefficient/operators merge into one image; "on [0, 4]" stays prose', () => {
+    const out = mathToCanvasHTML("Let f(x) = 2x^2 - 3x + 1 on [0, 4]. Find the absolute maximum of f on the interval.");
+    expect(imgCount(out)).toBe(1);
+    expect(contents(out)).toEqual(["2x^{2} - 3x + 1"]); // leading coeff + trailing tail merged
+    expect(skeleton(out)).toBe("Let f(x) = ⟦IMG⟧ on [0, 4]. Find the absolute maximum of f on the interval.");
+  });
+});
