@@ -365,3 +365,69 @@ describe("Canvas equation_image src form — double-encoded + ?scale=1 + a11y fl
     expect(out).toContain('data-equation-content="\\sqrt{x+5}"');
   });
 });
+
+// ── Coalesce fragmented equation images in QTI stems ─────────────────────────
+// toLatex wraps each atomic sub-expression in its own \(...\); toLatexForCanvas
+// used to emit one equation_image per span, shattering a single expression into
+// multiple images with loose math text + a leaked bare base char. These assert
+// the export-side coalescing repairs the model's under-delimiting.
+describe("QTI stem coalescing — fragmented math merged into one equation_image", () => {
+  const imgCount = (s) => (s.match(/<img class="equation_image"/g) || []).length;
+  const content = (s) => (s.match(/data-equation-content="([^"]*)"/) || [])[1];
+
+  test('"Evaluate lim_{x->2} (2x^2-x+1)." → ONE image after "Evaluate ", full expression, no loose math', () => {
+    const out = mathToCanvasHTML("Evaluate lim_{x->2} (2x^2-x+1).");
+    // before this fix the same stem produced 2+ images (\lim_{x\to2} and x^{2})
+    expect(imgCount(out)).toBe(1);
+    const c = content(out);
+    expect(c).toContain("\\lim_{x\\to2}");
+    expect(c).toContain("2x^{2}-x+1");          // coefficient + tail merged in
+    // prose stays text, sentence period stays outside the image
+    expect(out).toMatch(/^Evaluate <img/);
+    expect(out.replace(/<img[^>]*\/>/g, "X")).toBe("Evaluate X.");
+    // no orphan \(...\) delimiters, no stray single-char (\lim alone / x alone) image
+    expect(out).not.toMatch(/\\\(/);
+    expect(out).not.toMatch(/data-equation-content="\\lim_\{x\\to2\}"/); // not a lone-lim image
+    expect(out).not.toMatch(/data-equation-content="x\^\{2\}"/);         // not a lone-x^2 image
+  });
+
+  test('"f(x) = e^{2x}+3" → ONE image "e^{2x}+3", no detached "+3", no leaked "e"', () => {
+    const out = mathToCanvasHTML("f(x) = e^{2x}+3");
+    expect(imgCount(out)).toBe(1);
+    expect(content(out)).toBe("e^{2x}+3");
+    // the "+3" must be inside the image, not a loose text node after it
+    expect(out.replace(/<img[^>]*\/>/g, "X")).toBe("f(x) = X");
+  });
+
+  test('"e^{1\\cdot x}+2" → renders "e^{x}+2" (degenerate 1\\cdot gone), single image', () => {
+    const out = mathToCanvasHTML("e^{1\\cdot x}+2");
+    expect(imgCount(out)).toBe(1);
+    expect(content(out)).toBe("e^{x}+2");
+    expect(content(out)).not.toContain("\\cdot");
+    expect(content(out)).not.toContain("1");
+  });
+
+  test("pure-prose stem keeps prose as text, only math as image(s)", () => {
+    const out = mathToCanvasHTML("Combine into a single logarithm: log(x) + log(y)");
+    expect(out).toContain("Combine into a single logarithm:");
+    expect(imgCount(out)).toBeGreaterThanOrEqual(1);
+    // the prose prefix is never swallowed into an image
+    expect(out).toMatch(/^Combine into a single logarithm: <img/);
+    expect(out).not.toMatch(/\\\(/);
+  });
+
+  test("before→after image-count drop for the lim case (2+ → 1)", () => {
+    // Reconstruct the pre-coalesce span count from toLatex (one image per \(...\) span).
+    const { toLatex } = require("../lib/math/toLatex");
+    const spans = (toLatex("Evaluate lim_{x->2} (2x^2-x+1).").match(/\\\(/g) || []).length;
+    expect(spans).toBeGreaterThanOrEqual(2);   // toLatex still fragments into 2+ spans
+    const out = mathToCanvasHTML("Evaluate lim_{x->2} (2x^2-x+1).");
+    expect(imgCount(out)).toBe(1);             // coalescer collapses them to 1 image
+  });
+
+  test("degenerate cleanup does NOT eat a legit number·number product in a math context", () => {
+    // 2*3 inside a piecewise (math) block → 2\cdot 3; juxtaposing would change meaning
+    const out = mathToCanvasHTML("{ 2*3 + 1 if x >= 1 ; x^2 - 3 if x < 1 }");
+    expect(content(out)).toContain("\\cdot");
+  });
+});
