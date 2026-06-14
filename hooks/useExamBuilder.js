@@ -315,6 +315,22 @@ export function useExamBuilder({
     }
   }
 
+  // Changing the variant count or section count makes any ALREADY-BUILT version
+  // prompt STALE: the live cost estimate re-derives from versionCount/numClassSections,
+  // but `generatedPrompt` is a cached string that does NOT. Leaving it shown produced
+  // the "estimate says 3 variants but the prompt header lists only B, C" divergence
+  // (the cached prompt was built at an earlier, smaller count). Invalidate the built
+  // version prompt on either change so the displayed prompt can never disagree with the
+  // estimate — the user simply re-clicks Build Prompt and gets B, C, D. (Internal state
+  // setters above are left raw; only these UI-facing wrappers invalidate.)
+  function _invalidateBuiltVersionPrompt() {
+    setGeneratedPrompt("");
+    setPendingType(null);
+    setPasteInput("");
+  }
+  function setVersionCountSafe(v) { setVersionCount(v); _invalidateBuiltVersionPrompt(); }
+  function setNumClassSectionsSafe(v) { setNumClassSections(v); _invalidateBuiltVersionPrompt(); }
+
   return {
     versions, setVersions,
     activeVersion, setActiveVersion,
@@ -322,8 +338,8 @@ export function useExamBuilder({
     activeClassSection, setActiveClassSection,
     selectedForExam, setSelectedForExam,
     mutationType, setMutationType,
-    versionCount, setVersionCount,
-    numClassSections, setNumClassSections,
+    versionCount, setVersionCount: setVersionCountSafe,
+    numClassSections, setNumClassSections: setNumClassSectionsSafe,
     currentClassSection, setCurrentClassSection,
     versionMutationType, setVersionMutationType,
     masterLocked, setMasterLocked,
