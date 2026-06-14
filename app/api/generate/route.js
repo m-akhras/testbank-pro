@@ -131,22 +131,22 @@ export async function POST(req) {
     const operation = opHint === "validate" || opHint === "generate"
       ? opHint
       : (questions && Array.isArray(questions) ? "validate" : "generate");
-    const limit = RATE_LIMITS[operation] ?? RATE_LIMITS.generate;
+    // ⚠️ RATE LIMIT TEMPORARILY DISABLED FOR SOLO-DEV TESTING — RESTORE BEFORE PUBLIC LAUNCH.
+    // Re-add: count api_usage rows in the last hour, return 429 if over RATE_LIMIT.
+    //   const limit = RATE_LIMITS[operation] ?? RATE_LIMITS.generate;
+    //   const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    //   const { count } = await supabase.from("api_usage").select("*", { count: "exact", head: true })
+    //     .eq("user_id", userId).eq("operation", operation).gte("created_at", oneHourAgo);
+    //   if (count >= limit) {
+    //     const noun = operation === "validate" ? "validations" : "generations";
+    //     return Response.json({ error: `Rate limit exceeded. Maximum ${limit} ${noun} per hour.` }, { status: 429 });
+    //   }
 
-    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-    const { count } = await supabase
-      .from("api_usage")
-      .select("*", { count: "exact", head: true })
-      .eq("user_id", userId)
-      .eq("operation", operation)
-      .gte("created_at", oneHourAgo);
-
-    if (count >= limit) {
-      const noun = operation === "validate" ? "validations" : "generations";
-      return Response.json({ error: `Rate limit exceeded. Maximum ${limit} ${noun} per hour.` }, { status: 429 });
-    }
-
-    await supabase.from("api_usage").insert({ user_id: userId, operation });
+    // Usage logging RETAINED (so the data exists when the limit is re-added), but made
+    // NON-BLOCKING — a logging failure must never break generation.
+    supabase.from("api_usage").insert({ user_id: userId, operation })
+      .then(({ error }) => { if (error) console.error("api_usage insert failed:", error.message); })
+      .catch((e) => console.error("api_usage insert threw:", e?.message || e));
 
     // ── Validation mode ──────────────────────────────────────────────────────
     if (operation === "validate") {
