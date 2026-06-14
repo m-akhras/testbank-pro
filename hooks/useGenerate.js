@@ -10,6 +10,7 @@ import {
   formatVersionCompletenessError,
   findMissingGraphs,
   formatMissingGraphError,
+  findSingleFamilyErrors,
   clampGraphYDomainToFeatures,
   buildSectionVersions,
   assembleSection,
@@ -211,6 +212,12 @@ export function useGenerate({
         }
         const lostGraphs = findMissingGraphs(parsed, expected, selected);
         if (lostGraphs.length) throw new Error(formatMissingGraphError(lostGraphs));
+        // Monoculture guard — only the freshly function-mutated anchor (section ≥ 2);
+        // S1 is the master (varied by construction) and variants are numbers mutations.
+        if (anchorMode && sectionNum >= 2) {
+          const mono = findSingleFamilyErrors(parsed[`S${sectionNum}_${anchorLabel}`]);
+          if (mono.length) throw new Error(mono.join(" "));
+        }
         const sectionVariants = assembleSection({
           parsed, sectionNum, multi: true, variantLabels, anchorLabel, selected, course,
           masterLocked, masterVersion: versions[0], anchorMode,
@@ -256,6 +263,14 @@ export function useGenerate({
         }
         const lostGraphs = findMissingGraphs(parsed, expected, selected);
         if (lostGraphs.length) throw new Error(formatMissingGraphError(lostGraphs));
+        // Monoculture guard — each section's function-mutated anchor (S{s}_A, s ≥ 2).
+        // Skips S1 (master) and the numbers-mutated variants (they inherit A's families).
+        if (anchorMode) {
+          for (let s = 2; s <= sections; s++) {
+            const mono = findSingleFamilyErrors(parsed[`S${s}_${anchorLabel}`]);
+            if (mono.length) throw new Error(mono.join(" "));
+          }
+        }
 
         // Single source for the dual-write (classSectionVersions + versions).
         const { classSectionVersions, versions: vers } = buildSectionVersions({

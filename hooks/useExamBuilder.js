@@ -4,7 +4,7 @@ import { createBrowserClient } from "@supabase/ssr";
 import { sectionSortKey } from "../lib/utils/questions.js";
 import { buildAllVersionsPrompt, buildAllSectionsPrompt, buildVersionChunkPrompt, buildSectionPastePrompt } from "../lib/prompts/index.js";
 import { parseAiJson, looksTruncated } from "../lib/utils/sanitizeJsonPaste.js";
-import { findIncompleteKeys, formatVersionCompletenessError, findMissingGraphs, formatMissingGraphError } from "../lib/exams/versionMerge.js";
+import { findIncompleteKeys, formatVersionCompletenessError, findMissingGraphs, formatMissingGraphError, findSingleFamilyErrors } from "../lib/exams/versionMerge.js";
 
 // A is always the master; B–U are the 20 possible variant labels.
 const VERSIONS = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U"];
@@ -267,6 +267,12 @@ export function useExamBuilder({
           // mutates it): a graph-bearing master question must come back with a graph.
           const lostGraphs = findMissingGraphs(chunk, [key], master);
           if (lostGraphs.length) throw new Error(`${key} failed — ` + formatMissingGraphError(lostGraphs));
+          // Monoculture guard — only the function-mutated anchor (where the family is
+          // chosen). Numbers mutations inherit the anchor's families, so skip them.
+          if (mutation === "function") {
+            const mono = findSingleFamilyErrors(chunk[key]);
+            if (mono.length) throw new Error(`${key} failed — ` + mono.join(" "));
+          }
           combined[key] = chunk[key];
           return chunk[key];
         };
