@@ -93,6 +93,58 @@ describe("applyLimitAtInfinitySpec — guards", () => {
     ).toThrow(/diverges in-window/);
   });
 
+  test("image-8 class: even pole at 0 (den = 3x^2) -> throws", () => {
+    expect(() =>
+      applyLimitAtInfinitySpec({
+        type: "Free Response",
+        limitAtInfinitySpec: {
+          derive: { kind: "rational", num: [-4, 0, 1], den: [3, 0, 0] }, // HA -4/3
+          graph: { fn: "(-4*x^2+1)/(3*x^2)", xDomain: [-20, 20] }, // vertical asymptote at x=0
+        },
+        asks: [{ quantity: "endBehavior" }],
+      })
+    ).toThrow();
+  });
+
+  test("clean: rational with den x^2+1 passes; derived HA unchanged", () => {
+    const q = applyLimitAtInfinitySpec({
+      type: "Free Response",
+      limitAtInfinitySpec: {
+        derive: { kind: "rational", num: [3, 0, 1], den: [1, 0, 1] }, // HA 3
+        graph: { fn: "(3*x^2+1)/(x^2+1)", xDomain: [-10, 10] },
+      },
+      asks: [{ quantity: "horizontalAsymptotes" }],
+    });
+    expect(q.hasGraph).toBe(true);
+    expect(q.graphConfig.horizontalAsymptotes).toEqual([{ y: 3, label: "3" }]);
+  });
+
+  test("root-with-graph: algebraic_root carrying a graph block -> rational-only throw", () => {
+    expect(() =>
+      applyLimitAtInfinitySpec({
+        type: "Free Response",
+        limitAtInfinitySpec: {
+          derive: { kind: "algebraic_root", form: "root_over_linear", a: 1, b: 0, c: 1, d: 1, e: 1 },
+          graph: { fn: "sqrt(x^2+1)/(x+1)", xDomain: [-20, 20] },
+        },
+        asks: [{ quantity: "endBehavior" }],
+      })
+    ).toThrow(/rational curves only/);
+  });
+
+  test("odd pole still caught: den = x^2-1 (poles at ±1) -> throws", () => {
+    expect(() =>
+      applyLimitAtInfinitySpec({
+        type: "Free Response",
+        limitAtInfinitySpec: {
+          derive: { kind: "rational", num: [1, 0, 0], den: [1, 0, -1] }, // HA 1
+          graph: { fn: "(x^2)/(x^2-1)", xDomain: [-20, 20] },
+        },
+        asks: [{ quantity: "endBehavior" }],
+      })
+    ).toThrow();
+  });
+
   test("symbolic-only: arctan derive WITH a graph block -> throws", () => {
     expect(() =>
       applyLimitAtInfinitySpec({
